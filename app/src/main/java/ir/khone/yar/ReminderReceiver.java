@@ -74,7 +74,7 @@ public class ReminderReceiver extends BroadcastReceiver {
             next.set(Calendar.SECOND, 0);
             next.set(Calendar.MILLISECOND, 0);
             while (next.getTimeInMillis() <= System.currentTimeMillis()) next.add(Calendar.MONTH, 1);
-            String nextSaved = next.getTimeInMillis() + "\\nmonthly\\n" + title + "\\n" + day;
+            String nextSaved = next.getTimeInMillis() + "\nmonthly\n" + title + "\n" + day;
             prefs.edit().putString("reminder_" + id, nextSaved).apply();
             schedule(context, id, next.getTimeInMillis(), title, true);
         } else {
