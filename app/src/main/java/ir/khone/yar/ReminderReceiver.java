@@ -13,6 +13,9 @@ import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import java.util.concurrent.atomic.AtomicBoolean;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import java.util.Calendar;
@@ -89,7 +92,7 @@ public class ReminderReceiver extends BroadcastReceiver {
             }
         }
 
-        speakReminder(context.getApplicationContext(), "یادآوری خونه‌یار. " + title);
+        speakReminder(context.getApplicationContext(), "یادآوری خونه‌یار. " + title, goAsync());
 
         if (monthly) {
             rescheduleMonthly(context, id, title);
@@ -116,35 +119,53 @@ public class ReminderReceiver extends BroadcastReceiver {
         }
     }
 
-    private static void speakReminder(Context context, String message) {
+    private static void speakReminder(Context context, String message, PendingResult pendingResult) {
+        final AtomicBoolean finished = new AtomicBoolean(false);
+        final Handler handler = new Handler(Looper.getMainLooper());
+        Runnable finish = () -> {
+            if (finished.compareAndSet(false, true)) pendingResult.finish();
+        };
+        // Keep the receiver alive long enough for TextToSpeech to finish, but never indefinitely.
+        handler.postDelayed(finish, 15000);
         try {
             final TextToSpeech[] holder = new TextToSpeech[1];
             holder[0] = new TextToSpeech(context, result -> {
                 TextToSpeech engine = holder[0];
-                if (engine == null) return;
-                if (result == TextToSpeech.SUCCESS) {
-                    int languageResult = engine.setLanguage(new Locale("fa", "IR"));
-                    engine.setSpeechRate(0.9f);
-                    if (languageResult == TextToSpeech.LANG_MISSING_DATA
-                            || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                        engine.shutdown();
-                        return;
-                    }
-                    engine.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                        @Override public void onStart(String utteranceId) {}
-                        @Override public void onDone(String utteranceId) {
-                            engine.shutdown();
-                        }
-                        @Override public void onError(String utteranceId) {
-                            engine.shutdown();
-                        }
-                    });
-                    engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, "khoneyar_reminder_" + System.currentTimeMillis());
-                } else {
+                if (engine == null) {
+                    finish.run();
+                    return;
+                }
+                if (result != TextToSpeech.SUCCESS) {
                     engine.shutdown();
+                    finish.run();
+                    return;
+                }
+                int languageResult = engine.setLanguage(new Locale("fa", "IR"));
+                engine.setSpeechRate(0.9f);
+                if (languageResult == TextToSpeech.LANG_MISSING_DATA
+                        || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    engine.shutdown();
+                    finish.run();
+                    return;
+                }
+                engine.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    private void complete() {
+                        engine.shutdown();
+                        handler.post(finish);
+                    }
+                    @Override public void onStart(String utteranceId) {}
+                    @Override public void onDone(String utteranceId) { complete(); }
+                    @Override public void onError(String utteranceId) { complete(); }
+                });
+                int speakResult = engine.speak(message, TextToSpeech.QUEUE_FLUSH, null,
+                        "khoneyar_reminder_" + System.currentTimeMillis());
+                if (speakResult == TextToSpeech.ERROR) {
+                    engine.shutdown();
+                    finish.run();
                 }
             });
         } catch (Exception ignored) {
+            finish.run();
         }
     }
 
