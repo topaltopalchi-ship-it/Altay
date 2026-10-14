@@ -10,6 +10,20 @@ public final class VoiceCalculator {
 
     public static double evaluate(String input) {
         String s = normalizeDigits(input == null ? "" : input.toLowerCase(Locale.ROOT));
+        // Turn common discount requests into the final price after discount.
+        s = s.replace("قیمت با", " ").replace("با تخفیف", " تخفیف ");
+        java.util.regex.Matcher discount = java.util.regex.Pattern
+            .compile("([0-9]+(?:\\\\.[0-9]+)?)\\\\s*درصد\\\\s*تخفیف\\\\s*از\\\\s*([0-9]+(?:\\\\.[0-9]+)?(?:\\\\s*(?:هزار|میلیون))?)")
+            .matcher(s);
+        StringBuffer discounted = new StringBuffer();
+        while (discount.find()) {
+            String percent = discount.group(1);
+            String price = discount.group(2);
+            discount.appendReplacement(discounted, java.util.regex.Matcher.quoteReplacement(
+                "(" + price + " - (" + price + " * " + percent + " %))"));
+        }
+        discount.appendTail(discounted);
+        s = discounted.toString();
         s = s.replace("ماشین حساب", " ")
              .replace("حساب کن", " ")
              .replace("نتیجه", " ")
