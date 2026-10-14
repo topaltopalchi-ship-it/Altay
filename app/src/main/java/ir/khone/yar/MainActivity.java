@@ -1,0 +1,288 @@
+package ir.khone.yar;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Locale;
+
+public class MainActivity extends Activity {
+    private LinearLayout root, cards;
+    private TextView status, totals, recent;
+    private SharedPreferences prefs;
+    private SpeechRecognizer recognizer;
+    private TextToSpeech tts;
+    private String pendingMode = "auto";
+    private long incomeTotal = 0, expenseTotal = 0;
+    private final ArrayList<String> entries = new ArrayList<>();
+    private static final int AUDIO_PERMISSION = 44;
+    private int dark = Color.rgb(31, 56, 48), green = Color.rgb(37, 120, 82), cream = Color.rgb(247, 248, 243);
+
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        prefs = getSharedPreferences("khoneyar", MODE_PRIVATE);
+        incomeTotal = prefs.getLong("income", 0);
+        expenseTotal = prefs.getLong("expense", 0);
+        loadEntries();
+        tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
+        buildUi();
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
+        }
+    }
+
+    private void buildUi() {
+        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(cream);
+        root.setPadding(dp(18), dp(18), dp(18), dp(12));
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        TextView brand = text("🏠 خونه‌یار", 29, dark, true); brand.setGravity(Gravity.CENTER);
+        content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
+        TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
+        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+
+        Button speak = button("🎙  صحبت کن؛ خونه‌یار گوش می‌دهد", green, Color.WHITE, 20);
+        speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
+        content.addView(speak, lp(-1, -2, 0, 4, 0, 10));
+        status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
+        status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
+        content.addView(status, lp(-1,-2,0,0,0,12));
+
+        totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
+        totals.setPadding(dp(8),dp(16),dp(8),dp(16)); totals.setBackground(round(Color.WHITE, 18));
+        content.addView(totals, lp(-1,-2,0,0,0,12));
+
+        TextView label = text("دسترسی سریع صوتی", 19, dark, true);
+        content.addView(label, lp(-1,-2,0,6,0,8));
+        cards = new LinearLayout(this); cards.setOrientation(LinearLayout.VERTICAL);
+        addVoiceCard("🧾 ثبت مخارج", "بگو: «خرج ۱۲۰ هزار تومان برای خرید»", "expense");
+        addVoiceCard("💰 ثبت درآمد", "بگو: «درآمد ۵ میلیون تومان حقوق»", "income");
+        addVoiceCard("🧮 ماشین‌حساب صوتی", "بگو: «ماشین حساب ۲۰۰۰۰ جمع ۳۰۰۰۰»", "calc");
+        addVoiceCard("🛒 فهرست خرید", "بگو: «به فهرست خرید شیر اضافه کن»", "shopping");
+        addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
+        addVoiceCard("⏰ یادآوری", "بگو: «یادآوری پرداخت قبض برق»", "reminder");
+        content.addView(cards);
+        TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
+        content.addView(recentTitle, lp(-1,-2,0,12,0,6));
+        recent = text("", 14, Color.DKGRAY, false); recent.setPadding(dp(12),dp(10),dp(12),dp(10)); recent.setBackground(round(Color.WHITE,14));
+        content.addView(recent, lp(-1,-2,0,0,0,18));
+        scroll.addView(content);
+        root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
+        TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
+        root.addView(foot, lp(-1,-2,0,8,0,0));
+        setContentView(root);
+        refresh();
+    }
+
+    private void addVoiceCard(String title, String desc, String mode) {
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14),dp(12),dp(14),dp(12));
+        card.setBackground(round(Color.WHITE,16));
+        TextView t = text(title,18,dark,true); card.addView(t);
+        TextView d = text(desc,13,Color.DKGRAY,false); card.addView(d, lp(-1,-2,0,4,0,0));
+        card.setOnClickListener(v -> startVoice(mode));
+        LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
+    }
+
+    private void startVoice(String mode) {
+        pendingMode = mode;
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
+            say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
+        }
+        try {
+            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
+                public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
+                public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
+                public void onRmsChanged(float r) {}
+                public void onBufferReceived(byte[] b) {}
+                public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
+                public void onError(int e) {
+                    String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
+                        e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
+                        "تشخیص صدا انجام نشد. دوباره تلاش کن.";
+                    status.setText(msg); say(msg);
+                }
+                public void onResults(Bundle b) {
+                    ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (result != null && !result.isEmpty()) handleVoice(result.get(0));
+                }
+                public void onPartialResults(Bundle b) {}
+                public void onEvent(int a, Bundle b) {}
+            });
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            recognizer.startListening(intent);
+        } catch (Exception e) {
+            status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
+        }
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == AUDIO_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startVoice(pendingMode);
+        else { status.setText("برای فرمان صوتی باید اجازهٔ میکروفون بدهی."); say("برای استفاده صوتی اجازه میکروفون لازم است"); }
+    }
+
+    private void handleVoice(String raw) {
+        String s = normalize(raw);
+        status.setText("شنیدم: «" + raw + "»");
+        String mode = pendingMode;
+        if (mode.equals("auto")) {
+            if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
+            else if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) mode="calc";
+            else if (contains(s,"خرید","فهرست")) mode="shopping";
+            else if (contains(s,"یادآوری","یادم بنداز","یادآور")) mode="reminder";
+            else if (contains(s,"کار خانه","وظیفه","تمیزکاری")) mode="task";
+            else mode="expense";
+        }
+        if (mode.equals("expense") || mode.equals("income")) {
+            long amount = parseAmount(s);
+            if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return; }
+            String title = cleanDescription(s, mode);
+            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
+            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
+            refresh(); return;
+        }
+        if (mode.equals("calc")) {
+            long[] nums = extractNumbers(s);
+            if (nums.length < 2) { status.setText("دو عدد و عمل را بگو؛ مثلاً «ماشین حساب ۲۰۰ جمع ۳۰»"); say("برای محاسبه دو عدد لازم است"); return; }
+            long a=nums[0], b=nums[1], out;
+            if (contains(s,"ضرب","در")) out=a*b;
+            else if (contains(s,"منهای","منها","تفریق")) out=a-b;
+            else if (contains(s,"تقسیم","تقسیم بر")) { if(b==0){say("تقسیم بر صفر ممکن نیست");return;} out=a/b; }
+            else out=a+b;
+            String answer="نتیجه محاسبه: "+fmt(out);
+            status.setText(answer); say(answer); return;
+        }
+        if (mode.equals("shopping")) { addEntry("فهرست خرید", raw, 0); say("به فهرست خرید اضافه شد: "+raw); refresh(); return; }
+        if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
+        if (mode.equals("reminder")) { addEntry("یادآوری", raw, 0); say("یادآوری ثبت شد. در این نسخه اعلان خودکار زمان‌بندی‌شده هنوز فعال نیست."); refresh(); return; }
+        status.setText("فرمان دریافت شد: " + raw);
+    }
+
+    private String cleanDescription(String s, String mode) {
+        String x = s.replace("تومان","").replace("ریال","").replace("هزینه","").replace("خرج","").replace("مخارج","").replace("درآمد","").replace("حقوق","").trim();
+        x = x.replaceAll("[0-9۰-۹]+"," ").replaceAll("\\s+"," ").trim();
+        if (x.isEmpty()) return mode.equals("income") ? "درآمد" : "هزینه خانه";
+        return x;
+    }
+
+    private long parseAmount(String s) {
+        String x = s.replace("هزار تومان","000").replace("هزار","000").replace("میلیون تومان","000000").replace("میلیون","000000").replace("تومان","").replace("ریال","");
+        long[] nums = extractNumbers(x);
+        if (nums.length > 0) {
+            long n=nums[0];
+            if (s.contains("میلیون")) n*=1000000L;
+            else if (s.contains("هزار")) n*=1000L;
+            return n;
+        }
+        return wordNumber(s);
+    }
+
+    private long[] extractNumbers(String s) {
+        java.util.ArrayList<Long> found = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[0-9]+").matcher(s);
+        while(m.find()) try { found.add(Long.parseLong(m.group())); } catch(Exception ignored) {}
+        if(found.isEmpty()) {
+            String[] words=s.split("\\s+");
+            for(String w:words) { long n=wordValue(w); if(n>0) found.add(n); }
+        }
+        long[] out=new long[found.size()]; for(int i=0;i<out.length;i++) out[i]=found.get(i); return out;
+    }
+
+    private long wordNumber(String s) {
+        long total=0, current=0;
+        for(String w:s.split("\\s+")) {
+            long v=wordValue(w);
+            if(v>0) current += v;
+            else if(w.equals("هزار")) { total += Math.max(1,current)*1000; current=0; }
+            else if(w.equals("میلیون")) { total += Math.max(1,current)*1000000; current=0; }
+        }
+        return total+current;
+    }
+
+    private long wordValue(String w) {
+        switch(w) {
+            case "یک": case "یه": case "اول": return 1;
+            case "دو": case "دوتا": return 2;
+            case "سه": return 3; case "چهار": return 4; case "پنج": return 5;
+            case "شش": case "شیش": return 6; case "هفت": return 7; case "هشت": return 8; case "نه": return 9;
+            case "ده": return 10; case "یازده": return 11; case "دوازده": return 12; case "سیزده": return 13;
+            case "چهارده": return 14; case "پانزده": return 15; case "شانزده": return 16; case "هفده": return 17;
+            case "هجده": return 18; case "نوزده": return 19; case "بیست": return 20; case "سی": return 30;
+            case "چهل": return 40; case "پنجاه": return 50; case "شصت": return 60; case "هفتاد": return 70;
+            case "هشتاد": return 80; case "نود": return 90; case "صد": return 100; case "دویست": return 200;
+            case "سیصد": return 300; case "چهارصد": return 400; case "پانصد": return 500; case "هزار": return 1000;
+            case "میلیون": return 1000000; default: return 0;
+        }
+    }
+
+    private String normalize(String s) {
+        return s.replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9')
+                .replace('٠','0').replace('١','1').replace('٢','2').replace('٣','3').replace('٤','4').replace('٥','5').replace('٦','6').replace('٧','7').replace('٨','8').replace('٩','9')
+                .replace("،"," ").replace("؟"," ").replace("رو"," ").replace("برای"," ").replace("تومن","تومان").trim();
+    }
+    private boolean contains(String s, String... words) { for(String w:words) if(s.contains(w)) return true; return false; }
+    private void addEntry(String type, String title, long amount) {
+        String row = type + " • " + title + (amount>0 ? " • " + fmt(amount) + " تومان" : "");
+        entries.add(0,row); while(entries.size()>12) entries.remove(entries.size()-1);
+        StringBuilder b=new StringBuilder(); for(String e:entries)b.append(e).append("\n");
+        prefs.edit().putString("entries",b.toString()).apply();
+    }
+    private void loadEntries() {
+        String all=prefs.getString("entries","");
+        if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
+    }
+    private void refresh() {
+        if(totals!=null) totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده: "+fmt(incomeTotal-expenseTotal)+" تومان");
+        if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
+    }
+    private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
+    private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
+    private TextView text(String s,int size,int color,boolean bold) {
+        TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
+        if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;
+    }
+    private Button button(String s,int bg,int fg,int size) {
+        Button b=new Button(this); b.setText(s); b.setTextSize(size); b.setTextColor(fg); b.setAllCaps(false); b.setBackground(round(bg,20)); return b;
+    }
+    private GradientDrawable round(int color,int radius) {
+        GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); return d;
+    }
+    private LinearLayout.LayoutParams lp(int w,int h,int l,int t,int r,int b) {
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(w<0?w:dp(w),h<0?h:dp(h)); p.setMargins(dp(l),dp(t),dp(r),dp(b)); return p;
+    }
+    private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
+    @Override protected void onDestroy() {
+        if(recognizer!=null) recognizer.destroy();
+        if(tts!=null) tts.shutdown();
+        super.onDestroy();
+    }
+}
