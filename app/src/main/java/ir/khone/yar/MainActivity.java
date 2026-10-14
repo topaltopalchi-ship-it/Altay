@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
-    private int dark = Color.rgb(31, 56, 48), green = Color.rgb(37, 120, 82), cream = Color.rgb(247, 248, 243);
+    private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);\n    private int cardIndex = 0;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -67,11 +67,11 @@ public class MainActivity extends Activity {
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", green, Color.WHITE, 20);
+        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", dark, Color.WHITE, 16);
+        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
         wakeButton.setOnClickListener(v -> toggleWakeService());
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
         content.addView(status, lp(-1,-2,0,0,0,12));
 
         totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
-        totals.setPadding(dp(8),dp(16),dp(8),dp(16)); totals.setBackground(round(Color.WHITE, 18));
+        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
         TextView label = text("دسترسی سریع صوتی", 19, dark, true);
