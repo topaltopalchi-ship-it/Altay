@@ -21,6 +21,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -79,6 +81,7 @@ public class MainActivity extends Activity {
         addVoiceCard("🛒 فهرست خرید", "بگو: «به فهرست خرید شیر اضافه کن»", "shopping");
         addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
         addVoiceCard("⏰ یادآوری", "بگو: «یادآوری پرداخت قبض برق»", "reminder");
+        addVoiceCard("🚗 ماشین خانه", "بگو: «تعویض روغن در کیلومتر ۸۵ هزار؛ سرویس بعدی ۹۰ هزار کیلومتر»", "vehicle");
         content.addView(cards);
         TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
         content.addView(recentTitle, lp(-1,-2,0,12,0,6));
@@ -158,7 +161,8 @@ public class MainActivity extends Activity {
             if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
                 status.setText(summary); say(summary); return;
-            } else if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
+            } else if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) mode="vehicle";
+            else if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
             else if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) mode="calc";
             else if (contains(s,"هزینه","خرج","پرداخت کردم","خریدم","قیمت خرید")) mode="expense";
             else if (contains(s,"خرید","فهرست")) mode="shopping";
@@ -185,10 +189,73 @@ public class MainActivity extends Activity {
             String answer="نتیجه محاسبه: "+fmt(out);
             status.setText(answer); say(answer); return;
         }
+        if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { addEntry("فهرست خرید", raw, 0); say("به فهرست خرید اضافه شد: "+raw); refresh(); return; }
         if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
         if (mode.equals("reminder")) { addEntry("یادآوری", raw, 0); say("یادآوری ثبت شد. در این نسخه اعلان خودکار زمان‌بندی‌شده هنوز فعال نیست."); refresh(); return; }
         status.setText("فرمان دریافت شد: " + raw);
+    }
+
+
+    private void handleVehicleVoice(String raw, String s) {
+        boolean oil = contains(s, "روغن", "تعویض روغن");
+        boolean service = oil || contains(s, "سرویس", "تعمیر", "لنت", "باتری", "لاستیک", "فیلتر", "شمع", "تسمه");
+        if (!service) {
+            status.setText("برای ثبت خودرو بگو چه سرویسی انجام شد؛ مثلاً تعویض روغن در کیلومتر ۸۵ هزار.");
+            say("نام سرویس خودرو را بگو");
+            return;
+        }
+
+        long currentKm = extractMileage(s);
+        long nextKm = extractNextMileage(s);
+        String date = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(new Date());
+        String kind = oil ? "تعویض روغن" : "سرویس/تعمیر خودرو";
+        StringBuilder detail = new StringBuilder(kind).append(" • ").append(date);
+        if (currentKm > 0) detail.append(" • کیلومتر فعلی: ").append(fmt(currentKm));
+        if (nextKm > 0) detail.append(" • سرویس بعدی: ").append(fmt(nextKm)).append(" کیلومتر");
+
+        String all = prefs.getString("vehicleRecords", "");
+        String record = detail.toString();
+        all = record + (all.isEmpty() ? "" : "\n" + all);
+        String[] lines = all.split("\n");
+        StringBuilder saved = new StringBuilder();
+        for (int i = 0; i < Math.min(lines.length, 30); i++) {
+            if (i > 0) saved.append("\n");
+            saved.append(lines[i]);
+        }
+        prefs.edit().putString("vehicleRecords", saved.toString()).apply();
+        addEntry("ماشین خانه", record, 0);
+        refresh();
+
+        if (currentKm <= 0) {
+            status.setText("نوع سرویس ثبت شد؛ برای کامل شدن سابقه، کیلومتر فعلی را هم بگو. مثلاً «تعویض روغن در کیلومتر ۸۵ هزار».");
+            say("سرویس ثبت شد. برای کامل شدن سابقه، کیلومتر فعلی خودرو را هم بگو.");
+        } else if (nextKm <= 0) {
+            status.setText("سرویس در کیلومتر " + fmt(currentKm) + " ثبت شد. کیلومتر سرویس بعدی هنوز مشخص نشده است.");
+            say(kind + " در کیلومتر " + fmt(currentKm) + " ثبت شد. برای یادآوری بر اساس کیلومتر، عدد سرویس بعدی را هم بگو.");
+        } else {
+            status.setText("ثبت شد: " + kind + " در کیلومتر " + fmt(currentKm) + "؛ سرویس بعدی در " + fmt(nextKm) + " کیلومتر.");
+            say("ثبت شد. " + kind + " در کیلومتر " + fmt(currentKm) + " و سرویس بعدی در کیلومتر " + fmt(nextKm));
+        }
+    }
+
+    private long extractMileage(String s) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:کیلومتر\\s*)([0-9]+)\\s*هزار").matcher(s);
+        if (m.find()) try { return Long.parseLong(m.group(1)) * 1000L; } catch (Exception ignored) {}
+        m = java.util.regex.Pattern.compile("([0-9]+)\\s*هزار\\s*کیلومتر").matcher(s);
+        if (m.find()) try { return Long.parseLong(m.group(1)) * 1000L; } catch (Exception ignored) {}
+        m = java.util.regex.Pattern.compile("کیلومتر\\s*([0-9]+)").matcher(s);
+        if (m.find()) try { return Long.parseLong(m.group(1)); } catch (Exception ignored) {}
+        m = java.util.regex.Pattern.compile("([0-9]+)\\s*کیلومتر").matcher(s);
+        if (m.find()) try { return Long.parseLong(m.group(1)); } catch (Exception ignored) {}
+        return 0;
+    }
+
+    private long extractNextMileage(String s) {
+        int idx = s.indexOf("بعدی");
+        if (idx < 0) idx = s.indexOf("بعد");
+        if (idx < 0 || idx >= s.length() - 1) return 0;
+        return extractMileage(s.substring(idx));
     }
 
     private String cleanDescription(String s, String mode) {
