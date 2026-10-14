@@ -33,7 +33,7 @@ import java.util.Calendar;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
-    private TextView status, totals, recent, remindersView;
+    private TextView status, totals, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
@@ -92,6 +92,10 @@ public class MainActivity extends Activity {
         content.addView(remindersTitle, lp(-1,-2,0,12,0,6));
         remindersView = text("", 14, Color.DKGRAY, false); remindersView.setPadding(dp(12),dp(10),dp(12),dp(10)); remindersView.setBackground(round(Color.WHITE,14));
         content.addView(remindersView, lp(-1,-2,0,0,0,12));
+        TextView inventoryTitle = text("🧺 موجودی خانه و خریدهای ثبت‌شده", 19, dark, true);
+        content.addView(inventoryTitle, lp(-1,-2,0,8,0,6));
+        inventoryView = text("", 14, Color.DKGRAY, false); inventoryView.setPadding(dp(12),dp(10),dp(12),dp(10)); inventoryView.setBackground(round(Color.WHITE,14));
+        content.addView(inventoryView, lp(-1,-2,0,0,0,12));
         TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
         content.addView(recentTitle, lp(-1,-2,0,12,0,6));
         recent = text("", 14, Color.DKGRAY, false); recent.setPadding(dp(12),dp(10),dp(12),dp(10)); recent.setBackground(round(Color.WHITE,14));
@@ -167,14 +171,17 @@ public class MainActivity extends Activity {
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
         if (mode.equals("auto")) {
-            if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
+            if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
+            else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
+            else if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
                 status.setText(summary); say(summary); return;
             } else if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) mode="vehicle";
             else if (contains(s,"یادآوری","یادم بنداز","یادآور")) mode="reminder";
             else if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
             else if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) mode="calc";
-            else if (contains(s,"هزینه","خرج","پرداخت کردم","خریدم","قیمت خرید")) mode="expense";
+            else if (contains(s,"خریدم","خرید کردم","خریداری کردم","خرید به قیمت","خرید به مبلغ")) mode="shopping";
+            else if (contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) mode="expense";
             else if (contains(s,"خرید","فهرست")) mode="shopping";
             else if (contains(s,"کار خانه","وظیفه","تمیزکاری")) mode="task";
             else mode="expense";
@@ -199,7 +206,8 @@ public class MainActivity extends Activity {
             status.setText(answer); say(answer); return;
         }
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
-        if (mode.equals("shopping")) { addEntry("فهرست خرید", raw, 0); say("به فهرست خرید اضافه شد: "+raw); refresh(); return; }
+        if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
+        if (mode.equals("budget")) { handleBudgetVoice(raw, s); return; }
         if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
         if (mode.equals("reminder")) { handleReminderVoice(raw, s); return; }
         status.setText("فرمان دریافت شد: " + raw);
@@ -207,6 +215,59 @@ public class MainActivity extends Activity {
 
 
 
+
+
+    private void handleBudgetVoice(String raw, String s) {
+        long amount = parseAmount(s);
+        if (amount <= 0) {
+            status.setText("مبلغ بودجه را بگو؛ مثلاً «بودجه ماهانه خانه پنج میلیون تومان»");
+            say("مبلغ بودجه را بگو"); return;
+        }
+        prefs.edit().putLong("home_budget", amount).apply();
+        long remaining = amount - expenseTotal;
+        String msg = "بودجه خانه روی " + fmt(amount) + " تومان تنظیم شد. مانده بودجه با احتساب ثبت‌های فعلی " + fmt(remaining) + " تومان است.";
+        status.setText(msg); say(msg); refresh();
+    }
+
+    private void handlePurchaseVoice(String raw, String s) {
+        long amount = parseAmount(s);
+        if (amount <= 0) {
+            addEntry("فهرست خرید", raw, 0);
+            status.setText("مورد خرید به فهرست اضافه شد؛ برای ثبت هزینه بگو «خریدم شیر به قیمت ۸۰ هزار تومان».");
+            say("به فهرست خرید اضافه شد. برای کم شدن از بودجه، قیمت را هم بگو.");
+            refresh(); return;
+        }
+        String item = raw.replace("خریدم", "").replace("خرید کردم", "").replace("خریداری کردم", "")
+            .replace("به قیمت", " ").replace("به مبلغ", " ").replace("قیمت", " ")
+            .replace("تومان", " ").replace("تومن", " ").replace("هزار", " ").replace("میلیون", " ")
+            .replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
+        if (item.isEmpty()) item = "خرید خانه";
+        expenseTotal += amount;
+        prefs.edit().putLong("expense", expenseTotal).apply();
+        String key = "stock_" + item;
+        int qty = prefs.getInt(key, 0);
+        prefs.edit().putInt(key, qty + 1).apply();
+        addEntry("خرید: " + item, raw, amount);
+        long budget = prefs.getLong("home_budget", 0);
+        String msg = item + " به مبلغ " + fmt(amount) + " تومان ثبت شد؛ یک قلم به موجودی اضافه شد و هزینه از حساب خانه کم شد.";
+        if (budget > 0) msg += " مانده بودجه " + fmt(budget - expenseTotal) + " تومان است.";
+        status.setText(msg); say(msg); refresh();
+    }
+
+    private void refreshInventory() {
+        if (inventoryView == null) return;
+        StringBuilder out = new StringBuilder();
+        for (String key : prefs.getAll().keySet()) {
+            if (!key.startsWith("stock_")) continue;
+            try {
+                int qty = prefs.getInt(key, 0);
+                if (qty <= 0) continue;
+                if (out.length() > 0) out.append("\\n");
+                out.append("• ").append(key.substring(6)).append(" — ").append(qty).append(" قلم");
+            } catch (Exception ignored) {}
+        }
+        inventoryView.setText(out.length() == 0 ? "هنوز خریدی در موجودی ثبت نشده است. بگو: «خریدم شیر به قیمت ۸۰ هزار تومان»." : out.toString());
+    }
 
     private void refreshReminders() {
         java.util.ArrayList<String> rows = new java.util.ArrayList<>();
@@ -498,6 +559,7 @@ public class MainActivity extends Activity {
         if(totals!=null) totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده: "+fmt(incomeTotal-expenseTotal)+" تومان");
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
+        if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
