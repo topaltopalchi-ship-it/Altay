@@ -201,10 +201,8 @@ public class MainActivity extends Activity {
                             while(keys.hasNext()) {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
-                                else if(value instanceof Boolean) editor.putBoolean(key,(Boolean)value);
-                                else if(value instanceof Integer) editor.putInt(key,(Integer)value);
-                                else if(value instanceof Long) editor.putLong(key,(Long)value);
-                                else if(value instanceof Number) editor.putLong(key,((Number)value).longValue());
+                                else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
                             incomeTotal=prefs.getLong("income",0); expenseTotal=prefs.getLong("expense",0);
