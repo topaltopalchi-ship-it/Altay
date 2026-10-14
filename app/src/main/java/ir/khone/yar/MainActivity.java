@@ -174,7 +174,7 @@ public class MainActivity extends Activity {
             long[] nums = extractNumbers(s);
             if (nums.length < 2) { status.setText("دو عدد و عمل را بگو؛ مثلاً «ماشین حساب ۲۰۰ جمع ۳۰»"); say("برای محاسبه دو عدد لازم است"); return; }
             long a=nums[0], b=nums[1], out;
-            if (contains(s,"ضرب","در")) out=a*b;
+            if (contains(s,"ضرب","ضربدر")) out=a*b;
             else if (contains(s,"منهای","منها","تفریق")) out=a-b;
             else if (contains(s,"تقسیم","تقسیم بر")) { if(b==0){say("تقسیم بر صفر ممکن نیست");return;} out=a/b; }
             else out=a+b;
@@ -195,13 +195,14 @@ public class MainActivity extends Activity {
     }
 
     private long parseAmount(String s) {
-        String x = s.replace("هزار تومان","000").replace("هزار","000").replace("میلیون تومان","000000").replace("میلیون","000000").replace("تومان","").replace("ریال","");
-        long[] nums = extractNumbers(x);
-        if (nums.length > 0) {
-            long n=nums[0];
-            if (s.contains("میلیون")) n*=1000000L;
-            else if (s.contains("هزار")) n*=1000L;
-            return n;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[0-9]+").matcher(s);
+        if (m.find()) {
+            try {
+                long n = Long.parseLong(m.group());
+                if (s.contains("میلیون")) return n * 1000000L;
+                if (s.contains("هزار")) return n * 1000L;
+                return n;
+            } catch (Exception ignored) {}
         }
         return wordNumber(s);
     }
@@ -220,10 +221,9 @@ public class MainActivity extends Activity {
     private long wordNumber(String s) {
         long total=0, current=0;
         for(String w:s.split("\\s+")) {
-            long v=wordValue(w);
-            if(v>0) current += v;
-            else if(w.equals("هزار")) { total += Math.max(1,current)*1000; current=0; }
+            if(w.equals("هزار")) { total += Math.max(1,current)*1000; current=0; }
             else if(w.equals("میلیون")) { total += Math.max(1,current)*1000000; current=0; }
+            else { long v=wordValue(w); if(v>0) current += v; }
         }
         return total+current;
     }
