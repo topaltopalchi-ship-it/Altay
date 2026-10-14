@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.app.Notification;
+import android.speech.tts.TextToSpeech;
+import java.util.Locale;
 import android.content.SharedPreferences;
 import java.util.Calendar;
 
@@ -64,9 +66,9 @@ public class ReminderReceiver extends BroadcastReceiver {
                 .setContentTitle("یادآوری خونه‌یار")
                 .setContentText(title)
                 .setStyle(new Notification.BigTextStyle().bigText(title))
-                .setAutoCancel(true).setContentIntent(contentIntent);
+                .setAutoCancel(true).setContentIntent(contentIntent)\n                .setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) builder.setPriority(Notification.PRIORITY_HIGH);
-        try { manager.notify(id, builder.build()); } catch (SecurityException ignored) {}
+        try { manager.notify(id, builder.build()); } catch (SecurityException ignored) {}\n        final String spoken = "هشدار خونه‌یار. موعد یادآوری: " + title;\n        speakReminder(context, spoken);
 
         if (monthly) {
             SharedPreferences prefs = context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE);
@@ -92,7 +94,7 @@ public class ReminderReceiver extends BroadcastReceiver {
         }
     }
 
-    public static void restore(Context context) {
+    private static void speakReminder(Context context, String message) {\n        try {\n            final TextToSpeech[] holder = new TextToSpeech[1];\n            holder[0] = new TextToSpeech(context.getApplicationContext(), result -> {\n                if (result == TextToSpeech.SUCCESS) {\n                    holder[0].setLanguage(new Locale("fa", "IR"));\n                    holder[0].speak(message, TextToSpeech.QUEUE_FLUSH, null, "khoneyar_reminder");\n                }\n            });\n        } catch (Exception ignored) {}\n    }\n\n    public static void restore(Context context) {
         SharedPreferences prefs = context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE);
         for (String key : prefs.getAll().keySet()) {
             if (!key.startsWith("reminder_")) continue;
