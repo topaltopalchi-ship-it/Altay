@@ -19,7 +19,7 @@ import java.util.Calendar;
 import java.util.Locale;
 
 public class ReminderReceiver extends BroadcastReceiver {
-    public static final String CHANNEL_ID = "khoneyar_reminders";
+    public static final String CHANNEL_ID = "khoneyar_reminders_alarm_v2";
     private static final String CHANNEL_NAME = "یادآوری‌های خونه‌یار";
 
     public static void schedule(Context context, int id, long when, String title, boolean monthly) {
