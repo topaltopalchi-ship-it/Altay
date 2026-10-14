@@ -208,6 +208,7 @@ public class MainActivity extends Activity {
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
         if (mode.equals("budget")) { handleBudgetVoice(raw, s); return; }
+        if (mode.equals("stock_use")) { handleStockUse(raw); return; }
         if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
         if (mode.equals("reminder")) { handleReminderVoice(raw, s); return; }
         status.setText("فرمان دریافت شد: " + raw);
@@ -226,6 +227,19 @@ public class MainActivity extends Activity {
         prefs.edit().putLong("home_budget", amount).apply();
         long remaining = amount - expenseTotal;
         String msg = "بودجه خانه روی " + fmt(amount) + " تومان تنظیم شد. مانده بودجه با احتساب ثبت‌های فعلی " + fmt(remaining) + " تومان است.";
+        status.setText(msg); say(msg); refresh();
+    }
+
+    private void handleStockUse(String raw) {
+        String item = raw.replace("مصرف کردم", "").replace("تمام شده است", "").replace("تمام شده", "").replace("تمام شد", "").replace("از موجودی کم کن", "").trim();
+        String key = "stock_" + item;
+        int qty = prefs.getInt(key, 0);
+        if (item.isEmpty() || qty <= 0) {
+            String msg = "این مورد در موجودی پیدا نشد. نام کالا را مثل زمان خرید بگو.";
+            status.setText(msg); say(msg); return;
+        }
+        prefs.edit().putInt(key, Math.max(0, qty - 1)).apply();
+        String msg = "یک قلم " + item + " از موجودی کم شد.";
         status.setText(msg); say(msg); refresh();
     }
 
