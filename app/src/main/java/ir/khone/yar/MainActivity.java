@@ -107,6 +107,7 @@ public class MainActivity extends Activity {
         addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
         addVoiceCard("⏰ یادآوری‌های من", "بگو: «یادآوری قسط فردا ساعت ۹ صبح» یا «یادآوری قبض روز ۲۰ هر ماه ساعت ۱۰»", "reminder");
         addVoiceCard("🚗 ماشین خانه", "بگو: «تعویض روغن در کیلومتر ۸۵ هزار؛ سرویس بعدی ۹۰ هزار کیلومتر»", "vehicle");
+        addVoiceCard("🏥 سلامت", "بگو: «هزینه ۳۰۰ هزار تومان دکتر» یا «دارو ۱۵۰ هزار تومان خریدم»", "health");
         content.addView(cards);
         TextView remindersTitle = text("⏰ یادآوری‌های فعال", 19, dark, true);
         content.addView(remindersTitle, lp(-1,-2,0,12,0,6));
@@ -338,7 +339,8 @@ public class MainActivity extends Activity {
             else if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
                 status.setText(summary); say(summary); return;
-            } else if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) mode="vehicle";
+            } else if (contains(s,"سلامت","دکتر","پزشک","دارو","درمان","آزمایش","بیمارستان")) mode="health";
+            else if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) mode="vehicle";
             else if (contains(s,"یادآوری","یادم بنداز","یادآور")) mode="reminder";
             else if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
             else if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) mode="calc";
@@ -373,6 +375,21 @@ public class MainActivity extends Activity {
                 say(message);
             }
             return;
+        }
+        if (mode.equals("health")) {
+            long amount = parseAmount(s);
+            if (amount <= 0) {
+                status.setText("برای ثبت هزینه سلامت، مبلغ را هم بگو؛ مثلاً «هزینه ۳۰۰ هزار تومان دکتر».");
+                say("مبلغ هزینه سلامت را هم بگو");
+                return;
+            }
+            String title = raw.replace("تومان", "").replace("تومن", "").replace("هزار", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
+            if (title.isEmpty()) title = "هزینه سلامت";
+            expenseTotal += amount;
+            prefs.edit().putLong("expense", expenseTotal).apply();
+            addEntry("سلامت", title, amount);
+            String message = "هزینه سلامت به مبلغ " + fmt(amount) + " تومان ثبت شد.";
+            status.setText(message); say(message); refresh(); return;
         }
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
