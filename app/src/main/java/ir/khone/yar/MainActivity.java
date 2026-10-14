@@ -155,8 +155,12 @@ public class MainActivity extends Activity {
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
         if (mode.equals("auto")) {
-            if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
+            if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
+                String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
+                status.setText(summary); say(summary); return;
+            } else if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
             else if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) mode="calc";
+            else if (contains(s,"هزینه","خرج","پرداخت کردم","خریدم","قیمت خرید")) mode="expense";
             else if (contains(s,"خرید","فهرست")) mode="shopping";
             else if (contains(s,"یادآوری","یادم بنداز","یادآور")) mode="reminder";
             else if (contains(s,"کار خانه","وظیفه","تمیزکاری")) mode="task";
