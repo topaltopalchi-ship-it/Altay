@@ -3,6 +3,10 @@ package ir.khone.yar;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.os.Build;
+import android.provider.Settings;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -25,6 +29,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Calendar;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
@@ -80,7 +85,7 @@ public class MainActivity extends Activity {
         addVoiceCard("🧮 ماشین‌حساب صوتی", "بگو: «ماشین حساب ۲۰۰۰۰ جمع ۳۰۰۰۰»", "calc");
         addVoiceCard("🛒 فهرست خرید", "بگو: «به فهرست خرید شیر اضافه کن»", "shopping");
         addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
-        addVoiceCard("⏰ یادآوری", "بگو: «یادآوری پرداخت قبض برق»", "reminder");
+        addVoiceCard("⏰ یادآوری‌های من", "بگو: «یادآوری قسط فردا ساعت ۹ صبح» یا «یادآوری قبض روز ۲۰ هر ماه ساعت ۱۰»", "reminder");
         addVoiceCard("🚗 ماشین خانه", "بگو: «تعویض روغن در کیلومتر ۸۵ هزار؛ سرویس بعدی ۹۰ هزار کیلومتر»", "vehicle");
         content.addView(cards);
         TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
@@ -192,10 +197,89 @@ public class MainActivity extends Activity {
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { addEntry("فهرست خرید", raw, 0); say("به فهرست خرید اضافه شد: "+raw); refresh(); return; }
         if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
-        if (mode.equals("reminder")) { addEntry("یادآوری", raw, 0); say("یادآوری ثبت شد. در این نسخه اعلان خودکار زمان‌بندی‌شده هنوز فعال نیست."); refresh(); return; }
+        if (mode.equals("reminder")) { handleReminderVoice(raw, s); return; }
         status.setText("فرمان دریافت شد: " + raw);
     }
 
+
+
+    private void handleReminderVoice(String raw, String s) {
+        boolean monthly = contains(s, "هر ماه", "ماهانه");
+        Calendar now = Calendar.getInstance();
+        Calendar due = (Calendar) now.clone();
+        int hour = -1, minute = 0;
+        java.util.regex.Matcher tm = java.util.regex.Pattern.compile("ساعت\\s*([0-9]{1,2})(?:[:٫.]([0-9]{2}))?").matcher(s);
+        if (tm.find()) {
+            hour = Integer.parseInt(tm.group(1));
+            if (tm.group(2) != null) minute = Integer.parseInt(tm.group(2));
+            if (contains(s, "شب", "بعدازظهر", "بعد از ظهر") && hour < 12) hour += 12;
+            if (contains(s, "صبح") && hour == 12) hour = 0;
+            if (hour > 23 || minute > 59) hour = -1;
+        }
+        if (hour < 0) {
+            status.setText("برای زمان‌بندی دقیق، ساعت را هم بگو؛ مثلاً «یادآوری قسط فردا ساعت ۹ صبح».");
+            say("لطفاً ساعت یادآوری را هم بگو");
+            return;
+        }
+        due.set(Calendar.HOUR_OF_DAY, hour);
+        due.set(Calendar.MINUTE, minute);
+        due.set(Calendar.SECOND, 0);
+        due.set(Calendar.MILLISECOND, 0);
+
+        if (monthly) {
+            int day = extractReminderDay(s);
+            if (day < 1 || day > 31) {
+                status.setText("برای یادآوری ماهانه، روز ماه را مشخص کن؛ مثلاً «یادآوری قسط روز ۲۰ هر ماه ساعت ۹ صبح».");
+                say("روز ماه را هم بگو");
+                return;
+            }
+            due.set(Calendar.DAY_OF_MONTH, Math.min(day, due.getActualMaximum(Calendar.DAY_OF_MONTH)));
+            if (!due.after(now)) {
+                due.add(Calendar.MONTH, 1);
+                due.set(Calendar.DAY_OF_MONTH, Math.min(day, due.getActualMaximum(Calendar.DAY_OF_MONTH)));
+            }
+        } else if (contains(s, "پس فردا", "پس‌فردا")) {
+            due.add(Calendar.DAY_OF_MONTH, 2);
+        } else if (contains(s, "فردا")) {
+            due.add(Calendar.DAY_OF_MONTH, 1);
+        } else if (contains(s, "امروز", "امشب")) {
+            if (!due.after(now)) due.add(Calendar.DAY_OF_MONTH, 1);
+        } else {
+            status.setText("تاریخ را هم مشخص کن؛ مثلاً «یادآوری قسط فردا ساعت ۹ صبح» یا «روز ۲۰ هر ماه ساعت ۹».");
+            say("لطفاً روز یا تاریخ یادآوری را هم مشخص کن");
+            return;
+        }
+
+        String title = raw.replace("یادم بنداز", "").replace("یادآوری", "").replace("یادآور", "").trim();
+        title = title.replace("هر ماه", "").replace("ماهانه", "").replace("فردا", "").replace("پس فردا", "").replace("پس‌فردا", "").replace("امروز", "").replace("امشب", "");
+        title = title.replaceAll("ساعت\\s*[0-9]{1,2}(?:[:٫.][0-9]{2})?", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
+        if (title.isEmpty()) title = "یادآوری خانه";
+        int id = (int)(System.currentTimeMillis() & 0x7fffffff);
+        long when = due.getTimeInMillis();
+        String saved = when + "\\n" + (monthly ? "monthly" : "once") + "\\n" + title;
+        prefs.edit().putString("reminder_" + id, saved).apply();
+        ReminderReceiver.schedule(this, id, when, title, monthly);
+        String whenText = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(due.getTime());
+        String confirmation = "یادآوری «" + title + "» برای " + whenText + (monthly ? " و تکرار ماهانه" : "") + " ثبت شد.";
+        addEntry("یادآوری", confirmation, 0);
+        status.setText(confirmation);
+        say(confirmation);
+        refresh();
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
+        }
+    }
+
+    private int extractReminderDay(String s) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:روز\\s*)?([0-9]{1,2})\\s*(?:ام)?\\s*(?:هر ماه|ماهانه)").matcher(s);
+        if (m.find()) try { return Integer.parseInt(m.group(1)); } catch (Exception ignored) {}
+        m = java.util.regex.Pattern.compile("روز\\s*([0-9]{1,2})").matcher(s);
+        if (m.find()) try { return Integer.parseInt(m.group(1)); } catch (Exception ignored) {}
+        String[] ordinals = {"سی و یکم","سی‌ویکم","سی‌ام","سی ام","بیست و نهم","بیست‌ونهم","بیست و هشتم","بیست‌وهشتم","بیست و هفتم","بیست‌وهفتم","بیست و ششم","بیست‌وششم","بیست و پنجم","بیست‌وپنجم","بیست و چهارم","بیست‌وچهارم","بیست و سوم","بیست‌وسوم","بیست و دوم","بیست‌ودوم","بیستم","نوزدهم","هجدهم","هفدهم","شانزدهم","پانزدهم","چهاردهم","سیزدهم","دوازدهم","یازدهم","دهم","نهم","هشتم","هفتم","ششم","پنجم","چهارم","سوم","دوم","اول"};
+        int[] vals = {31,31,30,30,29,29,28,28,27,27,26,26,25,25,24,24,23,23,22,22,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1};
+        for (int i=0;i<ordinals.length;i++) if(s.contains(ordinals[i])) return vals[i];
+        return -1;
+    }
 
     private void handleVehicleVoice(String raw, String s) {
         boolean oil = contains(s, "روغن", "تعویض روغن");
