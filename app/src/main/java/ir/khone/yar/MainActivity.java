@@ -88,6 +88,10 @@ public class MainActivity extends Activity {
         addVoiceCard("⏰ یادآوری‌های من", "بگو: «یادآوری قسط فردا ساعت ۹ صبح» یا «یادآوری قبض روز ۲۰ هر ماه ساعت ۱۰»", "reminder");
         addVoiceCard("🚗 ماشین خانه", "بگو: «تعویض روغن در کیلومتر ۸۵ هزار؛ سرویس بعدی ۹۰ هزار کیلومتر»", "vehicle");
         content.addView(cards);
+        TextView remindersTitle = text("⏰ یادآوری‌های فعال", 19, dark, true);
+        content.addView(remindersTitle, lp(-1,-2,0,12,0,6));
+        remindersView = text("", 14, Color.DKGRAY, false); remindersView.setPadding(dp(12),dp(10),dp(12),dp(10)); remindersView.setBackground(round(Color.WHITE,14));
+        content.addView(remindersView, lp(-1,-2,0,0,0,12));
         TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
         content.addView(recentTitle, lp(-1,-2,0,12,0,6));
         recent = text("", 14, Color.DKGRAY, false); recent.setPadding(dp(12),dp(10),dp(12),dp(10)); recent.setBackground(round(Color.WHITE,14));
@@ -167,11 +171,11 @@ public class MainActivity extends Activity {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
                 status.setText(summary); say(summary); return;
             } else if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) mode="vehicle";
+            else if (contains(s,"یادآوری","یادم بنداز","یادآور")) mode="reminder";
             else if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) mode="income";
             else if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) mode="calc";
             else if (contains(s,"هزینه","خرج","پرداخت کردم","خریدم","قیمت خرید")) mode="expense";
             else if (contains(s,"خرید","فهرست")) mode="shopping";
-            else if (contains(s,"یادآوری","یادم بنداز","یادآور")) mode="reminder";
             else if (contains(s,"کار خانه","وظیفه","تمیزکاری")) mode="task";
             else mode="expense";
         }
@@ -223,6 +227,30 @@ public class MainActivity extends Activity {
         StringBuilder out = new StringBuilder();
         for (String row : rows) {
             if (out.length() > 0) out.append("\\n");
+            out.append(row.substring(row.indexOf("|")+1));
+        }
+        remindersView.setText(out.length() == 0 ? "هنوز یادآوری زمان‌بندی‌شده‌ای ثبت نشده است. با صدا بگو: «یادآوری قسط فردا ساعت ۹ صبح»." : out.toString());
+    }
+
+    private void refreshReminders() {
+        java.util.ArrayList<String> rows = new java.util.ArrayList<>();
+        for (String key : prefs.getAll().keySet()) {
+            if (!key.startsWith("reminder_")) continue;
+            try {
+                String value = prefs.getString(key, "");
+                String[] parts = value.split("\\n", 4);
+                if (parts.length < 3) continue;
+                long when = Long.parseLong(parts[0]);
+                boolean monthly = "monthly".equals(parts[1]);
+                String title = parts[2];
+                String date = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(new Date(when));
+                rows.add(when + "|" + "• " + title + " — " + date + (monthly ? " (هر ماه)" : ""));
+            } catch (Exception ignored) {}
+        }
+        java.util.Collections.sort(rows, (a,b) -> Long.compare(Long.parseLong(a.substring(0,a.indexOf("|"))), Long.parseLong(b.substring(0,b.indexOf("|")))));
+        StringBuilder out = new StringBuilder();
+        for (String row : rows) {
+            if (out.length() > 0) out.append("\n");
             out.append(row.substring(row.indexOf("|")+1));
         }
         remindersView.setText(out.length() == 0 ? "هنوز یادآوری زمان‌بندی‌شده‌ای ثبت نشده است. با صدا بگو: «یادآوری قسط فردا ساعت ۹ صبح»." : out.toString());
@@ -283,7 +311,7 @@ public class MainActivity extends Activity {
         if (title.isEmpty()) title = "یادآوری خانه";
         int id = (int)(System.currentTimeMillis() & 0x7fffffff);
         long when = due.getTimeInMillis();
-        String saved = when + "\\n" + (monthly ? "monthly" : "once") + "\\n" + title + "\\n" + monthlyDay;
+        String saved = when + "\n" + (monthly ? "monthly" : "once") + "\n" + title + "\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
         ReminderReceiver.schedule(this, id, when, title, monthly);
         String whenText = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(due.getTime());
@@ -445,6 +473,7 @@ public class MainActivity extends Activity {
     private void refresh() {
         if(totals!=null) totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده: "+fmt(incomeTotal-expenseTotal)+" تومان");
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
+        if(remindersView!=null) refreshReminders();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
