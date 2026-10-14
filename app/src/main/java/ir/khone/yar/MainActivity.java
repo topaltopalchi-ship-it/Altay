@@ -257,6 +257,30 @@ public class MainActivity extends Activity {
     }
 
     private void handleReminderVoice(String raw, String s) {
+        if (contains(s, "لیست یادآوری", "یادآوری های من", "یادآوری‌های من", "یادآوری ها")) {
+            refreshReminders();
+            status.setText(remindersView.getText());
+            say("یادآوری‌های فعال در بخش یادآوری‌های من نمایش داده شده‌اند");
+            return;
+        }
+        if (contains(s, "لغو یادآوری", "حذف یادآوری", "پاک کن یادآوری")) {
+            String target = raw.replace("لغو یادآوری", "").replace("حذف یادآوری", "").replace("پاک کن یادآوری", "").trim();
+            int removed = 0;
+            for (String key : new java.util.ArrayList<>(prefs.getAll().keySet())) {
+                if (!key.startsWith("reminder_")) continue;
+                try {
+                    String[] parts = prefs.getString(key, "").split("\\n", 4);
+                    if (parts.length >= 3 && (target.isEmpty() || parts[2].contains(target))) {
+                        int rid = Integer.parseInt(key.substring("reminder_".length()));
+                        ReminderReceiver.cancel(this, rid);
+                        removed++;
+                    }
+                } catch (Exception ignored) {}
+            }
+            refresh();
+            String msg = removed == 0 ? "یادآوری مطابق این نام پیدا نشد." : removed + " یادآوری لغو شد.";
+            status.setText(msg); say(msg); return;
+        }
         boolean monthly = contains(s, "هر ماه", "ماهانه");
         Calendar now = Calendar.getInstance();
         Calendar due = (Calendar) now.clone();
@@ -306,7 +330,7 @@ public class MainActivity extends Activity {
         }
 
         String title = raw.replace("یادم بنداز", "").replace("یادآوری", "").replace("یادآور", "").trim();
-        title = title.replace("هر ماه", "").replace("ماهانه", "").replace("فردا", "").replace("پس فردا", "").replace("پس‌فردا", "").replace("امروز", "").replace("امشب", "");
+        title = title.replace("هر ماه", "").replace("ماهانه", "").replace("فردا", "").replace("پس فردا", "").replace("پس‌فردا", "").replace("امروز", "").replace("امشب", "").replace("صبح", "").replace("شب", "").replace("بعدازظهر", "").replace("بعد از ظهر", "");
         title = title.replaceAll("ساعت\\s*[0-9]{1,2}(?:[:٫.][0-9]{2})?", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
         if (title.isEmpty()) title = "یادآوری خانه";
         int id = (int)(System.currentTimeMillis() & 0x7fffffff);
