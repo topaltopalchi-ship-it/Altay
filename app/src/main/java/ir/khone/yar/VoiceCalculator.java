@@ -31,8 +31,8 @@ public final class VoiceCalculator {
              .replace("منفی", " - ")
              .replace("ممیز", ".");
         // Spoken Persian amount multipliers and currency words.
-        s = s.replaceAll("([0-9]+(?:\\\\.[0-9]+)?)\\\\s*میلیون", "$1 * 1000000")
-             .replaceAll("([0-9]+(?:\\\\.[0-9]+)?)\\\\s*هزار", "$1 * 1000")
+        s = s.replaceAll("([0-9]+(?:\\.[0-9]+)?)\\s*میلیون", "$1 * 1000000")
+             .replaceAll("([0-9]+(?:\\.[0-9]+)?)\\s*هزار", "$1 * 1000")
              .replace("تومان", " ").replace("تومن", " ").replace("ریال", " ");
         // Ignore common conversational filler, but reject unknown words later.
         s = s.replace("اوبا", " ").replace("لطفا", " ").replace("لطفاً", " ");
