@@ -321,15 +321,22 @@ public class MainActivity extends Activity {
             refresh(); return;
         }
         if (mode.equals("calc")) {
-            long[] nums = extractNumbers(s);
-            if (nums.length < 2) { status.setText("دو عدد و عمل را بگو؛ مثلاً «ماشین حساب ۲۰۰ جمع ۳۰»"); say("برای محاسبه دو عدد لازم است"); return; }
-            long a=nums[0], b=nums[1], out;
-            if (contains(s,"ضرب","ضربدر")) out=a*b;
-            else if (contains(s,"منهای","منها","تفریق")) out=a-b;
-            else if (contains(s,"تقسیم","تقسیم بر")) { if(b==0){say("تقسیم بر صفر ممکن نیست");return;} out=a/b; }
-            else out=a+b;
-            String answer="نتیجه محاسبه: "+fmt(out);
-            status.setText(answer); say(answer); return;
+            try {
+                double result = VoiceCalculator.evaluate(s);
+                String resultText = new DecimalFormat("#,##0.####").format(result);
+                String answer = "نتیجه محاسبه: " + resultText;
+                status.setText(answer);
+                say(answer);
+            } catch (ArithmeticException ex) {
+                String message = ex.getMessage() == null ? "این محاسبه ممکن نیست." : ex.getMessage();
+                status.setText(message);
+                say(message);
+            } catch (IllegalArgumentException ex) {
+                String message = "عبارت را واضح‌تر بگو؛ مثلاً «ماشین حساب ۲۰۰ جمع ۳۰ ضربدر ۲».";
+                status.setText(message);
+                say(message);
+            }
+            return;
         }
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
