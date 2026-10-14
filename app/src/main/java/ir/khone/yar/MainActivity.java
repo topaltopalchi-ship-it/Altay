@@ -156,9 +156,11 @@ public class MainActivity extends Activity {
                 json.put("version",1);
                 JSONObject values = new JSONObject();
                 for (java.util.Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
+                    String key = entry.getKey();
                     Object value = entry.getValue();
-                    if (value instanceof String || value instanceof Boolean || value instanceof Integer || value instanceof Long || value instanceof Float)
-                        values.put(entry.getKey(),value);
+                    // Service state is transient and must never be restored from a backup file.
+                    if ("wake_enabled".equals(key)) continue;
+                    if (isValidBackupPreference(key, value)) values.put(key, value);
                 }
                 json.put("preferences",values);
                 try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
@@ -169,11 +171,25 @@ public class MainActivity extends Activity {
             } else if (requestCode == BACKUP_RESTORE) {
                 StringBuilder raw = new StringBuilder();
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(data.getData()), java.nio.charset.StandardCharsets.UTF_8))) {
-                    String line; while ((line=reader.readLine())!=null) raw.append(line);
+                    String line;
+                    while ((line=reader.readLine())!=null) {
+                        if (raw.length() + line.length() > 1000000) {
+                            Toast.makeText(this,"فایل پشتیبان بیش از حد بزرگ است.",Toast.LENGTH_LONG).show(); return;
+                        }
+                        raw.append(line);
+                    }
                 }
                 JSONObject json = new JSONObject(raw.toString());
-                if (!"OBA".equals(json.optString("app")) || !json.has("preferences")) {
+                if (!"OBA".equals(json.optString("app")) || json.optInt("version", -1) != 1 || !json.has("preferences") || !(json.opt("preferences") instanceof JSONObject)) {
                     Toast.makeText(this,"این فایل، نسخه پشتیبان معتبر OBA نیست.",Toast.LENGTH_LONG).show(); return;
+                }
+                JSONObject checkedValues = json.getJSONObject("preferences");
+                java.util.Iterator<String> checkedKeys = checkedValues.keys();
+                while (checkedKeys.hasNext()) {
+                    String key = checkedKeys.next();
+                    if (!isValidBackupPreference(key, checkedValues.opt(key))) {
+                        Toast.makeText(this,"فایل پشتیبان دارای دادهٔ نامعتبر یا پشتیبانی‌نشده است؛ اطلاعات تغییر نکرد.",Toast.LENGTH_LONG).show(); return;
+                    }
                 }
                 new AlertDialog.Builder(this).setTitle("بازیابی اطلاعات")
                     .setMessage("اطلاعات فعلی با اطلاعات داخل نسخه پشتیبان جایگزین می‌شوند. ادامه می‌دهی؟")
@@ -198,6 +214,28 @@ public class MainActivity extends Activity {
                     }).show();
             }
         } catch(Exception e) { Toast.makeText(this,"خطا در فایل پشتیبان؛ دوباره تلاش کن.",Toast.LENGTH_LONG).show(); }
+    }
+
+    private boolean isValidBackupPreference(String key, Object value) {
+        if (key == null || value == null) return false;
+        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) {
+            if (!(value instanceof Number)) return false;
+            double number = ((Number) value).doubleValue();
+            return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
+        }
+        if ("entries".equals(key) || "vehicleRecords".equals(key)) {
+            return value instanceof String && ((String) value).length() <= 20000;
+        }
+        if (key.matches("reminder_[0-9]{1,10}")) {
+            return value instanceof String && ((String) value).length() <= 2000;
+        }
+        if (key.startsWith("stock_") && key.length() > 6 && key.length() <= 106) {
+            if (!(value instanceof Number)) return false;
+            double number = ((Number) value).doubleValue();
+            return Double.isFinite(number) && number >= 0 && number <= Integer.MAX_VALUE && number == Math.rint(number);
+        }
+        // Unknown keys and runtime-only flags are deliberately not imported.
+        return false;
     }
 
     private void addVoiceCard(String title, String desc, String mode) {
