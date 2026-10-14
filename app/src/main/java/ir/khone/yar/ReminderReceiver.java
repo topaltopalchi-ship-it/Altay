@@ -29,6 +29,16 @@ public class ReminderReceiver extends BroadcastReceiver {
         }
     }
 
+    public static void cancel(Context context, int id) {
+        AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, ReminderReceiver.class);
+        PendingIntent pending = PendingIntent.getBroadcast(context, id, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        if (alarms != null) alarms.cancel(pending);
+        pending.cancel();
+        context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE).edit().remove("reminder_" + id).apply();
+    }
+
     @Override public void onReceive(Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             restore(context);
