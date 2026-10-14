@@ -30,6 +30,11 @@ import java.util.Date;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Calendar;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import org.json.JSONObject;
+import org.json.JSONException;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
@@ -42,6 +47,7 @@ public class MainActivity extends Activity {
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
+    private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
 
@@ -84,6 +90,13 @@ public class MainActivity extends Activity {
         totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
+        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
+        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
+        TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
+        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(255,143,0),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
+        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
+        content.addView(backupPanel,lp(-1,-2,0,8,0,14));
+
         TextView label = text("دسترسی سریع صوتی", 19, dark, true);
         content.addView(label, lp(-1,-2,0,6,0,8));
         cards = new LinearLayout(this); cards.setOrientation(LinearLayout.VERTICAL);
@@ -113,6 +126,78 @@ public class MainActivity extends Activity {
         root.addView(foot, lp(-1,-2,0,8,0,0));
         setContentView(root);
         refresh();
+    }
+
+
+    private void createBackup() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/json");
+            intent.putExtra(Intent.EXTRA_TITLE, "OBA-backup.json");
+            startActivityForResult(intent, BACKUP_CREATE);
+        } catch (Exception e) { Toast.makeText(this,"ذخیره فایل پشتیبان ممکن نشد.",Toast.LENGTH_LONG).show(); }
+    }
+
+    private void chooseBackup() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        startActivityForResult(intent, BACKUP_RESTORE);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode,resultCode,data);
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        try {
+            if (requestCode == BACKUP_CREATE) {
+                JSONObject json = new JSONObject();
+                json.put("app","OBA");
+                json.put("version",1);
+                JSONObject values = new JSONObject();
+                for (java.util.Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
+                    Object value = entry.getValue();
+                    if (value instanceof String || value instanceof Boolean || value instanceof Integer || value instanceof Long || value instanceof Float)
+                        values.put(entry.getKey(),value);
+                }
+                json.put("preferences",values);
+                try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                    if (out == null) throw new java.io.IOException("No output stream");
+                    out.write(json.toString(2).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                Toast.makeText(this,"نسخه پشتیبان در محل انتخابی گوشی ذخیره شد.",Toast.LENGTH_LONG).show();
+            } else if (requestCode == BACKUP_RESTORE) {
+                StringBuilder raw = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(getContentResolver().openInputStream(data.getData()), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line; while ((line=reader.readLine())!=null) raw.append(line);
+                }
+                JSONObject json = new JSONObject(raw.toString());
+                if (!"OBA".equals(json.optString("app")) || !json.has("preferences")) {
+                    Toast.makeText(this,"این فایل، نسخه پشتیبان معتبر OBA نیست.",Toast.LENGTH_LONG).show(); return;
+                }
+                new AlertDialog.Builder(this).setTitle("بازیابی اطلاعات")
+                    .setMessage("اطلاعات فعلی با اطلاعات داخل نسخه پشتیبان جایگزین می‌شوند. ادامه می‌دهی؟")
+                    .setNegativeButton("انصراف",null).setPositiveButton("بازیابی", (dialog,which) -> {
+                        try {
+                            JSONObject values = json.getJSONObject("preferences");
+                            SharedPreferences.Editor editor = prefs.edit().clear();
+                            java.util.Iterator<String> keys = values.keys();
+                            while(keys.hasNext()) {
+                                String key=keys.next(); Object value=values.get(key);
+                                if(value instanceof String) editor.putString(key,(String)value);
+                                else if(value instanceof Boolean) editor.putBoolean(key,(Boolean)value);
+                                else if(value instanceof Integer) editor.putInt(key,(Integer)value);
+                                else if(value instanceof Long) editor.putLong(key,(Long)value);
+                                else if(value instanceof Number) editor.putLong(key,((Number)value).longValue());
+                            }
+                            editor.apply();
+                            incomeTotal=prefs.getLong("income",0); expenseTotal=prefs.getLong("expense",0);
+                            entries.clear(); loadEntries(); refresh();
+                            Toast.makeText(this,"اطلاعات بازیابی شد. برای بازنشانی یادآوری‌ها برنامه را یک‌بار باز نگه دار.",Toast.LENGTH_LONG).show();
+                        } catch(Exception ex) { Toast.makeText(this,"بازیابی انجام نشد: فایل را بررسی کن.",Toast.LENGTH_LONG).show(); }
+                    }).show();
+            }
+        } catch(Exception e) { Toast.makeText(this,"خطا در فایل پشتیبان؛ دوباره تلاش کن.",Toast.LENGTH_LONG).show(); }
     }
 
     private void addVoiceCard(String title, String desc, String mode) {
