@@ -83,15 +83,24 @@ public final class VoiceCalculator {
             return value;
         }
         double term() {
-            double value = unary();
-            while (hasNext() && (peek("*") || peek("/") || peek("%"))) {
+            double value = percentage();
+            while (hasNext() && (peek("*") || peek("/"))) {
                 String op = t.get(i++);
-                double rhs = unary();
+                double rhs = percentage();
                 if (op.equals("*")) value *= rhs;
-                else if (op.equals("/")) {
+                else {
                     if (rhs == 0d) throw new ArithmeticException("تقسیم بر صفر ممکن نیست");
                     value /= rhs;
-                } else value = value * rhs / 100d;
+                }
+            }
+            return value;
+        }
+        double percentage() {
+            double value = unary();
+            // A spoken percent sign is postfix: "10 درصد" means 0.10.
+            while (hasNext() && peek("%")) {
+                i++;
+                value /= 100d;
             }
             return value;
         }
