@@ -31,7 +31,7 @@ public class VoiceCalculatorTest {
     @Test
     public void rejectsDivisionByZero() {
         try {
-            VoiceCalculator.evaluate("۱۰ تقسیم بر صفر");
+            VoiceCalculator.evaluate("۱۰ تقسیم بر ۰");
             fail("Expected division by zero to be rejected");
         } catch (ArithmeticException expected) {
             // Expected.
