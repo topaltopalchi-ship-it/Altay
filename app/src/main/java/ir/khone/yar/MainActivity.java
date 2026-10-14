@@ -207,6 +207,7 @@ public class MainActivity extends Activity {
         boolean monthly = contains(s, "هر ماه", "ماهانه");
         Calendar now = Calendar.getInstance();
         Calendar due = (Calendar) now.clone();
+        int monthlyDay = -1;
         int hour = -1, minute = 0;
         java.util.regex.Matcher tm = java.util.regex.Pattern.compile("ساعت\\s*([0-9]{1,2})(?:[:٫.]([0-9]{2}))?").matcher(s);
         if (tm.find()) {
@@ -228,6 +229,7 @@ public class MainActivity extends Activity {
 
         if (monthly) {
             int day = extractReminderDay(s);
+            monthlyDay = day;
             if (day < 1 || day > 31) {
                 status.setText("برای یادآوری ماهانه، روز ماه را مشخص کن؛ مثلاً «یادآوری قسط روز ۲۰ هر ماه ساعت ۹ صبح».");
                 say("روز ماه را هم بگو");
@@ -256,7 +258,7 @@ public class MainActivity extends Activity {
         if (title.isEmpty()) title = "یادآوری خانه";
         int id = (int)(System.currentTimeMillis() & 0x7fffffff);
         long when = due.getTimeInMillis();
-        String saved = when + "\\n" + (monthly ? "monthly" : "once") + "\\n" + title;
+        String saved = when + "\\n" + (monthly ? "monthly" : "once") + "\\n" + title + "\\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
         ReminderReceiver.schedule(this, id, when, title, monthly);
         String whenText = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(due.getTime());
