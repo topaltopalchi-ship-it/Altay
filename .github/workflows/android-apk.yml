@@ -83,6 +83,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v1.0.${{ github.run_number }}
         run: |
-          gh release create "$RELEASE_TAG" app/build/outputs/apk/release/app-release.apk \\
-            --title "OBA $RELEASE_TAG" \\
+          gh release create "$RELEASE_TAG" app/build/outputs/apk/release/app-release.apk \
+            --title "OBA $RELEASE_TAG" \
             --notes "نسخهٔ رسمی OBA برای اندروید. فایل APK امضاشده پیوست این انتشار است."
