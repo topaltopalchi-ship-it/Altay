@@ -62,16 +62,16 @@ public class MainActivity extends Activity {
         root.setPadding(dp(18), dp(18), dp(18), dp(12));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        TextView brand = text("🏠 خونه‌یار", 29, dark, true); brand.setGravity(Gravity.CENTER);
+        TextView brand = text("🏠 OBA", 29, dark, true); brand.setGravity(Gravity.CENTER);
         content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
 
-        Button speak = button("🎙  صحبت کن؛ خونه‌یار گوش می‌دهد", green, Color.WHITE, 20);
+        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", green, Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام خونه‌یار" : "🎧 فعال‌سازی شنیدن نام خونه‌یار در صفحه قفل", dark, Color.WHITE, 16);
+        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", dark, Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
         wakeButton.setOnClickListener(v -> toggleWakeService());
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
@@ -177,9 +177,9 @@ public class MainActivity extends Activity {
         if (prefs.getBoolean("wake_enabled", false)) {
             stopService(new Intent(this, VoiceWakeService.class));
             prefs.edit().putBoolean("wake_enabled", false).apply();
-            wakeButton.setText("🎧 فعال‌سازی شنیدن نام خونه‌یار در صفحه قفل");
-            status.setText("شنیدن نام خونه‌یار خاموش شد.");
-            say("شنیدن نام خونه‌یار خاموش شد");
+            wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
+            status.setText("شنیدن نام OBA خاموش شد.");
+            say("شنیدن نام OBA خاموش شد");
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -196,13 +196,13 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
             else startService(service);
             prefs.edit().putBoolean("wake_enabled", true).apply();
-            if (wakeButton != null) wakeButton.setText("🔕 خاموش کردن شنیدن نام خونه‌یار");
-            status.setText("شنیدن نام خونه‌یار فعال شد. بگو «خونه‌یار»؛ برای توقف، دکمه خاموش کردن را بزن.");
-            say("خونه‌یار آماده شنیدن نامش است");
+            if (wakeButton != null) wakeButton.setText("🔕 خاموش کردن شنیدن نام OBA");
+            status.setText("شنیدن نام OBA فعال شد. بگو «اوبا»؛ برای توقف، دکمه خاموش کردن را بزن.");
+            say("OBA آماده شنیدن نامش است");
         } catch (Exception e) {
             prefs.edit().putBoolean("wake_enabled", false).apply();
             status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
-            if (wakeButton != null) wakeButton.setText("🎧 فعال‌سازی شنیدن نام خونه‌یار در صفحه قفل");
+            if (wakeButton != null) wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
         }
     }
 
