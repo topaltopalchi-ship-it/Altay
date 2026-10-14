@@ -42,7 +42,8 @@ public class MainActivity extends Activity {
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
-    private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);\n    private int cardIndex = 0;
+    private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
+    private int cardIndex = 0;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
