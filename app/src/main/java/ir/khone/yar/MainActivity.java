@@ -33,7 +33,7 @@ import java.util.Calendar;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
-    private TextView status, totals, recent;
+    private TextView status, totals, recent, remindersView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
@@ -202,6 +202,31 @@ public class MainActivity extends Activity {
     }
 
 
+
+
+    private void refreshReminders() {
+        java.util.ArrayList<String> rows = new java.util.ArrayList<>();
+        for (String key : prefs.getAll().keySet()) {
+            if (!key.startsWith("reminder_")) continue;
+            try {
+                String value = prefs.getString(key, "");
+                String[] parts = value.split("\\n", 4);
+                if (parts.length < 3) continue;
+                long when = Long.parseLong(parts[0]);
+                boolean monthly = "monthly".equals(parts[1]);
+                String title = parts[2];
+                String date = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(new Date(when));
+                rows.add(when + "|" + "• " + title + " — " + date + (monthly ? " (هر ماه)" : ""));
+            } catch (Exception ignored) {}
+        }
+        java.util.Collections.sort(rows, (a,b) -> Long.compare(Long.parseLong(a.substring(0,a.indexOf("|"))), Long.parseLong(b.substring(0,b.indexOf("|")))));
+        StringBuilder out = new StringBuilder();
+        for (String row : rows) {
+            if (out.length() > 0) out.append("\\n");
+            out.append(row.substring(row.indexOf("|")+1));
+        }
+        remindersView.setText(out.length() == 0 ? "هنوز یادآوری زمان‌بندی‌شده‌ای ثبت نشده است. با صدا بگو: «یادآوری قسط فردا ساعت ۹ صبح»." : out.toString());
+    }
 
     private void handleReminderVoice(String raw, String s) {
         boolean monthly = contains(s, "هر ماه", "ماهانه");
