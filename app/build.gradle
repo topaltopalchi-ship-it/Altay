@@ -1,5 +1,7 @@
 plugins { id 'com.android.application' }
 
+def releaseKeystorePath = System.getenv("OBA_KEYSTORE_PATH")
+
 android {
     namespace 'ir.khone.yar'
     compileSdk 35
@@ -9,6 +11,26 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            if (releaseKeystorePath != null && !releaseKeystorePath.isEmpty()) {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv("OBA_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("OBA_KEY_ALIAS")
+                keyPassword System.getenv("OBA_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (releaseKeystorePath != null && !releaseKeystorePath.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
+        }
     }
 
     testOptions {
