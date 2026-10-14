@@ -165,7 +165,7 @@ public class ReminderReceiver extends BroadcastReceiver {
         next.set(Calendar.MILLISECOND, 0);
         while (next.getTimeInMillis() <= System.currentTimeMillis()) next.add(Calendar.MONTH, 1);
         prefs.edit().putString("reminder_" + id,
-                next.getTimeInMillis() + "\\nmonthly\\n" + title + "\\n" + day).apply();
+                next.getTimeInMillis() + "\nmonthly\n" + title + "\n" + day).apply();
         schedule(context, id, next.getTimeInMillis(), title, true);
     }
 
@@ -198,7 +198,7 @@ public class ReminderReceiver extends BroadcastReceiver {
                     next.set(Calendar.SECOND, 0);
                     next.set(Calendar.MILLISECOND, 0);
                     when = next.getTimeInMillis();
-                    prefs.edit().putString(key, when + "\\nmonthly\\n" + title + "\\n" + day).apply();
+                    prefs.edit().putString(key, when + "\nmonthly\n" + title + "\n" + day).apply();
                 }
                 schedule(context, id, when, title, monthly);
             } catch (Exception ignored) {
