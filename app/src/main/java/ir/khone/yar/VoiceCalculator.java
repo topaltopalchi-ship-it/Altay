@@ -13,7 +13,7 @@ public final class VoiceCalculator {
         // Turn common discount requests into the final price after discount.
         s = s.replace("قیمت با", " ").replace("با تخفیف", " تخفیف ");
         java.util.regex.Matcher discount = java.util.regex.Pattern
-            .compile("([0-9]+(?:\\\\.[0-9]+)?)\\\\s*درصد\\\\s*تخفیف\\\\s*از\\\\s*([0-9]+(?:\\\\.[0-9]+)?(?:\\\\s*(?:هزار|میلیون))?)")
+            .compile("([0-9]+(?:\\.[0-9]+)?)\\s*درصد\\s*تخفیف\\s*از\\s*([0-9]+(?:\\.[0-9]+)?(?:\\s*(?:هزار|میلیون))?)")
             .matcher(s);
         StringBuffer discounted = new StringBuffer();
         while (discount.find()) {
