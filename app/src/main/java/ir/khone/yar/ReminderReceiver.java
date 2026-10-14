@@ -23,7 +23,7 @@ import java.util.Locale;
 
 public class ReminderReceiver extends BroadcastReceiver {
     public static final String CHANNEL_ID = "khoneyar_reminders_alarm_v2";
-    private static final String CHANNEL_NAME = "یادآوری‌های خونه‌یار";
+    private static final String CHANNEL_NAME = "یادآوری‌های OBA";
 
     public static void schedule(Context context, int id, long when, String title, boolean monthly) {
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
@@ -75,7 +75,7 @@ public class ReminderReceiver extends BroadcastReceiver {
                     ? new Notification.Builder(context, CHANNEL_ID)
                     : new Notification.Builder(context);
             builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                    .setContentTitle("⏰ یادآوری خونه‌یار")
+                    .setContentTitle("⏰ یادآوری OBA")
                     .setContentText(title)
                     .setStyle(new Notification.BigTextStyle().bigText(title))
                     .setAutoCancel(true)
@@ -92,7 +92,7 @@ public class ReminderReceiver extends BroadcastReceiver {
             }
         }
 
-        speakReminder(context.getApplicationContext(), "یادآوری خونه‌یار. " + title, goAsync());
+        speakReminder(context.getApplicationContext(), "یادآوری اوبا. " + title, goAsync());
 
         if (monthly) {
             rescheduleMonthly(context, id, title);
