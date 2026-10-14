@@ -64,7 +64,7 @@ public class VoiceWakeService extends Service {
             return START_NOT_STICKY;
         }
         stopping = false;
-        startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «خونه‌یار»"));
+        startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «اوبا»"));
         handler.post(() -> beginListening());
         return START_STICKY;
     }
@@ -84,7 +84,7 @@ public class VoiceWakeService extends Service {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this);
             recognizer.setRecognitionListener(new RecognitionListener() {
                 @Override public void onReadyForSpeech(android.os.Bundle params) {
-                    updateNotification("در حال شنیدن؛ بگو «خونه‌یار»");
+                    updateNotification("در حال شنیدن؛ بگو «اوبا»");
                 }
                 @Override public void onBeginningOfSpeech() {}
                 @Override public void onRmsChanged(float rmsdB) {}
@@ -99,8 +99,9 @@ public class VoiceWakeService extends Service {
                     if (matches != null) {
                         for (String phrase : matches) {
                             String normalized = normalize(phrase);
-                            if (normalized.contains("خونهیار") || normalized.contains("خانیار") ||
-                                normalized.contains("خونه یار") || normalized.contains("خون یار")) {
+                            if (normalized.contains("اوبا") || normalized.contains("oba") ||
+                                normalized.contains("خونهیار") || normalized.contains("خانیار") ||
+                                normalized.contains("خونهیار") || normalized.contains("خونیار")) {
                                 wake = true;
                                 break;
                             }
@@ -108,7 +109,7 @@ public class VoiceWakeService extends Service {
                     }
                     if (wake && tts != null) {
                         speaking = true;
-                        updateNotification("نام خونه‌یار شنیده شد؛ پاسخ می‌دهد");
+                        updateNotification("نام OBA شنیده شد؛ پاسخ می‌دهد");
                         tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
@@ -137,8 +138,8 @@ public class VoiceWakeService extends Service {
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "شنیدن نام خونه‌یار", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("اعلان دائمی برای سرویس شنیدن نام خونه‌یار");
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "شنیدن نام OBA", NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("اعلان دائمی برای سرویس شنیدن نام OBA");
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
@@ -151,7 +152,7 @@ public class VoiceWakeService extends Service {
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, CHANNEL_ID) : new Notification.Builder(this);
         builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("خونه‌یار")
+            .setContentTitle("OBA")
             .setContentText(text)
             .setContentIntent(pending)
             .setOngoing(true)
