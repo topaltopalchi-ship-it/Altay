@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -77,3 +77,12 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Publish GitHub Release
+        if: steps.release-signing.outputs.configured == 'true' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v1.0.${{ github.run_number }}
+        run: |
+          gh release create "$RELEASE_TAG" app/build/outputs/apk/release/app-release.apk \\
+            --title "OBA $RELEASE_TAG" \\
+            --notes "نسخهٔ رسمی OBA برای اندروید. فایل APK امضاشده پیوست این انتشار است."
