@@ -29,12 +29,51 @@ jobs:
         with:
           gradle-version: '8.9'
           cache-provider: basic
-      - name: Build debug APK
+      - name: Build and test debug APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: OBA-Android-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Prepare release signing key
+        id: release-signing
+        shell: bash
+        env:
+          OBA_KEYSTORE_BASE64: ${{ secrets.OBA_KEYSTORE_BASE64 }}
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$OBA_KEYSTORE_BASE64" || -z "$OBA_KEYSTORE_PASSWORD" || -z "$OBA_KEY_ALIAS" || -z "$OBA_KEY_PASSWORD" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Release signing secrets are not configured; skipping release APK."
+            exit 0
+          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/oba-release.jks"
+          printf '%s' "$OBA_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          if [[ ! -s "$KEYSTORE_PATH" ]]; then
+            echo "Keystore decode failed." >&2
+            exit 1
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "keystore_path=$KEYSTORE_PATH" >> "$GITHUB_OUTPUT"
+      - name: Build signed release APK
+        if: steps.release-signing.outputs.configured == 'true'
+        env:
+          OBA_KEYSTORE_PATH: ${{ steps.release-signing.outputs.keystore_path }}
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+      - name: Upload signed release APK
+        if: steps.release-signing.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBA-Android-Release-APK
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
