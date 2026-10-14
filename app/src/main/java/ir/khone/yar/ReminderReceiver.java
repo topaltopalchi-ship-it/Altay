@@ -107,7 +107,7 @@ public class ReminderReceiver extends BroadcastReceiver {
                     next.set(Calendar.HOUR_OF_DAY, old.get(Calendar.HOUR_OF_DAY));
                     next.set(Calendar.MINUTE, old.get(Calendar.MINUTE));
                     when = next.getTimeInMillis();
-                    prefs.edit().putString(key, when + "\\nmonthly\\n" + title + "\\n" + day).apply();
+                    prefs.edit().putString(key, when + "\nmonthly\n" + title + "\n" + day).apply();
                 }
                 schedule(context, id, when, title, monthly);
             } catch (Exception ignored) {}
