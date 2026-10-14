@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private TextView status, totals, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private Button wakeButton;
     private TextToSpeech tts;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
@@ -68,7 +69,12 @@ public class MainActivity extends Activity {
 
         Button speak = button("🎙  صحبت کن؛ خونه‌یار گوش می‌دهد", green, Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
-        content.addView(speak, lp(-1, -2, 0, 4, 0, 10));
+        content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
+
+        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام خونه‌یار" : "🎧 فعال‌سازی شنیدن نام خونه‌یار در صفحه قفل", dark, Color.WHITE, 16);
+        wakeButton.setMinHeight(dp(58));
+        wakeButton.setOnClickListener(v -> toggleWakeService());
+        content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
@@ -163,7 +169,41 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == AUDIO_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startVoice(pendingMode);
+        else if (requestCode == 46 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startWakeService();
         else { status.setText("برای فرمان صوتی باید اجازهٔ میکروفون بدهی."); say("برای استفاده صوتی اجازه میکروفون لازم است"); }
+    }
+
+    private void toggleWakeService() {
+        if (prefs.getBoolean("wake_enabled", false)) {
+            stopService(new Intent(this, VoiceWakeService.class));
+            prefs.edit().putBoolean("wake_enabled", false).apply();
+            wakeButton.setText("🎧 فعال‌سازی شنیدن نام خونه‌یار در صفحه قفل");
+            status.setText("شنیدن نام خونه‌یار خاموش شد.");
+            say("شنیدن نام خونه‌یار خاموش شد");
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 46);
+            return;
+        }
+        startWakeService();
+    }
+
+    private void startWakeService() {
+        Intent service = new Intent(this, VoiceWakeService.class);
+        service.setAction(VoiceWakeService.ACTION_START);
+        try {
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
+            else startService(service);
+            prefs.edit().putBoolean("wake_enabled", true).apply();
+            if (wakeButton != null) wakeButton.setText("🔕 خاموش کردن شنیدن نام خونه‌یار");
+            status.setText("شنیدن نام خونه‌یار فعال شد. بگو «خونه‌یار»؛ برای توقف، دکمه خاموش کردن را بزن.");
+            say("خونه‌یار آماده شنیدن نامش است");
+        } catch (Exception e) {
+            prefs.edit().putBoolean("wake_enabled", false).apply();
+            status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
+            if (wakeButton != null) wakeButton.setText("🎧 فعال‌سازی شنیدن نام خونه‌یار در صفحه قفل");
+        }
     }
 
     private void handleVoice(String raw) {
