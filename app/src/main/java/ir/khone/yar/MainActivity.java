@@ -261,8 +261,27 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
-        new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> showCategoryExpenseForm(category, groups[which])).setNegativeButton("انصراف", null).show();
+
+        LinearLayout choices = new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        choices.setPadding(dp(16), dp(8), dp(16), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(choices);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("زیرگروه «" + category + "»")
+            .setView(scroll)
+            .setNegativeButton("بازگشت", null)
+            .create();
+        for (String group : groups) {
+            Button choice = button(group, Color.WHITE, dark, 16);
+            choice.setMinHeight(dp(54));
+            choice.setOnClickListener(v -> {
+                dialog.dismiss();
+                showCategoryExpenseForm(category, group);
+            });
+            choices.addView(choice, lp(-1, -2, 0, 3, 0, 5));
+        }
+        dialog.show();
     }
 
     private void showCategoryExpenseForm(String category, String subgroup) {
