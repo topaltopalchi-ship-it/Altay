@@ -22,7 +22,8 @@ drop policy if exists "users can read own OBA feature usage" on public.oba_featu
 create policy "users can read own OBA feature usage" on public.oba_feature_usage
   for select to authenticated using (user_id = (select auth.uid()));
 
-create or replace function public.oba_consume_feature_use(p_feature_key text)
+drop function if exists public.oba_consume_feature_use(text);
+create function public.oba_consume_feature_use(p_feature_key text)
 returns table (allowed boolean, used_count integer, remaining integer)
 language plpgsql security definer set search_path = ''
 as $$
