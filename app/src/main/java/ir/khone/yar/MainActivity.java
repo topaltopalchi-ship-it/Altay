@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private int cardIndex = 0;
     private boolean usageGateApproved = false;
     private String pendingCategoryVoice = "";
+    private boolean pendingShopIncome = false;
     private static final String OBA_SUPABASE_URL = "https://sxyaujvliummbvzznejq.supabase.co";
     private static final String OBA_SUPABASE_KEY = "sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
 
@@ -468,6 +469,8 @@ public class MainActivity extends Activity {
             voiceIncome.setMinHeight(dp(54));
             voiceIncome.setOnClickListener(v -> {
                 dialog.dismiss();
+                pendingShopIncome = true;
+                pendingCategoryVoice = "";
                 status.setText("برای ثبت فروش بگو: «درآمد مغازه ۵۰۰ هزار تومان فروش کالا».");
                 startVoice("auto");
             });
@@ -659,6 +662,7 @@ public class MainActivity extends Activity {
 
 private String featureKeyForVoice(String raw) {
         String s = normalize(raw);
+        if (pendingShopIncome && contains(s,"درآمد","فروش","فروختم","دریافت کردم")) return "shop_income";
         if (!pendingCategoryVoice.isEmpty() && contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) {
             return categoryFeatureKey(pendingCategoryVoice);
         }
@@ -865,8 +869,14 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             }
             String title = cleanDescription(s, mode);
             if (mode.equals("income")) {
+                if (amount > Long.MAX_VALUE - incomeTotal) {
+                    pendingShopIncome = false;
+                    status.setText("مبلغ درآمد بیش از حد مجاز است."); say("مبلغ درآمد معتبر نیست"); return;
+                }
                 incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply();
-                addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد");
+                addEntry(pendingShopIncome ? "درآمد مغازه" : "درآمد", title, amount);
+                say((pendingShopIncome ? "درآمد مغازه" : "درآمد") + " به مبلغ " + fmt(amount) + " تومان ثبت شد");
+                pendingShopIncome = false;
             } else {
                 String category = pendingCategoryVoice;
                 pendingCategoryVoice = "";
