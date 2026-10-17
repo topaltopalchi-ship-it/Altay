@@ -44,40 +44,15 @@ public class LoginActivity extends Activity {
  }
  private void startGuestLogin(Button loginChoice,Button signupChoice,TextView hint){
   if(busy)return;
-  busy=true;loginChoice.setEnabled(false);signupChoice.setEnabled(false);
-  hint.setText("در حال آماده‌سازی ورود رایگان...");
-  status.setText("برای ورود رایگان نیازی به نام کاربری و رمز عبور نیست.");
-  new Thread(()->{
-   HttpURLConnection c=null;
-   try{
-    c=(HttpURLConnection)new URL(AUTH_API+"signup").openConnection();
-    c.setRequestMethod("POST");c.setConnectTimeout(15000);c.setReadTimeout(15000);c.setDoOutput(true);
-    c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("apikey",API_KEY);
-    JSONObject body=new JSONObject();body.put("data",new JSONObject());
-    try(OutputStream out=c.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}
-    int code=c.getResponseCode();InputStream stream=code>=200&&code<300?c.getInputStream():c.getErrorStream();
-    StringBuilder raw=new StringBuilder();
-    if(stream!=null)try(BufferedReader reader=new BufferedReader(new InputStreamReader(stream,StandardCharsets.UTF_8))){String line;while((line=reader.readLine())!=null)raw.append(line);}
-    JSONObject result=raw.length()==0?new JSONObject():new JSONObject(raw.toString());
-    String access=result.optString("access_token","");
-    if(code<200||code>=300||access.isEmpty()){
-     String error=result.optString("msg",result.optString("message",result.optString("error_description",result.optString("error","ورود رایگان فعال نشد."))));
-     throw new Exception(code==404||error.toLowerCase(java.util.Locale.ROOT).contains("anonymous")?"ورود مهمان در تنظیمات سرور فعال نیست؛ باید ورود ناشناس Supabase فعال شود.":error);
-    }
-    long seconds=result.optLong("expires_in",3600L);
-    getSharedPreferences("oba_auth",MODE_PRIVATE).edit().putString("access_token",access)
-      .putString("refresh_token",result.optString("refresh_token","")).putString("username","مهمان").putBoolean("guest_local",false)
-      .putLong("expires_at",System.currentTimeMillis()+seconds*1000L).apply();
-    runOnUiThread(this::openApp);
-   }catch(Exception e){
-    String message=e.getMessage()==null?"ورود رایگان آنلاین در دسترس نیست.":e.getMessage();
-    // Guest entry must not depend on Supabase anonymous sign-in being enabled.
-    // Local guest mode keeps app access available and applies per-feature local limits.
-    getSharedPreferences("oba_auth",MODE_PRIVATE).edit().remove("access_token").remove("refresh_token")
-      .putString("username","مهمان").putBoolean("guest_local",true).putLong("expires_at",Long.MAX_VALUE).apply();
-    runOnUiThread(()->{busy=false;status.setText("ورود مهمان محلی فعال شد؛ " + message);openApp();});
-   }finally{if(c!=null)c.disconnect();}
-  }).start();
+  // Instant local guest session: does not depend on Supabase Anonymous Sign-Ins.
+  getSharedPreferences("oba_auth",MODE_PRIVATE).edit()
+    .remove("access_token").remove("refresh_token")
+    .putString("username","مهمان")
+    .putBoolean("guest_local",true)
+    .putLong("expires_at",Long.MAX_VALUE)
+    .apply();
+  status.setText("ورود رایگان فعال شد؛ اطلاعات این حالت روی همین گوشی ذخیره می‌شود.");
+  openApp();
  }
  private void showAuthForm(boolean create,Button loginChoice,Button signupChoice,TextView hint){
   signup=create;
