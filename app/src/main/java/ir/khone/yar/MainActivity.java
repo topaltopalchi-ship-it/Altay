@@ -777,6 +777,10 @@ public class MainActivity extends Activity {
         return canCreateCountedRecord(key, label, countCategoryRecords(key));
     }
 
+    private void incrementCategoryQuota(String key) {
+        prefs.edit().putInt("quota_record_" + key, countCategoryRecords(key) + 1).apply();
+    }
+
     private boolean canCreateCountedRecord(String preferenceKey, String label) {
         return canCreateCountedRecord(preferenceKey, label, prefs.getInt(preferenceKey, 0));
     }
@@ -871,8 +875,8 @@ public class MainActivity extends Activity {
                     }
                 }
                 String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
-                prefs.edit().putString(key, updated)
-                    .putInt("quota_record_" + key, countCategoryRecords(key) + 1).apply();
+                prefs.edit().putString(key, updated).apply();
+                incrementCategoryQuota(key);
                 String saveMessage = repeatedLesson
                     ? "⚠️ هشدار: عنوان مشابهی قبلاً در درس‌های خانواده ثبت شده؛ علت و راه پیشگیری قبلی را بررسی کن."
                     : "در بخش " + label + " ذخیره شد.";
@@ -1195,9 +1199,11 @@ public class MainActivity extends Activity {
             }
             String title = raw.replace("تومان", "").replace("تومن", "").replace("هزار", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
             if (title.isEmpty()) title = "هزینه سلامت";
+            if (!canCreateRecord("health_records", "سلامت خانواده")) return;
             expenseTotal += amount;
             prefs.edit().putLong("expense", expenseTotal).apply();
             addEntry("سلامت", title, amount);
+            incrementCategoryQuota("health_records");
             String message = "هزینه سلامت به مبلغ " + fmt(amount) + " تومان ثبت شد.";
             status.setText(message); say(message); refresh(); return;
         }
@@ -1205,7 +1211,12 @@ public class MainActivity extends Activity {
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
         if (mode.equals("budget")) { handleBudgetVoice(raw, s); return; }
         if (mode.equals("stock_use")) { handleStockUse(raw); return; }
-        if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
+        if (mode.equals("task")) {
+            if (!canCreateRecord("home_records", "خانه")) return;
+            addEntry("کار خانه", raw, 0);
+            incrementCategoryQuota("home_records");
+            say("کار خانه ثبت شد"); refresh(); return;
+        }
         if (mode.equals("reminder")) { handleReminderVoice(raw, s); return; }
         status.setText("فرمان دریافت شد: " + raw);
     }
@@ -1241,8 +1252,10 @@ public class MainActivity extends Activity {
 
     private void handlePurchaseVoice(String raw, String s) {
         long amount = parseAmount(s);
+        if (!canCreateRecord("shopping_records", "خرید و انبار خانه")) return;
         if (amount <= 0) {
             addEntry("فهرست خرید", raw, 0);
+            incrementCategoryQuota("shopping_records");
             status.setText("مورد خرید به فهرست اضافه شد؛ برای ثبت هزینه بگو «خریدم شیر به قیمت ۸۰ هزار تومان».");
             say("به فهرست خرید اضافه شد. برای کم شدن از بودجه، قیمت را هم بگو.");
             refresh(); return;
@@ -1252,6 +1265,7 @@ public class MainActivity extends Activity {
             .replace("تومان", " ").replace("تومن", " ").replace("هزار", " ").replace("میلیون", " ")
             .replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
         if (item.isEmpty()) item = "خرید خانه";
+        incrementCategoryQuota("shopping_records");
         expenseTotal += amount;
         prefs.edit().putLong("expense", expenseTotal).apply();
         String key = "stock_" + item;
@@ -1415,6 +1429,7 @@ public class MainActivity extends Activity {
             say("نام سرویس خودرو را بگو");
             return;
         }
+        if (!canCreateRecord("car_records", "ماشین")) return;
 
         long currentKm = extractMileage(s);
         long nextKm = extractNextMileage(s);
@@ -1434,6 +1449,7 @@ public class MainActivity extends Activity {
             saved.append(lines[i]);
         }
         prefs.edit().putString("vehicleRecords", saved.toString()).apply();
+        incrementCategoryQuota("car_records");
         addEntry("ماشین خانه", record, 0);
         refresh();
 
