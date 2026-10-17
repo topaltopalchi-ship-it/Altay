@@ -919,10 +919,16 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             status.setText("مبلغ بودجه را بگو؛ مثلاً «بودجه ماهانه خانه پنج میلیون تومان»");
             say("مبلغ بودجه را بگو"); return;
         }
-        prefs.edit().putLong("home_budget", amount).apply();
-        long remaining = amount - expenseTotal;
-        String msg = "بودجه خانه روی " + fmt(amount) + " تومان تنظیم شد. مانده بودجه با احتساب ثبت‌های فعلی " + fmt(remaining) + " تومان است.";
-        status.setText(msg); say(msg); refresh();
+        String category = contains(s, "ماشین", "خودرو") ? "ماشین"
+            : contains(s, "مغازه", "فروشگاه") ? "مغازه"
+            : contains(s, "مدرسه") ? "مدرسه"
+            : contains(s, "سلامت", "درمان") ? "سلامت"
+            : contains(s, "سایر", "متفرقه") ? "سایر" : "خانه";
+        String slug = categorySlug(category);
+        prefs.edit().putLong("budget_" + slug, amount).putBoolean("budget_alerted_" + slug, false).apply();
+        long remaining = amount - categorySpent(category);
+        String msg = "سقف هزینهٔ بخش " + category + " روی " + fmt(amount) + " تومان تنظیم شد. ماندهٔ سقف " + fmt(remaining) + " تومان است.";
+        status.setText(msg); say(msg); checkBudgetAlert(); refresh();
     }
 
     private void handleStockUse(String raw) {
