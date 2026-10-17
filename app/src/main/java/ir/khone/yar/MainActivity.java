@@ -99,9 +99,9 @@ public class MainActivity extends Activity {
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
+        wakeButton = button("🎙 میانبر صوتی: اول بگو «اوبا»", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
-        wakeButton.setOnClickListener(v -> toggleWakeService());
+        wakeButton.setOnClickListener(v -> startVoice("wake"));
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
@@ -266,8 +266,26 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
-        new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> showCategoryExpenseForm(category, groups[which])).setNegativeButton("انصراف", null).show();
+        LinearLayout choices = new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        choices.setPadding(dp(16), dp(8), dp(16), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(choices);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("زیرگروه «" + category + "»")
+            .setView(scroll)
+            .setNegativeButton("بازگشت", null)
+            .create();
+        for (String group : groups) {
+            Button choice = button(group, Color.WHITE, dark, 16);
+            choice.setMinHeight(dp(54));
+            choice.setOnClickListener(v -> {
+                dialog.dismiss();
+                showCategoryExpenseForm(category, group);
+            });
+            choices.addView(choice, lp(-1, -2, 0, 3, 0, 5));
+        }
+        dialog.show();
     }
 
     private void showCategoryExpenseForm(String category, String subgroup) {
@@ -553,6 +571,30 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
     }
 
     private void handleVoice(String raw) {
+        String spoken = normalize(raw);
+        if ("wake".equals(pendingMode)) {
+            if (contains(spoken, "اوبا", "اُبا", "وبا")) {
+                status.setText("بله، در خدمتم. حالا نام بخش را بگو.");
+                sayThenListenForNavigation("بله، در خدمتم");
+            } else {
+                status.setText("نام اوبا تشخیص داده نشد. دوباره روی میانبر صوتی بزن و بگو «اوبا».");
+                say("لطفاً بگو اوبا");
+            }
+            return;
+        }
+        if ("navigate".equals(pendingMode)) {
+            if (contains(spoken, "خانه", "خونه")) showCategorySubgroups("خانه");
+            else if (contains(spoken, "ماشین", "خودرو")) showCategorySubgroups("ماشین");
+            else if (contains(spoken, "مغازه", "فروشگاه", "کسب و کار")) showCategorySubgroups("مغازه");
+            else if (contains(spoken, "مدرسه", "مکتب")) showCategorySubgroups("مدرسه");
+            else if (contains(spoken, "سلامت", "دکتر", "درمان")) showCategorySubgroups("سلامت");
+            else if (contains(spoken, "سایر", "متفرقه")) showCategorySubgroups("سایر");
+            else {
+                status.setText("بخش را متوجه نشدم؛ بگو خانه، ماشین، مغازه یا مدرسه.");
+                say("نام بخش را دوباره بگو");
+            }
+            return;
+        }
         if (!usageGateApproved) {
             consumeFeatureUseBeforeVoice(raw);
             return;
@@ -966,6 +1008,24 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
+    private void sayThenListenForNavigation(String message) {
+        if (tts == null) {
+            startVoice("navigate");
+            return;
+        }
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) {}
+            @Override public void onDone(String utteranceId) {
+                if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> startVoice("navigate"));
+            }
+            @Override public void onError(String utteranceId) {
+                if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> status.setText("برای ادامه، نام بخش را لمس کن یا دوباره میانبر صوتی را بزن."));
+            }
+        });
+        int result = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "oba_wake_ack");
+        if (result == TextToSpeech.ERROR) startVoice("navigate");
+    }
+
     private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
