@@ -9,7 +9,8 @@ public final class VoiceCalculator {
     private VoiceCalculator() {}
 
     public static double evaluate(String input) {
-        String s = normalizeDigits(input == null ? "" : input.toLowerCase(Locale.ROOT));
+        String s = normalizeDigits(input == null ? "" : input.toLowerCase(Locale.ROOT))
+            .replace("×", "*").replace("÷", "/").replace("−", "-");
         // Turn common discount requests into the final price after discount.
         s = s.replace("قیمت با", " ").replace("با تخفیف", " تخفیف ")
              .replaceFirst("^\\s*با\\s+", " ");

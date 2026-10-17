@@ -20,6 +20,7 @@ import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -48,7 +49,7 @@ public class MainActivity extends Activity {
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
-    private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
+    private int dark = Color.rgb(112, 54, 83), green = Color.rgb(111, 190, 133), cream = Color.rgb(255, 245, 249);
     private int cardIndex = 0;
 
     @Override public void onCreate(Bundle state) {
@@ -57,7 +58,12 @@ public class MainActivity extends Activity {
         incomeTotal = prefs.getLong("income", 0);
         expenseTotal = prefs.getLong("expense", 0);
         loadEntries();
-        tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
+        tts = new TextToSpeech(this, result -> {
+            if (tts != null && result == TextToSpeech.SUCCESS) {
+                int languageResult = tts.setLanguage(new Locale("fa", "IR"));
+                tts.setSpeechRate(1.05f);
+            }
+        });
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
@@ -74,11 +80,94 @@ public class MainActivity extends Activity {
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
+        Button allCategories = button("📂 همه بخش‌های OBA  •  ۲۰ دسته", Color.WHITE, dark, 17);
+        allCategories.setMinHeight(dp(58));
+        allCategories.setOnClickListener(v -> showCategoriesDialog());
+        content.addView(allCategories, lp(-1, -2, 0, 0, 0, 12));
+
+        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(236, 105, 157), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
+        EditText typedCommand = new EditText(this);
+        typedCommand.setSingleLine(false);
+        typedCommand.setMinLines(2);
+        typedCommand.setMaxLines(3);
+        typedCommand.setTextSize(16);
+        typedCommand.setHint("اگر صدا کار نکرد، فرمان را اینجا بنویس؛ مثلاً هزینه ۸۰ هزار تومان برای نان");
+        typedCommand.setPadding(dp(12), dp(10), dp(12), dp(10));
+        typedCommand.setBackground(round(Color.WHITE, 14));
+        content.addView(typedCommand, lp(-1, -2, 0, 4, 0, 6));
+        Button runTypedCommand = button("⌨️ اجرای فرمان نوشتاری", Color.rgb(111, 190, 133), Color.WHITE, 16);
+        runTypedCommand.setOnClickListener(v -> {
+            String command = typedCommand.getText().toString().trim();
+            if (command.isEmpty()) {
+                status.setText("اول فرمان را بنویس.");
+                return;
+            }
+            pendingMode = "auto";
+            handleVoice(command);
+            typedCommand.setText("");
+        });
+        content.addView(runTypedCommand, lp(-1, -2, 0, 0, 0, 10));
+
+        TextView manualTitle = text("📝 ثبت دستی درآمد و هزینه", 19, dark, true);
+        content.addView(manualTitle, lp(-1, -2, 0, 4, 0, 6));
+        EditText manualDescription = new EditText(this);
+        manualDescription.setSingleLine(true);
+        manualDescription.setTextSize(16);
+        manualDescription.setHint("شرح مورد؛ مثلاً خرید نان یا حقوق");
+        manualDescription.setPadding(dp(12), dp(8), dp(12), dp(8));
+        manualDescription.setBackground(round(Color.WHITE, 12));
+        content.addView(manualDescription, lp(-1, -2, 0, 0, 0, 5));
+        EditText manualAmount = new EditText(this);
+        manualAmount.setSingleLine(true);
+        manualAmount.setInputType(2);
+        manualAmount.setTextSize(16);
+        manualAmount.setHint("مبلغ به تومان");
+        manualAmount.setPadding(dp(12), dp(8), dp(12), dp(8));
+        manualAmount.setBackground(round(Color.WHITE, 12));
+        content.addView(manualAmount, lp(-1, -2, 0, 0, 0, 5));
+        LinearLayout manualButtons = new LinearLayout(this);
+        manualButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button saveExpense = button("ثبت هزینه", Color.rgb(230, 93, 137), Color.WHITE, 15);
+        saveExpense.setOnClickListener(v -> saveManualEntry(manualDescription, manualAmount, false));
+        Button saveIncome = button("ثبت درآمد", Color.rgb(111, 190, 133), Color.WHITE, 15);
+        saveIncome.setOnClickListener(v -> saveManualEntry(manualDescription, manualAmount, true));
+        manualButtons.addView(saveExpense, new LinearLayout.LayoutParams(0, dp(52), 1));
+        manualButtons.addView(saveIncome, new LinearLayout.LayoutParams(0, dp(52), 1));
+        content.addView(manualButtons, lp(-1, -2, 0, 0, 0, 12));
+
+        LinearLayout calculatorPanel = new LinearLayout(this);
+        calculatorPanel.setOrientation(LinearLayout.VERTICAL);
+        calculatorPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        calculatorPanel.setBackground(round(Color.rgb(226, 246, 226), 20));
+        TextView calculatorTitle = text("🧮 ماشین‌حساب صوتی و دستی", 19, dark, true);
+        calculatorPanel.addView(calculatorTitle, lp(-1, -2, 0, 0, 0, 5));
+        TextView calculatorHint = text("عبارت را بنویس یا بگو؛ نمونه: 12500 + 3000 × 2", 13, dark, false);
+        calculatorPanel.addView(calculatorHint, lp(-1, -2, 0, 0, 0, 5));
+        EditText calculatorExpression = new EditText(this);
+        calculatorExpression.setSingleLine(true);
+        calculatorExpression.setTextSize(18);
+        calculatorExpression.setHint("مثلاً (12500 + 3000) * 2");
+        calculatorExpression.setPadding(dp(12), dp(8), dp(12), dp(8));
+        calculatorExpression.setBackground(round(Color.WHITE, 12));
+        calculatorPanel.addView(calculatorExpression, lp(-1, -2, 0, 0, 0, 8));
+        LinearLayout calculatorButtons = new LinearLayout(this);
+        calculatorButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button calculateManual = button("= محاسبه", Color.rgb(236, 105, 157), Color.WHITE, 15);
+        calculateManual.setOnClickListener(v -> calculateManualExpression(calculatorExpression, true));
+        Button calculateVoice = button("🎙 گفتن عبارت", Color.rgb(111, 190, 133), Color.WHITE, 15);
+        calculateVoice.setOnClickListener(v -> {
+            pendingMode = "calc";
+            startVoice("calc");
+        });
+        calculatorButtons.addView(calculateManual, new LinearLayout.LayoutParams(0, dp(50), 1));
+        calculatorButtons.addView(calculateVoice, new LinearLayout.LayoutParams(0, dp(50), 1));
+        calculatorPanel.addView(calculatorButtons, lp(-1, -2, 0, 0, 0, 6));
+        content.addView(calculatorPanel, lp(-1, -2, 0, 0, 0, 12));
+
+        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(196, 111, 153), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
         wakeButton.setOnClickListener(v -> toggleWakeService());
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
@@ -87,14 +176,14 @@ public class MainActivity extends Activity {
         content.addView(status, lp(-1,-2,0,0,0,12));
 
         totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
-        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
+        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(226, 246, 226), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
-        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
-        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
+        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,232,241),20));
+        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(112,54,83),true); backupPanel.addView(backupTitle);
         TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
-        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(255,143,0),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
-        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
+        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(236,105,157),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
+        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(111,190,133),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
         content.addView(backupPanel,lp(-1,-2,0,8,0,14));
 
         TextView label = text("دسترسی سریع صوتی", 19, dark, true);
@@ -129,6 +218,724 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+
+    private void showCategoriesDialog() {
+        String[] labels = {
+            "🏠 خانه", "🚗 ماشین", "📄 اسناد", "🛡️ گارانتی وسایل", "🎒 مدرسه",
+            "💰 امور مالی خانواده", "🛒 خرید و انبار خانه", "👨‍👩‍👧 خانواده",
+            "📅 تقویم و یادآوری‌ها", "🔧 تعمیرات و نگهداری", "🩺 سلامت خانواده",
+            "💼 کار و کسب‌وکار", "🔐 گاوصندوق دیجیتال", "👕 پوشاک و لباس خانواده",
+            "🎉 برنامه‌ها و دورهمی‌های خانوادگی", "🧼 نظافت خانه و شست‌وشوی قالی",
+            "🛟 پس‌انداز و صندوق اضطراری", "🔁 قبض‌ها و اشتراک‌های دوره‌ای", "🥫 موجودی و تاریخ انقضای خوراکی‌ها",
+            "🧠 تجربه‌ها، اشتباهات و درس‌های خانواده"
+        };
+        String[] keys = {
+            "home_records", "car_records", "document_records", "warranty_records", "school_records",
+            "finance_records", "shopping_records", "family_records", "calendar_records",
+            "maintenance_records", "health_records", "business_records", "safe_records", "clothing_records",
+            "family_events", "cleaning_records", "emergency_savings", "recurring_payments", "pantry_records", "lessons_records"
+        };
+        String[] hints = {
+            "هزینه‌های خانه، خریدها و کارهای روزمره",
+            "سرویس، تعمیر، کیلومتر و هزینه‌های خودرو",
+            "مدارک مهم، تاریخ انقضا و محل نگهداری",
+            "نام وسیله، شماره فاکتور و پایان گارانتی",
+            "تکالیف، برنامه مدرسه، شهریه و یادآوری‌ها",
+            "بودجه ماهانه، بدهی، طلب و اقساط؛ ثبت مالی جداگانه هم در صفحه اصلی هست",
+            "فهرست خرید و اقلام موردنیاز خانه",
+            "مناسبت‌ها و اطلاعات ضروری اعضای خانواده",
+            "قرارها، قبض‌ها و کارهای سررسیددار",
+            "پکیج، کولر، لوازم خانگی و تعمیرکار",
+            "نوبت پزشک، دارو و واکسن",
+            "سفارش‌ها، فروش و مطالبات کسب‌وکار",
+            "فهرست اسناد و اطلاعات ضروری؛ رمزهای حساس را اینجا ننویس",
+            "خرید لباس اعضای خانواده، بودجه پوشاک، اندازه‌ها و زمان خرید بعدی",
+            "مهمانی، دورهمی، تولد، سفر و برنامه‌های خانوادگی؛ تاریخ، ساعت، کارها و بودجه را ثبت کن",
+            "زمان شست‌وشوی قالی و فرش، قالیشویی، هزینه، تحویل و شست‌وشوی بعدی",
+            "هدف پس‌انداز، مبلغ کنارگذاشته‌شده و ذخیره هزینه‌های پیش‌بینی‌نشده",
+            "قبض اینترنت، تلفن، پلتفرم‌ها و پرداخت‌های تکرارشونده با مبلغ و سررسید",
+            "مواد غذایی و لوازم مصرفی، مقدار موجود، تاریخ انقضا و نیاز به خرید",
+            "ثبت اشتباه، علت، پیامد، راه پیشگیری و زمان یادآوری دوباره"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("همه بخش‌های OBA")
+            .setItems(labels, (dialog, which) -> showSubcategories(keys[which], labels[which], hints[which]))
+            .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private void showSubcategories(String parentKey, String parentLabel, String parentHint) {
+        if ("school_records".equals(parentKey)) {
+            showSchoolChildrenDialog();
+            return;
+        }
+        if ("family_records".equals(parentKey)) {
+            showFamilySectionsDialog();
+            return;
+        }
+        String[] labels;
+        String[] keys;
+        String[] hints;
+        switch (parentKey) {
+            case "car_records":
+                labels = new String[] {
+                    "🛢️ روغن موتور و فیلتر روغن", "🌬️ فیلتر هوا و کابین", "⛽ فیلتر بنزین",
+                    "⏱️ تسمه تایم و تسمه‌ها", "🛞 تایر، پنچری و بالانس", "🛑 لنت و دیسک ترمز",
+                    "🔋 باتری خودرو", "⚡ شمع و وایر", "❄️ کولر و گاز کولر", "💧 ضدیخ و مایع خنک‌کننده",
+                    "⚙️ روغن گیربکس و دیفرانسیل", "🛑 روغن ترمز و هیدرولیک", "🧹 برف‌پاک‌کن و چراغ‌ها",
+                    "🔧 تعمیرات خودرو", "🧰 سرویس دوره‌ای و معاینه", "📍 کیلومتر و سوابق خودرو"
+                };
+                hints = new String[] {
+                    "تاریخ، کیلومتر، برند و نوع روغن، هزینه و کیلومتر تعویض بعدی",
+                    "فیلتر هوا یا کابین؛ تاریخ، کیلومتر و نوبت تعویض بعدی",
+                    "تاریخ، کیلومتر و زمان تعویض فیلتر بنزین",
+                    "تاریخ و کیلومتر تعویض تسمه تایم، تسمه دینام و زمان تعویض بعدی",
+                    "برند و سایز تایر، تاریخ نصب، پنچری، جابه‌جایی و تعویض",
+                    "تعویض لنت، دیسک، صدای ترمز و تعمیرات سیستم ترمز",
+                    "تاریخ نصب باتری، مشخصات و زمان بررسی یا تعویض",
+                    "تعویض شمع، وایر و سرویس سیستم جرقه",
+                    "سرویس کولر، نشتی، شارژ گاز و تعمیرات",
+                    "تعویض ضدیخ، بررسی سطح مایع و سرویس رادیاتور",
+                    "نوع روغن گیربکس، تاریخ، کیلومتر و نوبت بعدی",
+                    "تعویض روغن ترمز، روغن هیدرولیک و سرویس مربوطه",
+                    "تعویض تیغه برف‌پاک‌کن، لامپ و تعمیر چراغ",
+                    "شرح خرابی، تعمیرکار، تاریخ، هزینه، قطعه تعویضی و ضمانت تعمیر",
+                    "سرویس‌های دوره‌ای، معاینه فنی، بیمه و تاریخ سررسید",
+                    "کیلومتر فعلی، تاریخ و یادداشت سوابق خودرو"
+                };
+                break;
+            case "home_records":
+                labels = new String[] {
+                    "🚰 تصفیه آب و فیلترها", "🔥 پکیج، آبگرمکن و رادیاتور", "❄️ کولر و تهویه",
+                    "🧊 یخچال و فریزر", "🧺 ماشین لباسشویی", "🍽️ ماشین ظرفشویی",
+                    "🧹 جاروبرقی و فیلترها", "🍳 اجاق، فر و هود", "📺 تلویزیون و لوازم برقی",
+                    "💡 لامپ، باتری و مصرفی‌ها", "🔧 تعمیرات لوازم خانه", "🔁 تعویض یا خرید دستگاه",
+                    "🧾 دفترچه، فاکتور و گارانتی", "💧 ثبت مصرف و قرائت آب، برق و گاز",
+                    "🏠 فهرست وسایل و دارایی‌های خانه", "🧯 ایمنی و آمادگی شرایط اضطراری"
+                };
+                hints = new String[] {
+                    "مدل دستگاه و نوع فیلتر، تاریخ تعویض، هزینه و تاریخ/مدت تعویض بعدی",
+                    "سرویس سالانه، رسوب‌زدایی، فیلتر، قطعات مصرفی و تعمیرات",
+                    "شست‌وشوی فیلتر، سرویس، گاز کولر و تعمیرات",
+                    "تعویض فیلتر آب یا یخچال، لاستیک در، قطعات و تعمیرات",
+                    "جرم‌گیری، فیلتر تخلیه، شلنگ، تسمه، قطعات و تعمیرات",
+                    "فیلتر، نمک، جلادهنده، جرم‌گیری و تعمیرات",
+                    "تعویض کیسه و فیلتر، برس و تعمیرات",
+                    "فیلتر هود، لامپ، قطعات مصرفی و تعمیرات",
+                    "کابل، کنترل، باتری، قطعات و تعمیرات",
+                    "نام مصرفی، مدل سازگار، تعداد و زمان تعویض",
+                    "نوع خرابی، تاریخ، تعمیرکار، هزینه، قطعه و ضمانت تعمیر",
+                    "وسیله، علت تعویض، تاریخ خرید، قیمت و مدل جایگزین",
+                    "مدل و شماره سریال دستگاه، فاکتور، دفترچه و پایان گارانتی",
+                    "نوع کنتور، تاریخ قرائت، عدد قبلی و فعلی، مقدار مصرف، مبلغ قبض و مقایسه با دوره قبل",
+                    "نام وسیله، برند و مدل، تاریخ و قیمت خرید، محل نگهداری، شماره سریال و وضعیت گارانتی",
+                    "کپسول آتش‌نشانی، کمک‌های اولیه، چراغ اضطراری، نشتی آب و برنامه قطع ایمن آب و برق؛ برای گاز فقط با متخصص اقدام کن"
+                };
+                break;
+            case "maintenance_records":
+                labels = new String[] {
+                    "🔧 تعمیرات خانه", "🔌 تعمیرات برق و سیم‌کشی", "🚿 لوله‌کشی و نشتی",
+                    "🧱 در، پنجره و ساختمان", "🧰 ابزار و قطعات یدکی", "🧹 سرویس و نگهداری دوره‌ای",
+                    "🧑‍🔧 دفترچه تعمیرکاران و خدمات", "🗓️ بازرسی پیشگیرانه خانه"
+                };
+                hints = new String[] {
+                    "وسیله یا محل، خرابی، تاریخ، تعمیرکار، هزینه و ضمانت",
+                    "محل خرابی، قطعه تعویضی، برقکار، تاریخ و هزینه",
+                    "محل نشتی، تعمیرکار، قطعه مصرفی، تاریخ و هزینه",
+                    "قفل، دستگیره، لولا، شیشه، درزگیر و تعمیرات",
+                    "نام قطعه، تعداد، محل نگهداری و وسیله سازگار",
+                    "کار دوره‌ای، تاریخ آخرین سرویس و موعد بعدی؛ برای هشدار دقیق، یادآوری را هم ثبت کن",
+                    "نام تعمیرکار، تخصص، شماره تماس، محدوده خدمت، آخرین مراجعه، هزینه، ضمانت و امتیاز تجربه",
+                    "موارد بازرسی، تاریخ بررسی، وضعیت، ایرادهای پیدا‌شده و موعد بررسی بعدی"
+                };
+                break;
+            case "document_records":
+                labels = new String[] {"🪪 مدارک هویتی", "🚗 مدارک خودرو", "🏠 اسناد خانه", "📅 تاریخ انقضا و تمدید"};
+                hints = new String[] {"نوع مدرک و محل نگهداری", "بیمه، کارت خودرو، معاینه فنی و سررسید", "سند، اجاره‌نامه و مدارک مرتبط", "تاریخ انقضا، موعد تمدید و یادآوری"};
+                break;
+            case "warranty_records":
+                labels = new String[] {"🛡️ گارانتی لوازم خانه", "🚗 ضمانت قطعات خودرو", "🧾 فاکتور و خدمات پس از فروش"};
+                hints = new String[] {"مدل، شماره سریال، شروع و پایان گارانتی", "قطعه، تاریخ نصب و مدت ضمانت", "فروشنده، شماره فاکتور و راه تماس"};
+                break;
+            case "school_records":
+                labels = new String[] {"📚 تکالیف و درس", "🚌 برنامه مدرسه", "💳 شهریه و هزینه‌ها", "🎒 لوازم و خرید"};
+                hints = new String[] {"عنوان، موعد و وضعیت انجام", "ساعت‌ها و برنامه هفتگی", "مبلغ و موعد پرداخت", "فهرست لوازم و تعداد"};
+                break;
+            case "finance_records":
+                labels = new String[] {
+                    "💵 بودجه و هزینه‌ها", "🤝 بدهی و طلب", "🏦 وام‌های بانکی",
+                    "📆 اقساط وام و پرداخت‌ها", "💳 بدهی کارت و خرید اقساطی", "👥 قرض از افراد / قرض به افراد",
+                    "🏦 حساب‌ها و تعهدات مالی", "📈 پیش‌بینی هزینه‌های آینده خانه"
+                };
+                hints = new String[] {
+                    "مبلغ و دوره بودجه",
+                    "نام بدهکار یا طلبکار، مبلغ، موعد تسویه و وضعیت پرداخت",
+                    "نام بانک، نام وام، مبلغ اولیه، مانده بدهی، نرخ و تاریخ سررسید قسط؛ اطلاعات ورود بانکی را ثبت نکن",
+                    "نام وام، مبلغ هر قسط، تاریخ سررسید، تعداد اقساط باقی‌مانده و وضعیت پرداخت",
+                    "نام کارت یا خرید، مبلغ بدهی، سررسید و وضعیت پرداخت",
+                    "نام طرف حساب، مبلغ، تاریخ قرض و موعد تسویه",
+                    "نام حساب و یادداشت غیرحساس",
+                    "هزینه مورد انتظار، مبلغ تقریبی، موعد احتمالی، اولویت و مبلغی که باید ماهانه کنار گذاشته شود"
+                };
+                break;
+            case "shopping_records":
+                labels = new String[] {"🛒 فهرست خرید", "📦 موجودی خانه", "🧴 مصرفی‌های تکرارشونده", "🔁 اقلام نیازمند تعویض"};
+                hints = new String[] {"نام کالا، تعداد و اولویت", "کالا، تعداد و محل نگهداری", "نام کالا، مقدار و موعد خرید بعدی", "وسیله یا قطعه، زمان تعویض و مدل مناسب"};
+                break;
+            case "family_records":
+                labels = new String[] {"🎂 مناسبت‌ها", "📞 تماس‌های ضروری", "👨‍👩‍👧 اطلاعات اعضای خانواده"};
+                hints = new String[] {"نام مناسبت و تاریخ", "نام و شماره تماس ضروری", "یادداشت‌های ضروری؛ از اطلاعات حساس غیرضروری خودداری کن"};
+                break;
+            case "calendar_records":
+                labels = new String[] {
+                    "📅 قرارها و کارها", "🧾 قبض‌ها و سررسیدها", "🔔 یادآوری تعویض و سرویس",
+                    "💡 قبض برق", "🚰 قبض آب", "🔥 قبض گاز", "☎️ تلفن ثابت", "📱 موبایل و اینترنت",
+                    "🏢 شارژ آپارتمان و هزینه‌های ساختمان", "🗑️ پسماند و خدمات شهری", "📺 تلویزیون و اشتراک‌ها",
+                    "🧾 سایر قبض‌ها و پرداخت‌های دوره‌ای"
+                };
+                hints = new String[] {
+                    "عنوان، تاریخ و ساعت",
+                    "نوع قبض، مبلغ، شناسه یا شماره پیگیری غیرحساس و موعد پرداخت",
+                    "وسیله یا قطعه، موعد و تکرار سرویس",
+                    "شناسه قبض در صورت نیاز، مبلغ، دوره مصرف، مهلت پرداخت و وضعیت پرداخت",
+                    "شناسه قبض در صورت نیاز، مبلغ، دوره مصرف، مهلت پرداخت و وضعیت پرداخت",
+                    "شناسه قبض در صورت نیاز، مبلغ، دوره مصرف، مهلت پرداخت و وضعیت پرداخت",
+                    "شماره خط، مبلغ قبض، دوره و موعد پرداخت",
+                    "اپراتور، شماره خط، بسته اینترنت، مبلغ و تاریخ تمدید",
+                    "شماره واحد، مبلغ شارژ ماهانه، هزینه‌های مشترک، بدهی قبلی و مهلت پرداخت",
+                    "مبلغ، دوره و تاریخ سررسید",
+                    "نام سرویس، مبلغ اشتراک و تاریخ تمدید",
+                    "نوع قبض یا پرداخت، مبلغ، دوره و تاریخ سررسید"
+                };
+                break;
+            case "health_records":
+                labels = new String[] {"🩺 نوبت‌ها", "💊 دارو و اقلام مصرفی", "💉 واکسن و پیگیری"};
+                hints = new String[] {"عنوان نوبت و زمان", "نام و زمان تهیه یا یادآوری", "عنوان و موعد پیگیری"};
+                break;
+            case "business_records":
+                labels = new String[] {"📦 سفارش‌ها", "💰 فروش و دریافت‌ها", "🧰 ابزار و تعمیرات", "🔁 مواد مصرفی و موجودی"};
+                hints = new String[] {"مشتری، سفارش و موعد", "مبلغ و وضعیت دریافت", "ابزار، خرابی، تعمیرکار و هزینه", "نام کالا، تعداد و موعد سفارش مجدد"};
+                break;
+            case "safe_records":
+                labels = new String[] {"📄 محل نگهداری اسناد", "🔑 فهرست اقلام مهم", "🧯 تجهیزات اضطراری"};
+                hints = new String[] {"فقط محل نگهداری؛ اطلاعات حساس را ثبت نکن", "عنوان و محل نگهداری", "تاریخ بررسی و تعویض باتری یا تاریخ مصرف"};
+                break;
+            case "clothing_records":
+                labels = new String[] {
+                    "🛍️ خرید لباس و هزینه‌ها", "📅 زمان خرید بعدی", "👨‍👩‍👧 لباس اعضای خانواده",
+                    "📏 اندازه و سایز لباس‌ها", "👟 کفش و کیف", "🧥 لباس فصلی و مناسبتی",
+                    "🧺 شست‌وشو، خشکشویی و تعمیر لباس", "🎯 بودجه پوشاک"
+                };
+                hints = new String[] {
+                    "نام فرد، نوع لباس، تاریخ خرید، مبلغ، فروشگاه و یادداشت",
+                    "برای چه کسی، چه لباسی لازم است، زمان مناسب خرید و بودجه موردنظر",
+                    "نام عضو خانواده و فهرست لباس‌های موردنیاز",
+                    "نام فرد، سایز لباس و کفش؛ فقط اطلاعات لازم را ثبت کن",
+                    "نام فرد، نوع کفش یا کیف، تاریخ و مبلغ خرید",
+                    "لباس زمستانی، تابستانی، مدرسه، مهمانی یا مناسبت و زمان نیاز",
+                    "نوع لباس، کار موردنیاز، تاریخ تحویل و هزینه",
+                    "بودجه ماهانه یا فصلی پوشاک و مبلغ باقی‌مانده"
+                };
+                break;
+            case "family_events":
+                labels = new String[] {
+                    "🎉 مهمانی و دورهمی", "🎂 تولد و مناسبت‌ها", "🧳 سفر و گردش خانوادگی",
+                    "📅 برنامه و قرار خانوادگی", "🛒 فهرست خرید و کارها", "💰 بودجه و هزینه برنامه"
+                };
+                hints = new String[] {
+                    "عنوان برنامه، تاریخ، ساعت، مکان، مهمان‌ها و یادداشت",
+                    "نام فرد یا مناسبت، تاریخ، تدارکات و بودجه هدیه یا جشن",
+                    "مقصد، تاریخ رفت‌وبرگشت، وسایل لازم و هزینه تقریبی",
+                    "تاریخ و ساعت، اعضای شرکت‌کننده، مکان و توضیحات",
+                    "کار یا وسیله لازم، مسئول انجام و موعد انجام",
+                    "بودجه کل، خوراکی، رفت‌وآمد، هدیه و سایر هزینه‌ها"
+                };
+                break;
+            case "cleaning_records":
+                labels = new String[] {
+                    "🧼 زمان شست‌وشوی قالی و فرش", "🚚 قالیشویی و تحویل", "💰 هزینه شست‌وشو",
+                    "📅 یادآوری شست‌وشوی بعدی", "🧹 نظافت دوره‌ای خانه"
+                };
+                hints = new String[] {
+                    "تعداد و نوع قالی‌ها، تاریخ شست‌وشوی قبلی و زمان پیشنهادی شست‌وشوی بعدی",
+                    "نام قالیشویی، تاریخ تحویل و دریافت، تعداد قالی‌ها و توضیحات",
+                    "تعداد قالی‌ها، هزینه هر کدام، هزینه حمل و مبلغ کل",
+                    "تاریخ موردنظر، قالی‌های نیازمند شست‌وشو و یادداشت",
+                    "کار نظافت، زمان‌بندی، مسئول انجام و موعد بعدی"
+                };
+                break;
+            case "emergency_savings":
+                labels = new String[] {
+                    "🎯 هدف پس‌انداز خانواده", "🛟 صندوق هزینه‌های اضطراری",
+                    "💵 ثبت مبلغ پس‌اندازشده", "📉 برداشت از پس‌انداز", "📊 بررسی پیشرفت هدف"
+                };
+                hints = new String[] {
+                    "هدف، مبلغ موردنیاز و تاریخ دلخواه رسیدن به آن",
+                    "هدف ذخیره برای تعمیر ضروری، درمان یا افت درآمد؛ مبلغ هدف و موجودی",
+                    "مبلغ، تاریخ و هدفی که برایش پس‌انداز می‌کنی",
+                    "مبلغ برداشت و دلیل آن؛ فقط برای ثبت و پیگیری",
+                    "مبلغ فعلی، هدف کل و مقدار باقی‌مانده"
+                };
+                break;
+            case "recurring_payments":
+                labels = new String[] {
+                    "💡 قبض برق و گاز و آب", "📱 تلفن و اینترنت", "📺 اشتراک‌ها",
+                    "💳 پرداخت ماهانه یا سالانه", "📅 سررسید و یادآوری پرداخت"
+                };
+                hints = new String[] {
+                    "نوع قبض، مبلغ، دوره پرداخت و تاریخ سررسید",
+                    "نام سرویس، مبلغ و تاریخ تمدید یا پرداخت بعدی",
+                    "نام اشتراک، هزینه و تاریخ تمدید؛ سرویس‌های غیرضروری را هم بررسی کن",
+                    "نام پرداخت، مبلغ و تناوب پرداخت",
+                    "عنوان پرداخت، تاریخ و ساعت یادآوری"
+                };
+                break;
+            case "pantry_records":
+                labels = new String[] {
+                    "🥫 موجودی مواد غذایی", "📆 تاریخ انقضا", "🧻 لوازم مصرفی خانه",
+                    "🛒 فهرست خرید بر اساس کمبود", "♻️ مصرف یا دورریز"
+                };
+                hints = new String[] {
+                    "نام قلم، مقدار موجود و محل نگهداری",
+                    "نام قلم و تاریخ انقضا برای مصرف به‌موقع",
+                    "مواد شوینده، دستمال و اقلام مصرفی؛ مقدار باقی‌مانده",
+                    "اقلام رو به اتمام یا تمام‌شده",
+                    "نام قلم و مقدار مصرف‌شده یا دورریز برای مدیریت بهتر خرید"
+                };
+                break;
+            case "lessons_records":
+                labels = new String[] {
+                    "📝 ثبت اشتباه یا تجربه", "🔎 علت و پیامد", "🛡️ راه پیشگیری",
+                    "⏰ یادآوری برای جلوگیری از تکرار", "✅ نتیجه و درس آموخته‌شده"
+                };
+                hints = new String[] {
+                    "چه اتفاقی افتاد؟ تاریخ، موضوع و توضیح کوتاه را ثبت کن",
+                    "چه چیزی باعث آن شد و چه هزینه یا مشکلی ایجاد کرد؟",
+                    "دفعه بعد چه کاری انجام دهیم تا تکرار نشود؟",
+                    "زمان یادآوری و هشدار موردنیاز را مشخص کن؛ برای هشدار واقعی باید به سیستم یادآوری وصل شود",
+                    "چه چیزی یاد گرفتیم و آیا راه پیشگیری مؤثر بود؟"
+                };
+                break;
+            default:
+                labels = new String[] {"📝 موارد عمومی", "🔧 تعمیرات", "🔁 تعویض و مصرفی‌ها"};
+                hints = new String[] {parentHint, "شرح تعمیر و هزینه", "نام قطعه یا مصرفی و موعد تعویض"};
+                break;
+        }
+        keys = new String[labels.length];
+        for (int i = 0; i < labels.length; i++) {
+            keys[i] = parentKey + "_sub_" + i;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(parentLabel + " • زیرشاخه‌ها")
+            .setItems(labels, (dialog, which) -> openCategory(keys[which], labels[which], hints[which]))
+            .setNegativeButton("بازگشت", (dialog, which) -> showCategoriesDialog())
+            .show();
+    }
+
+    private void showFamilySectionsDialog() {
+        String[] labels = {
+            "👨‍👩‍👧 مدیریت اعضای خانواده",
+            "🎂 مناسبت‌ها",
+            "📞 تماس‌های ضروری",
+            "📝 یادداشت‌های خانواده"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("👨‍👩‍👧 خانواده")
+            .setItems(labels, (dialog, which) -> {
+                if (which == 0) {
+                    showFamilyMembersDialog();
+                } else {
+                    String[] keys = {"family_records_sub_0", "family_records_sub_1", "family_records_sub_2"};
+                    String[] hints = {
+                        "نام مناسبت و تاریخ",
+                        "نام و شماره تماس ضروری",
+                        "یادداشت‌های ضروری؛ از اطلاعات حساس غیرضروری خودداری کن"
+                    };
+                    openCategory(keys[which - 1], labels[which], hints[which - 1]);
+                }
+            })
+            .setNegativeButton("بازگشت", (dialog, which) -> showCategoriesDialog())
+            .show();
+    }
+
+    private void showFamilyMembersDialog() {
+        java.util.ArrayList<JSONObject> members = new java.util.ArrayList<>();
+        String saved = prefs.getString("family_members", "[]");
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(saved);
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item != null && !item.optString("name").trim().isEmpty()) members.add(item);
+            }
+        } catch (JSONException ignored) { }
+        String[] names = new String[members.size()];
+        StringBuilder details = new StringBuilder();
+        for (int i = 0; i < members.size(); i++) {
+            JSONObject item = members.get(i);
+            String memberName = item.optString("name");
+            String relation = item.optString("relation", "عضو خانواده");
+            names[i] = memberName + " — " + relation;
+            if (details.length() > 0) details.append("\\n");
+            details.append("• ").append(names[i]);
+        }
+        if (details.length() == 0) details.append("هنوز عضوی ثبت نشده است.");
+        new AlertDialog.Builder(this)
+            .setTitle("👨‍👩‍👧 اعضای خانواده")
+            .setItems(names, (dialog, which) -> new AlertDialog.Builder(this)
+                .setTitle(names[which])
+                .setMessage("این عضو از فهرست محلی خانواده حذف شود؟")
+                .setNegativeButton("لغو", null)
+                .setPositiveButton("حذف", (d, w) -> {
+                    members.remove(which);
+                    saveFamilyMembers(members);
+                    showFamilyMembersDialog();
+                }).show())
+            .setPositiveButton("➕ افزودن عضو", (dialog, which) -> showAddFamilyMemberDialog())
+            .setNeutralButton("بازگشت", (dialog, which) -> showFamilySectionsDialog())
+            .show();
+    }
+
+    private void showAddFamilyMemberDialog() {
+        if (!canCreateRecord("family_records", "اعضای خانواده")) return;
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine(true);
+        nameField.setHint("نام عضو خانواده");
+        form.addView(nameField, lp(-1, -2, 0, 0, 0, 6));
+        EditText relationField = new EditText(this);
+        relationField.setSingleLine(true);
+        relationField.setHint("نسبت؛ مثلاً مادر، پدر، فرزند");
+        form.addView(relationField, lp(-1, -2, 0, 0, 0, 4));
+        new AlertDialog.Builder(this)
+            .setTitle("افزودن عضو خانواده")
+            .setMessage("این فهرست فعلاً فقط روی همین گوشی ذخیره می‌شود.")
+            .setView(form)
+            .setPositiveButton("ذخیره", (dialog, which) -> {
+                String name = nameField.getText().toString().trim();
+                String relation = relationField.getText().toString().trim();
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "نام عضو را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                java.util.ArrayList<JSONObject> members = new java.util.ArrayList<>();
+                try {
+                    org.json.JSONArray array = new org.json.JSONArray(prefs.getString("family_members", "[]"));
+                    for (int i = 0; i < array.length(); i++) {
+                        JSONObject item = array.optJSONObject(i);
+                        if (item != null) members.add(item);
+                    }
+                } catch (JSONException ignored) { }
+                for (JSONObject member : members) {
+                    if (member.optString("name").equalsIgnoreCase(name)) {
+                        Toast.makeText(this, "این نام قبلاً ثبت شده است.", Toast.LENGTH_SHORT).show();
+                        showFamilyMembersDialog();
+                        return;
+                    }
+                }
+                JSONObject member = new JSONObject();
+                try {
+                    member.put("name", name);
+                    member.put("relation", relation.isEmpty() ? "عضو خانواده" : relation);
+                    members.add(member);
+                    saveFamilyMembers(members);
+                    incrementCategoryQuota("family_records");
+                } catch (JSONException ignored) {
+                    Toast.makeText(this, "ذخیره عضو انجام نشد.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                showFamilyMembersDialog();
+            })
+            .setNegativeButton("انصراف", (dialog, which) -> showFamilyMembersDialog())
+            .show();
+    }
+
+    private void saveFamilyMembers(java.util.ArrayList<JSONObject> members) {
+        org.json.JSONArray array = new org.json.JSONArray();
+        for (JSONObject member : members) array.put(member);
+        prefs.edit().putString("family_members", array.toString()).apply();
+    }
+
+    private void showSchoolChildrenDialog() {
+        String saved = prefs.getString("school_children", "");
+        java.util.ArrayList<String> children = new java.util.ArrayList<>();
+        if (!saved.trim().isEmpty()) {
+            for (String name : saved.split("\\n")) {
+                if (!name.trim().isEmpty() && !children.contains(name.trim())) children.add(name.trim());
+            }
+        }
+        String[] names = children.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle("🎒 مدرسه فرزندان")
+            .setItems(names, (dialog, which) -> showSchoolSectionsDialog(names[which]))
+            .setPositiveButton("➕ افزودن نام فرزند / مدرسه", (dialog, which) -> showAddSchoolChildDialog())
+            .setNeutralButton("بازگشت", (dialog, which) -> showCategoriesDialog())
+            .show();
+    }
+
+    private void showAddSchoolChildDialog() {
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine(true);
+        nameField.setHint("مثلاً آیسل یا مدرسه آیسل");
+        new AlertDialog.Builder(this)
+            .setTitle("نام فرزند یا مدرسه")
+            .setView(nameField)
+            .setPositiveButton("ثبت", (dialog, which) -> {
+                String name = nameField.getText().toString().trim();
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "لطفاً نام را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                name = name.replaceFirst("^(مدرسه|فرزند)\\s+", "").trim();
+                String saved = prefs.getString("school_children", "");
+                java.util.ArrayList<String> names = new java.util.ArrayList<>();
+                if (!saved.trim().isEmpty()) {
+                    for (String item : saved.split("\\n")) {
+                        item = item.trim();
+                        if (!item.isEmpty() && !names.contains(item)) names.add(item);
+                    }
+                }
+                boolean isNewName = !names.contains(name);
+                if (isNewName) {
+                    if (!canCreateRecord("school_records", "مدرسه فرزندان")) return;
+                    names.add(name);
+                }
+                StringBuilder out = new StringBuilder();
+                for (String item : names) {
+                    if (out.length() > 0) out.append("\n");
+                    out.append(item);
+                }
+                if (isNewName) {
+                    prefs.edit().putString("school_children", out.toString()).apply();
+                    incrementCategoryQuota("school_records");
+                }
+                showSchoolSectionsDialog(name);
+            })
+            .setNegativeButton("انصراف", (dialog, which) -> showSchoolChildrenDialog())
+            .show();
+    }
+
+    private void showSchoolSectionsDialog(String childName) {
+        String[] labels = {
+            "📚 درس‌ها و تکالیف", "⏰ یادآوری‌ها و برنامه مدرسه",
+            "🚌 هزینه سرویس مدرسه", "💳 شهریه و هزینه‌های مدرسه",
+            "📖 کلاس خصوصی و فوق‌برنامه", "🎒 لوازم‌التحریر و لباس فرم",
+            "📝 امتحان‌ها و نمره‌ها", "👩‍🏫 جلسه با معلم و ارتباط با مدرسه",
+            "🧾 سایر هزینه‌ها و یادداشت‌ها"
+        };
+        String[] hints = {
+            "نام درس، تکلیف، صفحه یا تمرین، تاریخ تحویل و وضعیت انجام",
+            "عنوان یادآوری، تاریخ و ساعت؛ مثل جلسه اولیا یا آوردن کتاب",
+            "مبلغ سرویس، نام راننده یا مسیر، موعد پرداخت و وضعیت پرداخت",
+            "شهریه، کمک‌هزینه، اردو، بیمه یا سایر مبالغ؛ مبلغ و سررسید پرداخت",
+            "نام کلاس، معلم، روز و ساعت، شهریه و موعد پرداخت",
+            "فهرست اقلام، تعداد، اندازه، مبلغ و زمان خرید",
+            "نام درس، تاریخ امتحان، موضوع و نتیجه دلخواه برای پیگیری",
+            "نام معلم، زمان جلسه، موضوع گفتگو و پیگیری‌های لازم",
+            "عنوان، مبلغ در صورت نیاز، تاریخ و جزئیات"
+        };
+        String keyBase = "school_child_" + Integer.toHexString(childName.hashCode());
+        String[] keys = new String[labels.length];
+        for (int i = 0; i < labels.length; i++) keys[i] = keyBase + "_sub_" + i;
+        new AlertDialog.Builder(this)
+            .setTitle("مدرسه " + childName)
+            .setItems(labels, (dialog, which) -> openCategory(keys[which], "مدرسه " + childName + " • " + labels[which], hints[which]))
+            .setPositiveButton("➕ افزودن نام دیگر", (dialog, which) -> showAddSchoolChildDialog())
+            .setNegativeButton("بازگشت به فهرست", (dialog, which) -> showSchoolChildrenDialog())
+            .show();
+    }
+
+    private void addCategoryButton(LinearLayout content, String label, String key, String hint) {
+        Button b = button(label + "   ›", Color.WHITE, dark, 17);
+        b.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        b.setMinHeight(dp(54));
+        b.setBackground(round(Color.WHITE, 14));
+        b.setOnClickListener(v -> openCategory(key, label, hint));
+        content.addView(b, lp(-1, -2, 0, 0, 0, 7));
+    }
+
+    private void openCategory(String key, String label, String hint) {
+        if ("family_members".equals(key)) {
+            showFamilyMembersDialog();
+            return;
+        }
+        String saved = prefs.getString(key, "");
+        String message = saved.isEmpty() ? "هنوز موردی ثبت نشده است." : saved;
+        new AlertDialog.Builder(this)
+            .setTitle(label)
+            .setMessage(message)
+            .setPositiveButton("➕ ثبت مورد جدید", (dialog, which) -> showAddCategoryRecord(key, label, hint))
+            .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private int countCategoryRecords(String key) {
+        String saved = prefs.getString(key, "");
+        // Preserve voice-driven entries that do not use a text-list field.
+        return FreeQuotaPolicy.countRecords(saved, prefs.getInt("quota_record_" + key, 0));
+    }
+
+    private boolean canCreateRecord(String key, String label) {
+        return canCreateCountedRecord(key, label, countCategoryRecords(key));
+    }
+
+    private void incrementCategoryQuota(String key) {
+        prefs.edit().putInt("quota_record_" + key, countCategoryRecords(key) + 1).apply();
+    }
+
+    private void syncCategoryQuota(String key) {
+        prefs.edit().putInt("quota_record_" + key, countCategoryRecords(key)).apply();
+    }
+
+    private boolean canCreateCountedRecord(String preferenceKey, String label) {
+        return canCreateCountedRecord(preferenceKey, label, prefs.getInt(preferenceKey, 0));
+    }
+
+    private boolean canCreateCountedRecord(String preferenceKey, String label, int currentCount) {
+        if (FreeQuotaPolicy.canCreate(currentCount)) return true;
+        showSubscriptionPrompt(label);
+        return false;
+    }
+
+    private void showSubscriptionPrompt(String label) {
+        new AlertDialog.Builder(this)
+            .setTitle("🎁 سهمیه رایگان این بخش تمام شده")
+            .setMessage("برای بخش «" + label + "» ده ثبت رایگان استفاده شده است. برای ثبت مورد یازدهم و ادامه استفاده، حساب OBA بساز و اشتراک سه‌ماهه را فعال کن. اطلاعات خانواده همچنان فقط روی همین گوشی می‌ماند.")
+            .setPositiveButton("ساخت حساب / خرید اشتراک", (dialog, which) ->
+                new AlertDialog.Builder(this)
+                    .setTitle("فعال‌سازی حساب OBA")
+                    .setMessage("اتصال احراز هویت و تأیید خرید هنوز روی سرور فعال نشده است. تا پیش از راه‌اندازی Supabase و اتصال تأیید خرید فروشگاه، امکان فعال‌سازی اشتراک از داخل برنامه وجود ندارد.")
+                    .setPositiveButton("متوجه شدم", null)
+                    .show())
+            .setNegativeButton("بعداً", null)
+            .show();
+    }
+
+    private void showAddCategoryRecord(String key, String label, String hint) {
+        if (!canCreateRecord(key, label)) return;
+        LinearLayout form = new LinearLayout(this);
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        form.setOrientation(LinearLayout.VERTICAL);
+        EditText titleField = new EditText(this);
+        titleField.setSingleLine(true);
+        titleField.setHint("عنوان؛ مثلاً قبض آب یا کارت واکسن");
+        form.addView(titleField, lp(-1, -2, 0, 0, 0, 8));
+        EditText detailField = new EditText(this);
+        detailField.setMinLines(2);
+        detailField.setHint(hint);
+        form.addView(detailField, lp(-1, -2, 0, 0, 0, 4));
+
+        boolean trackAmount = key.equals("home_records_sub_13") || key.equals("home_records_sub_14")
+            || key.equals("maintenance_records_sub_6") || key.equals("finance_records_sub_7");
+        boolean canRemind = key.startsWith("home_records_sub_") || key.startsWith("maintenance_records_sub_")
+            || key.startsWith("lessons_records") || key.equals("finance_records_sub_7");
+        EditText amountField = null;
+        if (trackAmount) {
+            amountField = new EditText(this);
+            amountField.setSingleLine(true);
+            amountField.setInputType(2);
+            amountField.setHint(key.equals("home_records_sub_13") ? "مقدار مصرف یا مبلغ قبض (اختیاری)"
+                : key.equals("home_records_sub_14") ? "قیمت خرید یا تعداد (اختیاری)"
+                : key.equals("maintenance_records_sub_6") ? "هزینه آخرین خدمت (اختیاری)"
+                : "مبلغ تقریبی هزینه آینده (اختیاری)");
+            form.addView(amountField, lp(-1, -2, 0, 0, 0, 6));
+        }
+        EditText reminderField = null;
+        if (canRemind) {
+            reminderField = new EditText(this);
+            reminderField.setSingleLine(true);
+            reminderField.setHint("یادآوری اختیاری؛ مثلاً فردا ساعت ۹ صبح یا روز ۲۰ هر ماه ساعت ۱۰");
+            form.addView(reminderField, lp(-1, -2, 0, 0, 0, 4));
+        }
+        final EditText savedAmountField = amountField;
+        final EditText savedReminderField = reminderField;
+        new AlertDialog.Builder(this)
+            .setTitle("ثبت در " + label)
+            .setView(form)
+            .setPositiveButton("ذخیره", (dialog, which) -> {
+                String title = titleField.getText().toString().trim();
+                String detail = detailField.getText().toString().trim();
+                String amount = savedAmountField == null ? "" : savedAmountField.getText().toString().trim();
+                String reminderText = savedReminderField == null ? "" : savedReminderField.getText().toString().trim();
+                if (title.isEmpty()) {
+                    Toast.makeText(this, "عنوان را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                // Re-check at save time so a second open dialog cannot exceed the free limit.
+                if (!canCreateRecord(key, label)) return;
+                StringBuilder recordBuilder = new StringBuilder("• ").append(title);
+                if (!detail.isEmpty()) recordBuilder.append("\n  ").append(detail);
+                if (!amount.isEmpty()) recordBuilder.append("\n  مبلغ/مقدار: ").append(amount);
+                if (!reminderText.isEmpty()) recordBuilder.append("\n  یادآوری: ").append(reminderText);
+                String record = recordBuilder.toString();
+                String old = prefs.getString(key, "");
+                boolean repeatedLesson = false;
+                if (key.startsWith("lessons_records") && !old.isEmpty()) {
+                    String normalizedTitle = normalize(title).toLowerCase(Locale.ROOT);
+                    for (String line : old.split("\\n")) {
+                        String prior = line.replaceFirst("^\\s*•\\s*", "").trim();
+                        if (!prior.isEmpty() && normalize(prior).toLowerCase(Locale.ROOT).startsWith(normalizedTitle)) {
+                            repeatedLesson = true;
+                            break;
+                        }
+                    }
+                }
+                String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
+                prefs.edit().putString(key, updated).apply();
+                syncCategoryQuota(key);
+                String saveMessage = repeatedLesson
+                    ? "⚠️ هشدار: عنوان مشابهی قبلاً در درس‌های خانواده ثبت شده؛ علت و راه پیشگیری قبلی را بررسی کن."
+                    : "در بخش " + label + " ذخیره شد.";
+                Toast.makeText(this, saveMessage, Toast.LENGTH_LONG).show();
+                if (repeatedLesson) { status.setText(saveMessage); say("هشدار. این اشتباه یا تجربه قبلاً ثبت شده است."); }
+                if (!reminderText.isEmpty()) {
+                    handleReminderVoice("یادآوری " + title + " " + reminderText, normalize("یادآوری " + title + " " + reminderText));
+                }
+                openCategory(key, label, hint);
+            })
+            .setNegativeButton("انصراف", null)
+            .show();
+    }
+
+    private void saveManualEntry(EditText descriptionField, EditText amountField, boolean income) {
+        String sectionKey = income ? "quota_income" : "quota_expense";
+        String sectionLabel = income ? "درآمدها" : "هزینه‌ها";
+        String description = descriptionField.getText().toString().trim();
+        String rawAmount = normalize(amountField.getText().toString()).replaceAll("[,،\\s]", "");
+        long amount;
+        try {
+            amount = Long.parseLong(rawAmount);
+        } catch (Exception ex) {
+            amount = 0;
+        }
+        if (description.isEmpty()) {
+            status.setText("لطفاً شرح مورد را بنویس.");
+            descriptionField.requestFocus();
+            return;
+        }
+        if (amount <= 0) {
+            status.setText("لطفاً مبلغ معتبر را به تومان وارد کن.");
+            amountField.requestFocus();
+            return;
+        }
+        if (!canCreateCountedRecord(sectionKey, sectionLabel)) return;
+        if (income) {
+            incomeTotal += amount;
+            prefs.edit().putLong("income", incomeTotal).putInt(sectionKey, prefs.getInt(sectionKey, 0) + 1).apply();
+            addEntry("درآمد", description, amount);
+        } else {
+            expenseTotal += amount;
+            prefs.edit().putLong("expense", expenseTotal).putInt(sectionKey, prefs.getInt(sectionKey, 0) + 1).apply();
+            addEntry("هزینه", description, amount);
+        }
+        String message = (income ? "درآمد" : "هزینه") + " «" + description + "» به مبلغ " + fmt(amount) + " تومان ثبت شد.";
+        status.setText(message);
+        say(message);
+        descriptionField.setText("");
+        amountField.setText("");
+        refresh();
+    }
 
     private void createBackup() {
         try {
@@ -203,6 +1010,7 @@ public class MainActivity extends Activity {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
                                 else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if ("quota_income".equals(key) || "quota_expense".equals(key) || key.matches("quota_record_[a-z0-9_]{1,100}")) editor.putInt(key,((Number)value).intValue());
                                 else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
@@ -222,7 +1030,18 @@ public class MainActivity extends Activity {
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
         }
-        if ("entries".equals(key) || "vehicleRecords".equals(key)) {
+        if ("quota_income".equals(key) || "quota_expense".equals(key)
+            || key.matches("quota_record_[a-z0-9_]{1,100}")) {
+            if (!(value instanceof Number)) return false;
+            double number = ((Number) value).doubleValue();
+            return Double.isFinite(number) && number >= 0 && number <= Integer.MAX_VALUE && number == Math.rint(number);
+        }
+        if ("entries".equals(key) || "vehicleRecords".equals(key) || "school_children".equals(key)
+            || "family_members".equals(key)) {
+            return value instanceof String && ((String) value).length() <= 20000;
+        }
+        String categoryPattern = "(home_records|car_records|document_records|warranty_records|school_records|finance_records|shopping_records|family_records|calendar_records|maintenance_records|health_records|business_records|safe_records|clothing_records|family_events|cleaning_records|emergency_savings|recurring_payments|pantry_records|lessons_records|school_child_[0-9a-f]+)(?:_sub_[0-9]{1,2})?";
+        if (key.matches(categoryPattern)) {
             return value instanceof String && ((String) value).length() <= 20000;
         }
         if (key.matches("reminder_[0-9]{1,10}")) {
@@ -256,8 +1075,7 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
         }
         try {
-            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            if (recognizer == null) recognizer = SpeechRecognizer.createSpeechRecognizer(this);
             recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
                 public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
                 public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
@@ -351,11 +1169,14 @@ public class MainActivity extends Activity {
             else mode="expense";
         }
         if (mode.equals("expense") || mode.equals("income")) {
+            String quotaKey = mode.equals("income") ? "quota_income" : "quota_expense";
+            String quotaLabel = mode.equals("income") ? "درآمدها" : "هزینه‌ها";
             long amount = parseAmount(s);
             if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return; }
+            if (!canCreateCountedRecord(quotaKey, quotaLabel)) return;
             String title = cleanDescription(s, mode);
-            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
-            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
+            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).putInt(quotaKey, prefs.getInt(quotaKey, 0) + 1).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
+            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).putInt(quotaKey, prefs.getInt(quotaKey, 0) + 1).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
             refresh(); return;
         }
         if (mode.equals("calc")) {
@@ -385,9 +1206,11 @@ public class MainActivity extends Activity {
             }
             String title = raw.replace("تومان", "").replace("تومن", "").replace("هزار", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
             if (title.isEmpty()) title = "هزینه سلامت";
+            if (!canCreateRecord("health_records", "سلامت خانواده")) return;
             expenseTotal += amount;
             prefs.edit().putLong("expense", expenseTotal).apply();
             addEntry("سلامت", title, amount);
+            incrementCategoryQuota("health_records");
             String message = "هزینه سلامت به مبلغ " + fmt(amount) + " تومان ثبت شد.";
             status.setText(message); say(message); refresh(); return;
         }
@@ -395,7 +1218,12 @@ public class MainActivity extends Activity {
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
         if (mode.equals("budget")) { handleBudgetVoice(raw, s); return; }
         if (mode.equals("stock_use")) { handleStockUse(raw); return; }
-        if (mode.equals("task")) { addEntry("کار خانه", raw, 0); say("کار خانه ثبت شد"); refresh(); return; }
+        if (mode.equals("task")) {
+            if (!canCreateRecord("home_records", "خانه")) return;
+            addEntry("کار خانه", raw, 0);
+            incrementCategoryQuota("home_records");
+            say("کار خانه ثبت شد"); refresh(); return;
+        }
         if (mode.equals("reminder")) { handleReminderVoice(raw, s); return; }
         status.setText("فرمان دریافت شد: " + raw);
     }
@@ -431,8 +1259,10 @@ public class MainActivity extends Activity {
 
     private void handlePurchaseVoice(String raw, String s) {
         long amount = parseAmount(s);
+        if (!canCreateRecord("shopping_records", "خرید و انبار خانه")) return;
         if (amount <= 0) {
             addEntry("فهرست خرید", raw, 0);
+            incrementCategoryQuota("shopping_records");
             status.setText("مورد خرید به فهرست اضافه شد؛ برای ثبت هزینه بگو «خریدم شیر به قیمت ۸۰ هزار تومان».");
             say("به فهرست خرید اضافه شد. برای کم شدن از بودجه، قیمت را هم بگو.");
             refresh(); return;
@@ -442,6 +1272,7 @@ public class MainActivity extends Activity {
             .replace("تومان", " ").replace("تومن", " ").replace("هزار", " ").replace("میلیون", " ")
             .replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
         if (item.isEmpty()) item = "خرید خانه";
+        incrementCategoryQuota("shopping_records");
         expenseTotal += amount;
         prefs.edit().putLong("expense", expenseTotal).apply();
         String key = "stock_" + item;
@@ -570,10 +1401,12 @@ public class MainActivity extends Activity {
         title = title.replace("هر ماه", "").replace("ماهانه", "").replace("فردا", "").replace("پس فردا", "").replace("پس‌فردا", "").replace("امروز", "").replace("امشب", "").replace("صبح", "").replace("شب", "").replace("بعدازظهر", "").replace("بعد از ظهر", "");
         title = title.replaceAll("ساعت\\s*[0-9]{1,2}(?:[:٫.][0-9]{2})?", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
         if (title.isEmpty()) title = "یادآوری خانه";
+        if (!canCreateRecord("calendar_records", "تقویم و یادآوری‌ها")) return;
         int id = (int)(System.currentTimeMillis() & 0x7fffffff);
         long when = due.getTimeInMillis();
         String saved = when + "\n" + (monthly ? "monthly" : "once") + "\n" + title + "\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
+        incrementCategoryQuota("calendar_records");
         ReminderReceiver.schedule(this, id, when, title, monthly);
         String whenText = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(due.getTime());
         String confirmation = "یادآوری «" + title + "» برای " + whenText + (monthly ? " و تکرار ماهانه" : "") + " ثبت شد.";
@@ -605,6 +1438,7 @@ public class MainActivity extends Activity {
             say("نام سرویس خودرو را بگو");
             return;
         }
+        if (!canCreateRecord("car_records", "ماشین")) return;
 
         long currentKm = extractMileage(s);
         long nextKm = extractNextMileage(s);
@@ -624,6 +1458,7 @@ public class MainActivity extends Activity {
             saved.append(lines[i]);
         }
         prefs.edit().putString("vehicleRecords", saved.toString()).apply();
+        incrementCategoryQuota("car_records");
         addEntry("ماشین خانه", record, 0);
         refresh();
 
@@ -738,7 +1573,35 @@ public class MainActivity extends Activity {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
-    private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
+    private void calculateManualExpression(EditText expression, boolean speakResult) {
+        String raw = expression.getText().toString().trim();
+        if (raw.isEmpty()) {
+            status.setText("عبارت ریاضی را وارد کن؛ مثلاً 12500 + 3000 * 2");
+            return;
+        }
+        try {
+            double result = VoiceCalculator.evaluate(raw);
+            String resultText = new DecimalFormat("#,##0.####").format(result);
+            String answer = "نتیجه محاسبه: " + resultText;
+            status.setText(answer);
+            String oldHistory = prefs.getString("calculator_history", "");
+            String item = raw + " = " + resultText;
+            prefs.edit().putString("calculator_history", item + (oldHistory.isEmpty() ? "" : "\\n" + oldHistory)).apply();
+            if (speakResult) say(answer);
+        } catch (ArithmeticException ex) {
+            String message = ex.getMessage() == null ? "این محاسبه ممکن نیست." : ex.getMessage();
+            status.setText(message);
+            if (speakResult) say(message);
+        } catch (IllegalArgumentException ex) {
+            String message = "عبارت را بررسی کن؛ نمونه: (12500 + 3000) * 2";
+            status.setText(message);
+            if (speakResult) say(message);
+        }
+    }
+
+    private void say(String s) {
+        if (tts != null) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "khoneyar");
+    }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
         if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;

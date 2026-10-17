@@ -2,7 +2,7 @@ name: Build OBA Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, fix/oba-manual-command-fallback ]
   workflow_dispatch:
 
 permissions:
@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Public Supabase client configuration only; never put server secrets in the APK.
+      OBA_SUPABASE_URL: https://sxyaujvliummbvzznejq.supabase.co
+      OBA_SUPABASE_PUBLISHABLE_KEY: sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen
     steps:
       - name: Checkout source
         uses: actions/checkout@v4

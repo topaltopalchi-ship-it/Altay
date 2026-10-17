@@ -1,6 +1,9 @@
 plugins { id 'com.android.application' }
 
 def releaseKeystorePath = System.getenv("OBA_KEYSTORE_PATH")
+def obaSupabaseUrl = (System.getenv("OBA_SUPABASE_URL") ?: project.findProperty("OBA_SUPABASE_URL") ?: "").toString()
+def obaSupabasePublishableKey = (System.getenv("OBA_SUPABASE_PUBLISHABLE_KEY") ?: project.findProperty("OBA_SUPABASE_PUBLISHABLE_KEY") ?: "").toString()
+def asBuildConfigString = { value -> '"' + value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '') + '"' }
 
 android {
     namespace 'ir.khone.yar'
@@ -11,6 +14,12 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0.0'
+        buildConfigField "String", "SUPABASE_URL", asBuildConfigString(obaSupabaseUrl)
+        buildConfigField "String", "SUPABASE_PUBLISHABLE_KEY", asBuildConfigString(obaSupabasePublishableKey)
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     signingConfigs {
