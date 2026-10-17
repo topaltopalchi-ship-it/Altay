@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
     private boolean usageGateApproved = false;
+    private String pendingCategoryVoice = "";
     private static final String OBA_SUPABASE_URL = "https://sxyaujvliummbvzznejq.supabase.co";
     private static final String OBA_SUPABASE_KEY = "sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
 
@@ -396,6 +397,7 @@ public class MainActivity extends Activity {
         voiceChoice.setMinHeight(dp(56));
         voiceChoice.setOnClickListener(v -> {
             dialog.dismiss();
+            pendingCategoryVoice = category;
             status.setText("برای ثبت در بخش " + category + " بگو: هزینه، مبلغ و شرح آن؛ مثلاً «هزینه ۸۰ هزار تومان برای نان».");
             say("مبلغ و شرح را بگو");
             startVoice("auto");
@@ -800,10 +802,21 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         }
         if (mode.equals("expense") || mode.equals("income")) {
             long amount = parseAmount(s);
-            if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return; }
+            if (amount <= 0) {
+                pendingCategoryVoice = "";
+                status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return;
+            }
             String title = cleanDescription(s, mode);
-            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
-            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
+            if (mode.equals("income")) {
+                incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply();
+                addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد");
+            } else {
+                String category = pendingCategoryVoice;
+                pendingCategoryVoice = "";
+                expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply();
+                addEntry(category.isEmpty() ? "هزینه" : category, title, amount);
+                say("هزینه " + fmt(amount) + " تومان " + (category.isEmpty() ? "ثبت شد" : "در بخش " + category + " ثبت شد"));
+            }
             refresh(); return;
         }
         if (mode.equals("calc")) {
