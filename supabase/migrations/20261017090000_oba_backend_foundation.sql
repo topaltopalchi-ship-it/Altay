@@ -58,16 +58,9 @@ using (
   or created_by = (select auth.uid())
 );
 
-create policy "members can read household membership"
+create policy "users can read their own household memberships"
 on public.oba_household_members for select to authenticated
-using (
-  user_id = (select auth.uid())
-  or exists (
-    select 1 from public.oba_household_members own
-    where own.household_id = oba_household_members.household_id
-      and own.user_id = (select auth.uid())
-  )
-);
+using (user_id = (select auth.uid()));
 
 -- No client-side INSERT/UPDATE/DELETE policies on entitlements.
 -- Only a trusted server-side purchase verifier should write entitlement status.
