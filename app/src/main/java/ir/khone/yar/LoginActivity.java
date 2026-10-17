@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 public class LoginActivity extends Activity {
  private static final String API="https://sxyaujvliummbvzznejq.supabase.co/functions/v1/";
- private static final String API_KEY="CONFIGURE_SUPABASE_PUBLISHABLE_KEY";
+ private static final String API_KEY="sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
  private EditText username,password;
  private TextView status;
  private Button action,mode;
