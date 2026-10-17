@@ -85,16 +85,16 @@ public class LoginActivity extends Activity {
   action.setVisibility(android.view.View.VISIBLE);
   mode.setVisibility(android.view.View.VISIBLE);
   action.setText(create?"ساخت حساب":"ورود");
-  mode.setText(create?"قبلاً حساب ساخته‌ام؛ ورود":"بازگشت به انتخاب");
+  mode.setText(create?"قبلاً حساب ساخته‌ام؛ ورود":"حساب نداری؟ ثبت‌نام");
   status.setText(create?"برای ساخت حساب نام کاربری و رمز عبور تعیین کن.":"با حساب قبلی خود وارد شو.");
  }
  private void submit(){if(busy)return;String u=username.getText().toString().trim().toLowerCase(java.util.Locale.ROOT),p=password.getText().toString();
   if(!u.matches("[a-z0-9_]{3,24}")){username.setError("۳ تا ۲۴ حرف انگلیسی، عدد یا _");return;}if(p.length()<8||p.length()>72){password.setError("رمز عبور باید ۸ تا ۷۲ کاراکتر باشد");return;}
   busy=true;action.setEnabled(false);final boolean create=signup;
   new Thread(()->{try{JSONObject result=request(create?"register-username":"login-username",u,p);
-   if(create){runOnUiThread(()->{busy=false;action.setEnabled(true);signup=false;action.setText("ورود");mode.setText("بازگشت به انتخاب");password.setText("");status.setText("حساب ساخته شد؛ حالا دکمه «ورود» را بزن.");});}
+   if(create){runOnUiThread(()->{busy=false;action.setEnabled(true);signup=false;action.setText("ورود");mode.setText("حساب نداری؟ ثبت‌نام");password.setText("");status.setText("حساب ساخته شد؛ حالا دکمه «ورود» را بزن.");});}
    else{long seconds=result.optLong("expires_in",3600);getSharedPreferences("oba_auth",MODE_PRIVATE).edit().putString("access_token",result.getString("access_token")).putString("refresh_token",result.optString("refresh_token","")).putString("username",u).putLong("expires_at",System.currentTimeMillis()+seconds*1000L).apply();runOnUiThread(this::openApp);}
-  }catch(Exception e){String m=e.getMessage()==null?"ارتباط با سرور برقرار نشد.":e.getMessage();runOnUiThread(()->{busy=false;action.setEnabled(true);status.setText(m);if(create){signup=false;action.setText("ورود");mode.setText("بازگشت به انتخاب");status.append("\nاگر قبلاً با این نام حساب ساخته‌ای، اکنون «ورود» را بزن؛ برای نام جدید «قبلاً حساب ساخته‌ام؛ ورود» را بزن تا حالت ورود/ثبت‌نام عوض شود.");}});}}).start();
+  }catch(Exception e){String m=e.getMessage()==null?"ارتباط با سرور برقرار نشد.":e.getMessage();runOnUiThread(()->{busy=false;action.setEnabled(true);status.setText(m);if(create){status.append("\nاگر قبلاً حساب ساخته‌ای، دکمه «قبلاً حساب ساخته‌ام؛ ورود» را بزن.");}});}}).start();
  }
  private JSONObject request(String fn,String u,String p)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(API+fn).openConnection();try{c.setRequestMethod("POST");c.setConnectTimeout(15000);c.setReadTimeout(15000);c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("apikey",API_KEY);JSONObject b=new JSONObject();b.put("username",u);b.put("password",p);try(OutputStream o=c.getOutputStream()){o.write(b.toString().getBytes(StandardCharsets.UTF_8));}int code=c.getResponseCode();InputStream s=code>=200&&code<400?c.getInputStream():c.getErrorStream();StringBuilder raw=new StringBuilder();if(s!=null)try(BufferedReader r=new BufferedReader(new InputStreamReader(s,StandardCharsets.UTF_8))){String line;while((line=r.readLine())!=null)raw.append(line);}JSONObject out=raw.length()==0?new JSONObject():new JSONObject(raw.toString());if(code<200||code>=300)throw new Exception(out.optString("error","خطای سرور "+code));return out;}finally{c.disconnect();}}
  private void openApp(){Intent i=new Intent(this,MainActivity.class);i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);startActivity(i);finish();}
