@@ -24,7 +24,7 @@ OBA is an Android-only app. Family records, reminders, documents, expenses, home
 - `OBA_SUPABASE_URL`: `https://sxyaujvliummbvzznejq.supabase.co`
 - `OBA_SUPABASE_PUBLISHABLE_KEY`: a Supabase publishable key beginning with `sb_publishable_`
 
-They can be supplied as GitHub Actions repository variables or environment variables during a local build. The publishable key is public by design and must be paired with correct RLS policies. Never put a Supabase secret/service-role key or third-party market-provider credentials into the APK.
+The Android APK workflow currently includes the project URL and publishable key as public client configuration. The publishable key is public by design and must be paired with correct RLS policies. Never put a Supabase secret/service-role key or third-party market-provider credentials into the APK.
 
 ## Schema and security
 
