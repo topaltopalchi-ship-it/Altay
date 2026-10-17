@@ -273,24 +273,61 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private String categorySlug(String category) {
+        if ("خانه".equals(category)) return "home";
+        if ("ماشین".equals(category)) return "vehicle";
+        if ("مغازه".equals(category)) return "shop";
+        if ("مدرسه".equals(category)) return "school";
+        if ("سلامت".equals(category)) return "health";
+        return "other";
+    }
+
+    private long categorySpent(String category) { return prefs.getLong("category_expense_" + categorySlug(category), 0L); }
+
+    private void addCategorySpend(String category, long amount) {
+        if (category == null || category.isEmpty() || amount <= 0) return;
+        String key = "category_expense_" + categorySlug(category);
+        long current = prefs.getLong(key, 0L);
+        if (amount <= Long.MAX_VALUE - current) prefs.edit().putLong(key, current + amount).apply();
+        checkBudgetAlert();
+    }
+
     private void showBudgetLimitForm() {
+        String[] categories = new String[]{"خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر"};
+        android.widget.Spinner categoryPicker = new android.widget.Spinner(this);
+        categoryPicker.setAdapter(new android.widget.ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, categories));
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         input.setHint("سقف هزینه به تومان");
-        long current = prefs.getLong("home_budget", 0);
-        if (current > 0) input.setText(String.valueOf(current));
-        new AlertDialog.Builder(this).setTitle("تنظیم سقف هزینه")
-            .setMessage("وقتی مجموع هزینه‌های ثبت‌شده از این مبلغ عبور کند، اوبا هشدار می‌دهد.")
-            .setView(input).setNegativeButton("لغو", null)
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),0);
+        form.addView(text("بخش موردنظر",14,dark,false));
+        form.addView(categoryPicker,lp(-1,-2,0,4,0,8));
+        form.addView(input,lp(-1,-2,0,2,0,4));
+        Runnable loadLimit = () -> {
+            String category = categories[categoryPicker.getSelectedItemPosition()];
+            long current = prefs.getLong("budget_" + categorySlug(category), 0L);
+            input.setText(current > 0 ? String.valueOf(current) : "");
+        };
+        categoryPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) { loadLimit.run(); }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+        new AlertDialog.Builder(this).setTitle("تنظیم سقف هزینهٔ هر بخش")
+            .setMessage("برای هر بخش سقف جداگانه تعیین کن؛ با عبور هزینهٔ همان بخش از سقف، اوبا هشدار می‌دهد.")
+            .setView(form).setNegativeButton("لغو", null)
             .setPositiveButton("ذخیره سقف", (d,w) -> {
+                String category = categories[categoryPicker.getSelectedItemPosition()];
                 String raw = normalize(input.getText().toString()).replace("٬","").replace(",","");
                 try {
                     long limit = Long.parseLong(raw);
                     if (limit <= 0) throw new NumberFormatException();
-                    prefs.edit().putLong("home_budget", limit).putBoolean("budget_alerted", false).apply();
-                    String msg = "سقف هزینه روی " + fmt(limit) + " تومان تنظیم شد.";
-                    status.setText(msg); say(msg); refresh();
+                    prefs.edit().putLong("budget_" + categorySlug(category), limit)
+                        .putBoolean("budget_alerted_" + categorySlug(category), false).apply();
+                    String msg = "سقف هزینهٔ بخش " + category + " روی " + fmt(limit) + " تومان تنظیم شد.";
+                    status.setText(msg); say(msg); checkBudgetAlert();
                 } catch (Exception e) {
                     Toast.makeText(this, "یک مبلغ معتبر و بزرگ‌تر از صفر وارد کن.", Toast.LENGTH_LONG).show();
                 }
@@ -336,34 +373,39 @@ public class MainActivity extends Activity {
             }).show();
     }
 
-    private void triggerBudgetAlert(long limit) {
-        if (prefs.getBoolean("budget_alerted", false)) return;
-        prefs.edit().putBoolean("budget_alerted", true).apply();
-        String msg = "هشدار اوبا! هزینه‌ها از سقف مجاز " + fmt(limit) + " تومان عبور کرده‌اند.";
-        status.setText(msg); say(msg);
-        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+    private void triggerBudgetAlert(String category, long limit) {
+        String slug = categorySlug(category), key = "budget_alerted_" + slug;
+        if (prefs.getBoolean(key, false)) return;
+        prefs.edit().putBoolean(key, true).apply();
+        String msg = "هشدار اوبا! هزینهٔ بخش " + category + " از سقف مجاز " + fmt(limit) + " تومان عبور کرده است.";
+        status.setText(msg); say(msg); Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
         try {
             android.app.NotificationManager manager = (android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
             if (manager != null) {
+                String channelId = "oba_budget_alerts";
                 if (Build.VERSION.SDK_INT >= 26) {
-                    android.app.NotificationChannel channel = new android.app.NotificationChannel("oba_budget_alerts","هشدار سقف هزینه",android.app.NotificationManager.IMPORTANCE_HIGH);
+                    android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId,"هشدار سقف هزینه",android.app.NotificationManager.IMPORTANCE_HIGH);
                     channel.enableVibration(true); manager.createNotificationChannel(channel);
                 }
                 android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
-                    ? new android.app.Notification.Builder(this,"oba_budget_alerts")
+                    ? new android.app.Notification.Builder(this,channelId)
                     : new android.app.Notification.Builder(this).setPriority(android.app.Notification.PRIORITY_HIGH);
-                builder.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("هشدار اوبا: عبور از سقف هزینه")
-                    .setContentText("مجموع هزینه‌ها از " + fmt(limit) + " تومان عبور کرده است.")
+                builder.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("هشدار اوبا: " + category)
+                    .setContentText("هزینه از سقف " + fmt(limit) + " تومان عبور کرده است.")
                     .setAutoCancel(true).setDefaults(android.app.Notification.DEFAULT_SOUND | android.app.Notification.DEFAULT_VIBRATE);
-                manager.notify(8701,builder.build());
+                manager.notify(8701 + Math.abs(slug.hashCode() % 1000),builder.build());
             }
         } catch (SecurityException ignored) {}
     }
 
     private void checkBudgetAlert() {
-        long limit = prefs.getLong("home_budget", 0);
-        if (limit > 0 && expenseTotal > limit) triggerBudgetAlert(limit);
-        else prefs.edit().putBoolean("budget_alerted", false).apply();
+        String[] categories = new String[]{"خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر"};
+        for (String category : categories) {
+            String slug = categorySlug(category);
+            long limit = prefs.getLong("budget_" + slug, 0L), spent = categorySpent(category);
+            if (limit > 0 && spent > limit) triggerBudgetAlert(category, limit);
+            else prefs.edit().putBoolean("budget_alerted_" + slug, false).apply();
+        }
     }
 
     private void showCategorySubgroups(String category) {
@@ -501,6 +543,7 @@ public class MainActivity extends Activity {
                     }
                     expenseTotal += amount;
                     prefs.edit().putLong("expense", expenseTotal).apply();
+                    addCategorySpend(category, amount);
                     addEntry(category, entryTitle, amount);
                     refresh();
                     String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد.";
@@ -817,6 +860,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
                 String category = pendingCategoryVoice;
                 pendingCategoryVoice = "";
                 expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply();
+                if (!category.isEmpty()) addCategorySpend(category, amount);
                 addEntry(category.isEmpty() ? "هزینه" : category, title, amount);
                 say("هزینه " + fmt(amount) + " تومان " + (category.isEmpty() ? "ثبت شد" : "در بخش " + category + " ثبت شد"));
             }
@@ -851,6 +895,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             if (title.isEmpty()) title = "هزینه سلامت";
             expenseTotal += amount;
             prefs.edit().putLong("expense", expenseTotal).apply();
+            addCategorySpend("سلامت", amount);
             addEntry("سلامت", title, amount);
             String message = "هزینه سلامت به مبلغ " + fmt(amount) + " تومان ثبت شد.";
             status.setText(message); say(message); refresh(); return;
@@ -908,6 +953,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         if (item.isEmpty()) item = "خرید خانه";
         expenseTotal += amount;
         prefs.edit().putLong("expense", expenseTotal).apply();
+        addCategorySpend("خانه", amount);
         String key = "stock_" + item;
         int qty = prefs.getInt(key, 0);
         prefs.edit().putInt(key, qty + 1).apply();
