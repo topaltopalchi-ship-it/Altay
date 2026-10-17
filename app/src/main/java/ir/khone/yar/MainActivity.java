@@ -572,15 +572,15 @@ public class MainActivity extends Activity {
         StringBuilder details = new StringBuilder();
         for (int i = 0; i < members.size(); i++) {
             JSONObject item = members.get(i);
-            names[i] = item.optString("name");
+            String memberName = item.optString("name");
             String relation = item.optString("relation", "عضو خانواده");
+            names[i] = memberName + " — " + relation;
             if (details.length() > 0) details.append("\\n");
-            details.append("• ").append(names[i]).append(" — ").append(relation);
+            details.append("• ").append(names[i]);
         }
         if (details.length() == 0) details.append("هنوز عضوی ثبت نشده است.");
         new AlertDialog.Builder(this)
             .setTitle("👨‍👩‍👧 اعضای خانواده")
-            .setMessage(details.toString())
             .setItems(names, (dialog, which) -> new AlertDialog.Builder(this)
                 .setTitle(names[which])
                 .setMessage("این عضو از فهرست محلی خانواده حذف شود؟")
