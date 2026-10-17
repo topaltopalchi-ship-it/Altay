@@ -612,7 +612,7 @@ public class MainActivity extends Activity {
         boolean trackAmount = key.equals("home_records_sub_13") || key.equals("home_records_sub_14")
             || key.equals("maintenance_records_sub_6") || key.equals("finance_records_sub_7");
         boolean canRemind = key.startsWith("home_records_sub_") || key.startsWith("maintenance_records_sub_")
-            || key.startsWith("lessons_records");
+            || key.startsWith("lessons_records") || key.equals("finance_records_sub_7");
         EditText amountField = null;
         if (trackAmount) {
             amountField = new EditText(this);
