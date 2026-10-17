@@ -20,6 +20,8 @@ import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
+import android.text.InputType;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -33,6 +35,8 @@ import java.util.Calendar;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import org.json.JSONObject;
 import org.json.JSONException;
 
@@ -50,6 +54,9 @@ public class MainActivity extends Activity {
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
+    private boolean usageGateApproved = false;
+    private static final String OBA_SUPABASE_URL = "https://sxyaujvliummbvzznejq.supabase.co";
+    private static final String OBA_SUPABASE_KEY = "sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -73,6 +80,17 @@ public class MainActivity extends Activity {
         content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+
+        TextView sectionTitle = text("بخش‌های برنامه", 21, dark, true);
+        content.addView(sectionTitle, lp(-1, -2, 0, 0, 0, 8));
+        LinearLayout sectionRow1 = new LinearLayout(this); sectionRow1.setOrientation(LinearLayout.HORIZONTAL);
+        addSectionButton(sectionRow1, "🏠 خانه", "خانه", new String[]{"لوازم خانه","مواد غذایی","قبض آب","قبض برق","قبض گاز","اجاره و شارژ","وسایل برقی","تعمیرات خانه","نظافت و شوینده","سایر مخارج"});
+        addSectionButton(sectionRow1, "🚗 ماشین", "ماشین", new String[]{"روغن موتور","تسمه تایم","بیمه","لاستیک","باتری","لنت ترمز","معاینه فنی","بنزین","تعمیرات","سرویس دوره‌ای"});
+        content.addView(sectionRow1, lp(-1, -2, 0, 0, 0, 6));
+        LinearLayout sectionRow2 = new LinearLayout(this); sectionRow2.setOrientation(LinearLayout.HORIZONTAL);
+        addSectionButton(sectionRow2, "🏪 مغازه", "مغازه", new String[]{"خرید جنس","بسته‌بندی و فروش","اجاره مغازه","حقوق کارکنان","قبض‌ها","تجهیزات","تعمیرات","سایر مخارج"});
+        addSectionButton(sectionRow2, "🎓 مدرسه", "مدرسه", new String[]{"شهریه","کتاب و دفتر","لوازم‌التحریر","لباس مدرسه","سرویس مدرسه","غذا و خوراکی","فعالیت‌ها","سایر مخارج"});
+        content.addView(sectionRow2, lp(-1, -2, 0, 0, 0, 14));
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
@@ -237,6 +255,86 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private void addSectionButton(LinearLayout row, String label, String section, String[] items) {
+        Button b = button(label, Color.WHITE, dark, 18);
+        b.setMinHeight(dp(76));
+        b.setBackground(round(Color.WHITE, 18));
+        b.setElevation(dp(2));
+        b.setOnClickListener(v -> showSectionItems(section, items));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1f);
+        p.setMargins(dp(3), dp(3), dp(3), dp(3));
+        row.addView(b, p);
+    }
+
+    private void showSectionItems(String section, String[] items) {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(6), dp(8), dp(6));
+        scroll.addView(list);
+        final AlertDialog chooser = new AlertDialog.Builder(this)
+            .setTitle("هزینه‌های بخش " + section)
+            .setView(scroll)
+            .setNegativeButton("بستن", null)
+            .create();
+        for (int i = 0; i < items.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = i; j < Math.min(i + 2, items.length); j++) {
+                final String selectedItem = items[j];
+                Button itemButton = button(selectedItem, Color.WHITE, dark, 15);
+                itemButton.setMinHeight(dp(58));
+                itemButton.setBackground(round(Color.WHITE, 14));
+                itemButton.setElevation(dp(1));
+                itemButton.setOnClickListener(v -> {
+                    chooser.dismiss();
+                    showCategoryExpenseDialog(section, selectedItem);
+                });
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1f);
+                p.setMargins(dp(4), dp(4), dp(4), dp(4));
+                row.addView(itemButton, p);
+            }
+            list.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+        chooser.show();
+    }
+
+    private void showCategoryExpenseDialog(String section, String item) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setInputType(InputType.TYPE_CLASS_NUMBER);
+        amount.setHint("مبلغ به تومان");
+        box.addView(amount, new LinearLayout.LayoutParams(-1, -2));
+        EditText note = new EditText(this);
+        note.setSingleLine(true);
+        note.setHint("توضیحات (اختیاری)");
+        box.addView(note, new LinearLayout.LayoutParams(-1, -2));
+        new AlertDialog.Builder(this)
+            .setTitle("ثبت هزینه: " + item)
+            .setView(box)
+            .setPositiveButton("ثبت هزینه", (dialog, which) -> {
+                String raw = normalize(amount.getText().toString()).replace(",", "").replace("٬", "").trim();
+                long value;
+                try { value = Long.parseLong(raw); } catch (Exception e) { value = 0; }
+                if (value <= 0) {
+                    Toast.makeText(this, "لطفاً مبلغ معتبر وارد کن.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String detail = note.getText().toString().trim();
+                expenseTotal += value;
+                prefs.edit().putLong("expense", expenseTotal).apply();
+                addEntry("هزینه " + section + " / " + item, detail.isEmpty() ? item : detail, value);
+                refresh();
+                status.setText("هزینهٔ " + item + " ثبت شد: " + fmt(value) + " تومان");
+                Toast.makeText(this, "هزینه ثبت شد.", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("لغو", null)
+            .show();
+    }
+
     private void addVoiceCard(String title, String desc, String mode) {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14),dp(12),dp(14),dp(12));
         card.setBackground(round(Color.WHITE,16));
@@ -329,7 +427,156 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String featureKeyForVoice(String raw) {
+        String s = normalize(raw);
+        if (pendingMode != null && !pendingMode.equals("auto")) {
+            if (pendingMode.startsWith("stock_")) return "inventory";
+            return pendingMode;
+        }
+        // Keep classification aligned with handleVoice() and never bill an
+        // unrecognized phrase as an expense by default.
+        if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) return "budget";
+        if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) return "inventory";
+        if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) return "summary";
+        if (contains(s,"سلامت","دکتر","پزشک","دارو","درمان","آزمایش","بیمارستان")) return "health";
+        if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) return "vehicle";
+        if (contains(s,"یادآوری","یادم بنداز","یادآور")) return "reminder";
+        if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) return "income";
+        if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) return "calc";
+        if (contains(s,"خریدم","خرید کردم","خریداری کردم","خرید به قیمت","خرید به مبلغ","خرید","فهرست")) return "shopping";
+        if (contains(s,"کار خانه","وظیفه","تمیزکاری")) return "task";
+        if (contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) return "expense";
+        return null;
+    }
+
+    private void consumeFeatureUseBeforeVoice(String raw) {
+        String token = getSharedPreferences("oba_auth", MODE_PRIVATE).getString("access_token", "");
+        if (token.isEmpty()) {
+            status.setText("برای استفاده از این قابلیت، ابتدا وارد حساب اوبا شو.");
+            say("ابتدا وارد حساب اوبا شو");
+            return;
+        }
+        String featureKey = featureKeyForVoice(raw);
+        if (featureKey == null) {
+            String message = "متوجه نوع درخواست نشدم؛ لطفاً فرمان را واضح‌تر بگو.";
+            status.setText(message);
+            say(message);
+            return;
+        }
+        String normalized = normalize(raw);
+        if ((featureKey.equals("expense") || featureKey.equals("income")) && parseAmount(normalized) <= 0) {
+            String message = "مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان».";
+            status.setText(message);
+            say(message);
+            return;
+        }
+        status.setText("در حال بررسی سهمیهٔ استفاده...");
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String effectiveToken = refreshSessionIfNeeded(token);
+                URL url = new URL(OBA_SUPABASE_URL + "/rest/v1/rpc/oba_consume_feature_use");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(12000);
+                connection.setReadTimeout(12000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+                connection.setRequestProperty("Authorization", "Bearer " + effectiveToken);
+                JSONObject body = new JSONObject();
+                body.put("p_feature_key", featureKey);
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int code = connection.getResponseCode();
+                java.io.InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
+                StringBuilder response = new StringBuilder();
+                if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) response.append(line);
+                }
+                if (code < 200 || code >= 300) throw new Exception("بررسی سهمیه انجام نشد (HTTP " + code + "). ورود و اینترنت را بررسی کن.");
+                org.json.JSONArray rows = new org.json.JSONArray(response.toString());
+                if (rows.length() == 0) throw new Exception("پاسخ سهمیه از سرور معتبر نیست.");
+                JSONObject row = rows.getJSONObject(0);
+                boolean allowed = row.optBoolean("allowed", false);
+                boolean trialActive = row.optBoolean("trial_active", false);
+                int remaining = row.optInt("remaining", 0);
+                runOnUiThread(() -> {
+                    if (!allowed) {
+                        status.setText("سهمیهٔ رایگان این قابلیت تمام شده است. برای ادامه، اشتراک لازم است.");
+                        new AlertDialog.Builder(this).setTitle("پایان سهمیهٔ رایگان")
+                            .setMessage("۱۰ استفادهٔ رایگان این قابلیت مصرف شده است. بخش اشتراک هنوز آماده نیست.")
+                            .setPositiveButton("متوجه شدم", null).show();
+                        return;
+                    }
+                    usageGateApproved = true;
+                    if (trialActive) {
+                        status.setText("دورهٔ آزمایشی ۳۰روزهٔ اوبا فعال است.");
+                    } else {
+                        status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
+                    }
+                    handleVoice(raw);
+                });
+            } catch (Exception e) {
+                String message = e.getMessage() == null ? "بررسی سهمیه ممکن نشد. اتصال اینترنت و ورود به حساب را بررسی کن." : e.getMessage();
+                runOnUiThread(() -> {
+                    status.setText(message);
+                    say(message);
+                });
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }).start();
+    }
+
+    private String refreshSessionIfNeeded(String currentToken) throws Exception {
+        SharedPreferences auth = getSharedPreferences("oba_auth", MODE_PRIVATE);
+        if (auth.getLong("expires_at", 0L) > System.currentTimeMillis() + 120000L) return currentToken;
+        String refreshToken = auth.getString("refresh_token", "");
+        if (refreshToken.isEmpty()) throw new Exception("نشست ورود منقضی شده است؛ دوباره وارد اوبا شو.");
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(OBA_SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token").openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(12000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+            JSONObject request = new JSONObject();
+            request.put("refresh_token", refreshToken);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            int code = c.getResponseCode();
+            java.io.InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+            StringBuilder raw = new StringBuilder();
+            if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) raw.append(line);
+            }
+            if (code < 200 || code >= 300) throw new Exception("تمدید ورود انجام نشد؛ دوباره وارد اوبا شو.");
+            JSONObject session = new JSONObject(raw.toString());
+            String access = session.optString("access_token", "");
+            String rotatedRefresh = session.optString("refresh_token", "");
+            if (access.isEmpty() || rotatedRefresh.isEmpty()) throw new Exception("پاسخ تمدید ورود معتبر نیست؛ دوباره وارد اوبا شو.");
+            long seconds = session.optLong("expires_in", 3600L);
+            auth.edit().putString("access_token", access).putString("refresh_token", rotatedRefresh)
+                .putLong("expires_at", System.currentTimeMillis() + seconds * 1000L).apply();
+            return access;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
     private void handleVoice(String raw) {
+        if (!usageGateApproved) {
+            consumeFeatureUseBeforeVoice(raw);
+            return;
+        }
+        usageGateApproved = false;
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
