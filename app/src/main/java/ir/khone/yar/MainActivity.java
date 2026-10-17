@@ -156,7 +156,7 @@ public class MainActivity extends Activity {
         LinearLayout calculatorButtons = new LinearLayout(this);
         calculatorButtons.setOrientation(LinearLayout.HORIZONTAL);
         Button calculateManual = button("= محاسبه", Color.rgb(236, 105, 157), Color.WHITE, 15);
-        calculateManual.setOnClickListener(v -> calculateManualExpression(calculatorExpression, false));
+        calculateManual.setOnClickListener(v -> calculateManualExpression(calculatorExpression, true));
         Button calculateVoice = button("🎙 گفتن عبارت", Color.rgb(111, 190, 133), Color.WHITE, 15);
         calculateVoice.setOnClickListener(v -> {
             pendingMode = "calc";
