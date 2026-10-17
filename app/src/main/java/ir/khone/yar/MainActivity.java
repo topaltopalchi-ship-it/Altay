@@ -662,10 +662,8 @@ public class MainActivity extends Activity {
 
 private String featureKeyForVoice(String raw) {
         String s = normalize(raw);
-        if (pendingShopIncome && contains(s,"درآمد","فروش","فروختم","دریافت کردم")) return "shop_income";
-        if (!pendingCategoryVoice.isEmpty() && contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) {
-            return categoryFeatureKey(pendingCategoryVoice);
-        }
+        if (pendingShopIncome) return "shop_income";
+        if (!pendingCategoryVoice.isEmpty()) return categoryFeatureKey(pendingCategoryVoice);
         if (pendingMode != null && !pendingMode.equals("auto")) {
             if (pendingMode.startsWith("stock_")) return "inventory";
             return pendingMode;
@@ -845,7 +843,9 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
         if (mode.equals("auto")) {
-            if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
+            if (pendingShopIncome) mode = "income";
+            else if (!pendingCategoryVoice.isEmpty()) mode = "expense";
+            else if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
             else if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
