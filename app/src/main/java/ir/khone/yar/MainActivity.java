@@ -596,6 +596,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAddFamilyMemberDialog() {
+        if (!canCreateRecord("family_records", "اعضای خانواده")) return;
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(18), dp(8), dp(18), dp(4));
@@ -639,6 +640,7 @@ public class MainActivity extends Activity {
                     member.put("relation", relation.isEmpty() ? "عضو خانواده" : relation);
                     members.add(member);
                     saveFamilyMembers(members);
+                    incrementCategoryQuota("family_records");
                 } catch (JSONException ignored) {
                     Toast.makeText(this, "ذخیره عضو انجام نشد.", Toast.LENGTH_SHORT).show();
                     return;
@@ -673,6 +675,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAddSchoolChildDialog() {
+        if (!canCreateRecord("school_records", "مدرسه فرزندان")) return;
         EditText nameField = new EditText(this);
         nameField.setSingleLine(true);
         nameField.setHint("مثلاً آیسل یا مدرسه آیسل");
@@ -700,7 +703,10 @@ public class MainActivity extends Activity {
                     if (out.length() > 0) out.append("\n");
                     out.append(item);
                 }
-                prefs.edit().putString("school_children", out.toString()).apply();
+                if (!names.contains(name)) {
+                    prefs.edit().putString("school_children", out.toString()).apply();
+                    incrementCategoryQuota("school_records");
+                }
                 showSchoolSectionsDialog(name);
             })
             .setNegativeButton("انصراف", (dialog, which) -> showSchoolChildrenDialog())
