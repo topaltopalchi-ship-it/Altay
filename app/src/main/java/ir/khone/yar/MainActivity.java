@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private Button wakeButton;
     private TextToSpeech tts;
+    private volatile boolean ttsReady = false;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
@@ -65,7 +66,7 @@ public class MainActivity extends Activity {
         incomeTotal = prefs.getLong("income", 0);
         expenseTotal = prefs.getLong("expense", 0);
         loadEntries();
-        tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
+        tts = new TextToSpeech(this, result -> { if (tts != null && result == TextToSpeech.SUCCESS) { int languageResult = tts.setLanguage(new Locale("fa", "IR")); if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.getDefault()); tts.setSpeechRate(0.88f); ttsReady = true; } });
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
@@ -556,7 +557,7 @@ public class MainActivity extends Activity {
                     refresh();
                     String confirmation = "درآمد مغازه به مبلغ " + fmt(amount) + " تومان ثبت شد.";
                     status.setText(confirmation);
-                    say(confirmation);
+                    say("بیلدیم");
                     Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
                 });
             }).show();
@@ -598,7 +599,7 @@ public class MainActivity extends Activity {
                     addCategorySpend(category, amount);
                     addEntry(category, entryTitle, amount);
                     refresh();
-                    String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد.";
+                    String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد. بیلدیم.";
                     status.setText(confirmation);
                     say(confirmation);
                     Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
@@ -1033,7 +1034,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
                 }
                 incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply();
                 addEntry(pendingShopIncome ? "درآمد مغازه" : "درآمد", title, amount);
-                say((pendingShopIncome ? "درآمد مغازه" : "درآمد") + " به مبلغ " + fmt(amount) + " تومان ثبت شد");
+                say("بیلدیم");
                 pendingShopIncome = false;
             } else {
                 String category = pendingCategoryVoice;
@@ -1042,7 +1043,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
                 expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply();
                 addCategorySpend(category, amount);
                 addEntry(category, title, amount);
-                say("هزینه " + fmt(amount) + " تومان در بخش " + category + " ثبت شد");
+                say("بیلدیم");
             }
             refresh(); return;
         }
@@ -1078,7 +1079,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             addCategorySpend("سلامت", amount);
             addEntry("سلامت", title, amount);
             String message = "هزینه سلامت به مبلغ " + fmt(amount) + " تومان ثبت شد.";
-            status.setText(message); say(message); refresh(); return;
+            status.setText(message); say("بیلدیم"); refresh(); return;
         }
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
@@ -1486,8 +1487,9 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void sayThenListenForNavigation(String message) {
-        if (tts == null) {
-            startVoice("navigate");
+        if (tts == null || !ttsReady) {
+            status.setText("بویور؛ حالا نام بخش را بگو و برای ادامه دکمهٔ صوتی را بزن.");
+            say(message);
             return;
         }
         tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
@@ -1503,7 +1505,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         if (result == TextToSpeech.ERROR) startVoice("navigate");
     }
 
-    private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
+    private void say(String s) { if (tts != null && ttsReady) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "oba_tts_" + System.currentTimeMillis()); }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
         if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;
