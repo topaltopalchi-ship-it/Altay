@@ -421,7 +421,7 @@ public class MainActivity extends Activity {
                 if (!names.contains(name)) names.add(name);
                 StringBuilder out = new StringBuilder();
                 for (String item : names) {
-                    if (out.length() > 0) out.append("\\n");
+                    if (out.length() > 0) out.append("\n");
                     out.append(item);
                 }
                 prefs.edit().putString("school_children", out.toString()).apply();
