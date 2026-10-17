@@ -285,7 +285,61 @@ public class MainActivity extends Activity {
             });
             choices.addView(choice, lp(-1, -2, 0, 3, 0, 5));
         }
+        if ("مغازه".equals(category)) {
+            Button incomeChoice = button("＋ ثبت فروش / درآمد مغازه", Color.rgb(220, 247, 232), Color.rgb(20, 100, 55), 16);
+            incomeChoice.setMinHeight(dp(58));
+            incomeChoice.setOnClickListener(v -> {
+                dialog.dismiss();
+                showCategoryIncomeForm();
+            });
+            choices.addView(incomeChoice, lp(-1, -2, 0, 8, 0, 5));
+        }
         dialog.show();
+    }
+
+    private void showCategoryIncomeForm() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText amountInput = new EditText(this);
+        amountInput.setHint("مبلغ فروش به تومان");
+        amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(amountInput, lp(-1, -2, 0, 0, 0, 8));
+        EditText descriptionInput = new EditText(this);
+        descriptionInput.setHint("شرح فروش (اختیاری)");
+        descriptionInput.setSingleLine(true);
+        form.addView(descriptionInput, lp(-1, -2, 0, 0, 0, 4));
+        new AlertDialog.Builder(this).setTitle("ثبت درآمد مغازه")
+            .setView(form).setNegativeButton("لغو", null)
+            .setPositiveButton("ثبت درآمد", (dialog, which) -> {
+                String rawAmount = amountInput.getText().toString().trim()
+                    .replace("۰","0").replace("۱","1").replace("۲","2").replace("۳","3")
+                    .replace("۴","4").replace("۵","5").replace("۶","6").replace("۷","7")
+                    .replace("۸","8").replace("۹","9").replace("٬","").replace(",","");
+                long amount;
+                try { amount = Long.parseLong(rawAmount); }
+                catch (Exception e) { Toast.makeText(this, "مبلغ معتبر وارد کن.", Toast.LENGTH_LONG).show(); return; }
+                if (amount <= 0 || amount > Long.MAX_VALUE - incomeTotal) {
+                    Toast.makeText(this, "مبلغ درآمد معتبر نیست.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String description = descriptionInput.getText().toString().trim();
+                String title = description.isEmpty() ? "فروش مغازه" : "فروش مغازه — " + description;
+                consumeFeatureUse("shop_income", () -> {
+                    if (amount > Long.MAX_VALUE - incomeTotal) {
+                        Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    incomeTotal += amount;
+                    prefs.edit().putLong("income", incomeTotal).apply();
+                    addEntry("درآمد مغازه", title, amount);
+                    refresh();
+                    String confirmation = "درآمد مغازه به مبلغ " + fmt(amount) + " تومان ثبت شد.";
+                    status.setText(confirmation);
+                    say(confirmation);
+                    Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+                });
+            }).show();
     }
 
     private void showCategoryExpenseForm(String category, String subgroup) {
