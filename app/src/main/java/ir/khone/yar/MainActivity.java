@@ -6,6 +6,7 @@ import android.app.AlertDialog;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.os.Build;
+import android.os.Handler;
 import android.provider.Settings;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -94,9 +95,9 @@ public class MainActivity extends Activity {
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
+        wakeButton = button("🎙 میانبر صوتی: اول بگو «اوبا»", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
-        wakeButton.setOnClickListener(v -> toggleWakeService());
+        wakeButton.setOnClickListener(v -> startVoice("wake"));
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
@@ -398,6 +399,30 @@ public class MainActivity extends Activity {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
+        if (mode.equals("wake")) {
+            if (contains(s, "اوبا", "اُبا", "وبا")) {
+                status.setText("اوبا آماده است؛ حالا نام بخش را بگو: خانه، ماشین، مغازه یا مدرسه.");
+                say("بله، در خدمتم");
+                new Handler(getMainLooper()).postDelayed(() -> startVoice("navigate"), 1300);
+            } else {
+                status.setText("نام اوبا تشخیص داده نشد. دوباره روی میانبر صوتی بزن و بگو «اوبا».");
+                say("لطفاً بگو اوبا");
+            }
+            return;
+        }
+        if (mode.equals("navigate")) {
+            if (contains(s, "خانه", "خونه")) showCategorySubgroups("خانه");
+            else if (contains(s, "ماشین", "خودرو")) showCategorySubgroups("ماشین");
+            else if (contains(s, "مغازه", "فروشگاه", "کسب و کار")) showCategorySubgroups("مغازه");
+            else if (contains(s, "مدرسه", "مکتب")) showCategorySubgroups("مدرسه");
+            else if (contains(s, "سلامت", "دکتر", "درمان")) showCategorySubgroups("سلامت");
+            else if (contains(s, "سایر", "متفرقه")) showCategorySubgroups("سایر");
+            else {
+                status.setText("بخش را متوجه نشدم؛ بگو خانه، ماشین، مغازه یا مدرسه.");
+                say("بگو خانه، ماشین، مغازه یا مدرسه");
+            }
+            return;
+        }
         if (mode.equals("auto")) {
             if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
