@@ -354,7 +354,7 @@ public class MainActivity extends Activity {
                 status.setText(answer); say(answer); return;
             } else if (contains(s, "سوابق خودرو", "سابقه خودرو", "سرویس های خودرو", "سرویس‌های خودرو")) {
                 String records = prefs.getString("vehicleRecords", "");
-                String answer = records.isEmpty() ? "هنوز سابقه‌ای برای خودرو ثبت نشده است." : "سوابق خودرو. " + records.replace("\\n", ". ");
+                String answer = records.isEmpty() ? "هنوز سابقه‌ای برای خودرو ثبت نشده است." : "سوابق خودرو. " + records.replace("\n", ". ");
                 status.setText(answer); say(answer); return;
             } else if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
