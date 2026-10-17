@@ -35,12 +35,24 @@ public class LoginActivity extends Activity {
   status=new TextView(this);status.setText("اطلاعات مالی فعلی همچنان روی همین گوشی ذخیره می‌شوند.");status.setGravity(Gravity.CENTER);status.setPadding(0,18,0,0);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
   final TextView hint=intro;
   Runnable showChoices=()->{signup=false;username.setVisibility(android.view.View.GONE);password.setVisibility(android.view.View.GONE);action.setVisibility(android.view.View.GONE);mode.setVisibility(android.view.View.GONE);loginChoice.setVisibility(android.view.View.VISIBLE);signupChoice.setVisibility(android.view.View.VISIBLE);hint.setVisibility(android.view.View.VISIBLE);hint.setText("برای ادامه یکی از گزینه‌ها را انتخاب کن.");status.setText("اطلاعات مالی فعلی همچنان روی همین گوشی ذخیره می‌شوند.");};
-  java.util.function.Consumer<Boolean> showForm=create->{signup=create;loginChoice.setVisibility(android.view.View.GONE);signupChoice.setVisibility(android.view.View.GONE);hint.setVisibility(android.view.View.GONE);username.setVisibility(android.view.View.VISIBLE);password.setVisibility(android.view.View.VISIBLE);action.setVisibility(android.view.View.VISIBLE);mode.setVisibility(android.view.View.VISIBLE);action.setText(create?"ساخت حساب":"ورود");password.setText("");status.setText(create?"برای ساخت حساب نام کاربری و رمز عبور تعیین کن.":"با حساب قبلی خود وارد شو.");};
-  loginChoice.setOnClickListener(v->showForm.accept(false));
-  signupChoice.setOnClickListener(v->showForm.accept(true));
+  loginChoice.setOnClickListener(v->showAuthForm(false,loginChoice,signupChoice,hint));
+  signupChoice.setOnClickListener(v->showAuthForm(true,loginChoice,signupChoice,hint));
   action.setOnClickListener(v->submit());
   mode.setOnClickListener(v->showChoices.run());
   setContentView(box);
+ }
+ private void showAuthForm(boolean create,Button loginChoice,Button signupChoice,TextView hint){
+  signup=create;
+  loginChoice.setVisibility(android.view.View.GONE);
+  signupChoice.setVisibility(android.view.View.GONE);
+  hint.setVisibility(android.view.View.GONE);
+  username.setVisibility(android.view.View.VISIBLE);
+  password.setVisibility(android.view.View.VISIBLE);
+  action.setVisibility(android.view.View.VISIBLE);
+  mode.setVisibility(android.view.View.VISIBLE);
+  action.setText(create?"ساخت حساب":"ورود");
+  password.setText("");
+  status.setText(create?"برای ساخت حساب نام کاربری و رمز عبور تعیین کن.":"با حساب قبلی خود وارد شو.");
  }
  private void submit(){if(busy)return;String u=username.getText().toString().trim().toLowerCase(java.util.Locale.ROOT),p=password.getText().toString();
   if(!u.matches("[a-z0-9_]{3,24}")){username.setError("۳ تا ۲۴ حرف انگلیسی، عدد یا _");return;}if(p.length()<8||p.length()>72){password.setError("رمز عبور باید ۸ تا ۷۲ کاراکتر باشد");return;}
