@@ -319,7 +319,7 @@ public class MainActivity extends Activity {
                             return;
                         }
                         int id = (int)(System.currentTimeMillis() & 0x7fffffff);
-                        String saved = due.getTimeInMillis() + "\\nonce\\n" + reminderTitle + "\\n-1";
+                        String saved = due.getTimeInMillis() + "\nonce\n" + reminderTitle + "\n-1";
                         prefs.edit().putString("reminder_" + id, saved).apply();
                         ReminderReceiver.schedule(this, id, due.getTimeInMillis(), reminderTitle, false);
                         addEntry("هشدار", reminderTitle, 0);
@@ -409,6 +409,14 @@ public class MainActivity extends Activity {
                 showCategoryIncomeForm();
             });
             choices.addView(incomeChoice, lp(-1, -2, 0, 8, 0, 5));
+            Button voiceIncome = button("🎙 ثبت فروش مغازه با صدا", Color.rgb(225,238,255), dark, 16);
+            voiceIncome.setMinHeight(dp(54));
+            voiceIncome.setOnClickListener(v -> {
+                dialog.dismiss();
+                status.setText("برای ثبت فروش بگو: «درآمد مغازه ۵۰۰ هزار تومان فروش کالا».");
+                startVoice("auto");
+            });
+            choices.addView(voiceIncome, lp(-1,-2,0,2,0,5));
         }
         dialog.show();
     }
