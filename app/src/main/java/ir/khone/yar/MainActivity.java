@@ -111,6 +111,20 @@ public class MainActivity extends Activity {
         totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
+        LinearLayout alertPanel = new LinearLayout(this);
+        alertPanel.setOrientation(LinearLayout.VERTICAL);
+        alertPanel.setPadding(dp(14),dp(12),dp(14),dp(12));
+        alertPanel.setBackground(round(Color.rgb(255,235,238),18));
+        alertPanel.addView(text("🔔 هشدارها و آلارم‌ها",18,Color.rgb(150,25,35),true));
+        alertPanel.addView(text("برای عبور هزینه از سقف بودجه هشدار بگیر؛ برای زمان تعویض روغن، سرویس یا هر کار دیگری هم آلارم زمان‌دار تنظیم کن.",13,dark,false),lp(-1,-2,0,5,0,8));
+        Button budgetAlert = button("🎯 تنظیم سقف هزینه / بودجه",Color.WHITE,dark,15);
+        budgetAlert.setOnClickListener(v -> showBudgetLimitForm());
+        alertPanel.addView(budgetAlert,lp(-1,-2,0,2,0,4));
+        Button maintenanceAlert = button("🛠 تنظیم آلارم زمان تعویض یا سرویس",Color.WHITE,dark,15);
+        maintenanceAlert.setOnClickListener(v -> showManualMaintenanceReminder());
+        alertPanel.addView(maintenanceAlert,lp(-1,-2,0,2,0,0));
+        content.addView(alertPanel,lp(-1,-2,0,2,0,14));
+
         LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
         TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
         TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
@@ -258,6 +272,99 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private void showBudgetLimitForm() {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("سقف هزینه به تومان");
+        long current = prefs.getLong("home_budget", 0);
+        if (current > 0) input.setText(String.valueOf(current));
+        new AlertDialog.Builder(this).setTitle("تنظیم سقف هزینه")
+            .setMessage("وقتی مجموع هزینه‌های ثبت‌شده از این مبلغ عبور کند، اوبا هشدار می‌دهد.")
+            .setView(input).setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیره سقف", (d,w) -> {
+                String raw = normalize(input.getText().toString()).replace("٬","").replace(",","");
+                try {
+                    long limit = Long.parseLong(raw);
+                    if (limit <= 0) throw new NumberFormatException();
+                    prefs.edit().putLong("home_budget", limit).putBoolean("budget_alerted", false).apply();
+                    String msg = "سقف هزینه روی " + fmt(limit) + " تومان تنظیم شد.";
+                    status.setText(msg); say(msg); refresh();
+                } catch (Exception e) {
+                    Toast.makeText(this, "یک مبلغ معتبر و بزرگ‌تر از صفر وارد کن.", Toast.LENGTH_LONG).show();
+                }
+            }).show();
+    }
+
+    private void showManualMaintenanceReminder() {
+        EditText titleInput = new EditText(this);
+        titleInput.setSingleLine(true);
+        titleInput.setHint("مثلاً تعویض روغن، سرویس ماشین یا تعویض فیلتر");
+        new AlertDialog.Builder(this).setTitle("آلارم سرویس یا تعویض")
+            .setMessage("عنوان هشدار را وارد کن؛ سپس تاریخ و ساعت را انتخاب می‌کنی.")
+            .setView(titleInput).setNegativeButton("لغو", null)
+            .setPositiveButton("انتخاب تاریخ", (d,w) -> {
+                String title = titleInput.getText().toString().trim();
+                if (title.isEmpty()) title = "زمان سرویس یا تعویض رسیده است";
+                final String reminderTitle = title;
+                Calendar now = Calendar.getInstance();
+                new android.app.DatePickerDialog(this, (picker, year, month, day) -> {
+                    Calendar due = Calendar.getInstance();
+                    due.set(Calendar.YEAR, year); due.set(Calendar.MONTH, month); due.set(Calendar.DAY_OF_MONTH, day);
+                    new android.app.TimePickerDialog(this, (timePicker, hour, minute) -> {
+                        due.set(Calendar.HOUR_OF_DAY, hour); due.set(Calendar.MINUTE, minute);
+                        due.set(Calendar.SECOND, 0); due.set(Calendar.MILLISECOND, 0);
+                        if (due.getTimeInMillis() <= System.currentTimeMillis()) {
+                            Toast.makeText(this, "تاریخ و ساعت باید در آینده باشد.", Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        int id = (int)(System.currentTimeMillis() & 0x7fffffff);
+                        String saved = due.getTimeInMillis() + "\\nonce\\n" + reminderTitle + "\\n-1";
+                        prefs.edit().putString("reminder_" + id, saved).apply();
+                        ReminderReceiver.schedule(this, id, due.getTimeInMillis(), reminderTitle, false);
+                        addEntry("هشدار", reminderTitle, 0);
+                        refresh();
+                        String msg = "آلارم «" + reminderTitle + "» برای " +
+                            new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(due.getTime()) + " تنظیم شد.";
+                        status.setText(msg); say(msg);
+                        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
+                        }
+                    }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show();
+                }, now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH)).show();
+            }).show();
+    }
+
+    private void triggerBudgetAlert(long limit) {
+        if (prefs.getBoolean("budget_alerted", false)) return;
+        prefs.edit().putBoolean("budget_alerted", true).apply();
+        String msg = "هشدار اوبا! هزینه‌ها از سقف مجاز " + fmt(limit) + " تومان عبور کرده‌اند.";
+        status.setText(msg); say(msg);
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        try {
+            android.app.NotificationManager manager = (android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+            if (manager != null) {
+                if (Build.VERSION.SDK_INT >= 26) {
+                    android.app.NotificationChannel channel = new android.app.NotificationChannel("oba_budget_alerts","هشدار سقف هزینه",android.app.NotificationManager.IMPORTANCE_HIGH);
+                    channel.enableVibration(true); manager.createNotificationChannel(channel);
+                }
+                android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                    ? new android.app.Notification.Builder(this,"oba_budget_alerts")
+                    : new android.app.Notification.Builder(this).setPriority(android.app.Notification.PRIORITY_HIGH);
+                builder.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("هشدار اوبا: عبور از سقف هزینه")
+                    .setContentText("مجموع هزینه‌ها از " + fmt(limit) + " تومان عبور کرده است.")
+                    .setAutoCancel(true).setDefaults(android.app.Notification.DEFAULT_SOUND | android.app.Notification.DEFAULT_VIBRATE);
+                manager.notify(8701,builder.build());
+            }
+        } catch (SecurityException ignored) {}
+    }
+
+    private void checkBudgetAlert() {
+        long limit = prefs.getLong("home_budget", 0);
+        if (limit > 0 && expenseTotal > limit) triggerBudgetAlert(limit);
+        else prefs.edit().putBoolean("budget_alerted", false).apply();
+    }
+
     private void showCategorySubgroups(String category) {
         String[] groups;
         if ("خانه".equals(category)) groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه"};
@@ -277,7 +384,7 @@ public class MainActivity extends Activity {
             .setNegativeButton("بازگشت", null)
             .create();
         for (String group : groups) {
-            Button choice = button(group, Color.WHITE, dark, 16);
+            Button choice = button("✍️ ثبت دستی: " + group, Color.WHITE, dark, 16);
             choice.setMinHeight(dp(54));
             choice.setOnClickListener(v -> {
                 dialog.dismiss();
@@ -285,6 +392,15 @@ public class MainActivity extends Activity {
             });
             choices.addView(choice, lp(-1, -2, 0, 3, 0, 5));
         }
+        Button voiceChoice = button("🎙 ثبت با صدا در بخش «" + category + "»", Color.rgb(225,238,255), dark, 16);
+        voiceChoice.setMinHeight(dp(56));
+        voiceChoice.setOnClickListener(v -> {
+            dialog.dismiss();
+            status.setText("برای ثبت در بخش " + category + " بگو: هزینه، مبلغ و شرح آن؛ مثلاً «هزینه ۸۰ هزار تومان برای نان».");
+            say("مبلغ و شرح را بگو");
+            startVoice("auto");
+        });
+        choices.addView(voiceChoice, lp(-1,-2,0,8,0,5));
         if ("مغازه".equals(category)) {
             Button incomeChoice = button("＋ ثبت فروش / درآمد مغازه", Color.rgb(220, 247, 232), Color.rgb(20, 100, 55), 16);
             incomeChoice.setMinHeight(dp(58));
@@ -1056,6 +1172,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
     }
     private void refresh() {
+        checkBudgetAlert();
         if(totals!=null) { long budget=prefs.getLong("home_budget",0); totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده حساب: "+fmt(incomeTotal-expenseTotal)+" تومان" + (budget>0 ? "\n🎯 مانده بودجه خانه: "+fmt(budget-expenseTotal)+" تومان" : "\n🎯 بودجه را صوتی تعیین کن")); }
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
