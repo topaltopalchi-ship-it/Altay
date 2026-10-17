@@ -346,6 +346,31 @@ public class MainActivity extends Activity {
             }).show();
     }
 
+    private void showSingleCategoryBudgetForm(String category) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("سقف هزینه به تومان");
+        long current = prefs.getLong("budget_" + categorySlug(category), 0L);
+        if (current > 0) input.setText(String.valueOf(current));
+        new AlertDialog.Builder(this).setTitle("سقف هزینهٔ " + category)
+            .setMessage("هزینهٔ ثبت‌شدهٔ این بخش: " + fmt(categorySpent(category)) + " تومان")
+            .setView(input).setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیره سقف", (d,w) -> {
+                String raw = normalize(input.getText().toString()).replace("٬","").replace(",","");
+                try {
+                    long limit = Long.parseLong(raw);
+                    if (limit <= 0) throw new NumberFormatException();
+                    String slug = categorySlug(category);
+                    prefs.edit().putLong("budget_" + slug, limit).putBoolean("budget_alerted_" + slug, false).apply();
+                    String msg = "سقف هزینهٔ " + category + " روی " + fmt(limit) + " تومان تنظیم شد.";
+                    status.setText(msg); say(msg); checkBudgetAlert(); refresh();
+                } catch (Exception e) {
+                    Toast.makeText(this, "یک مبلغ معتبر و بزرگ‌تر از صفر وارد کن.", Toast.LENGTH_LONG).show();
+                }
+            }).show();
+    }
+
     private void showManualMaintenanceReminder() {
         EditText titleInput = new EditText(this);
         titleInput.setSingleLine(true);
@@ -432,7 +457,20 @@ public class MainActivity extends Activity {
         choices.setOrientation(LinearLayout.VERTICAL);
         choices.setPadding(dp(16), dp(8), dp(16), dp(8));
         ScrollView scroll = new ScrollView(this);
-        scroll.addView(choices);
+        LinearLayout chooserContent = new LinearLayout(this);
+        chooserContent.setOrientation(LinearLayout.VERTICAL);
+        chooserContent.setPadding(dp(12),dp(6),dp(12),dp(6));
+        long sectionLimit = prefs.getLong("budget_" + categorySlug(category), 0L);
+        long sectionSpent = categorySpent(category);
+        String sectionSummary = "هزینهٔ ثبت‌شده: " + fmt(sectionSpent) + " تومان"
+            + (sectionLimit > 0 ? "\\nسقف مجاز: " + fmt(sectionLimit) + " تومان | مانده: " + fmt(sectionLimit-sectionSpent) + " تومان"
+                : "\\nبرای این بخش هنوز سقف هزینه تعیین نشده است.");
+        chooserContent.addView(text(sectionSummary,14,dark,true),lp(-1,-2,0,4,0,8));
+        Button setSectionBudget = button("🔔 تنظیم سقف هزینه برای " + category,Color.rgb(255,235,238),Color.rgb(150,25,35),14);
+        setSectionBudget.setOnClickListener(v -> showSingleCategoryBudgetForm(category));
+        chooserContent.addView(setSectionBudget,lp(-1,-2,0,2,0,8));
+        chooserContent.addView(choices);
+        scroll.addView(chooserContent);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("زیرگروه «" + category + "»")
             .setView(scroll)
