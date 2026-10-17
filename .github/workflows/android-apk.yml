@@ -11,6 +11,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Optional public client configuration; no server secrets belong in the APK.
+      OBA_SUPABASE_URL: ${{ vars.OBA_SUPABASE_URL }}
+      OBA_SUPABASE_PUBLISHABLE_KEY: ${{ vars.OBA_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
