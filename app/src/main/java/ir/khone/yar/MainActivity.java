@@ -20,6 +20,7 @@ import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -73,6 +74,21 @@ public class MainActivity extends Activity {
         content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+
+        TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 20, dark, true);
+        content.addView(categoryTitle, lp(-1,-2,0,4,0,8));
+        TextView categoryHint = text("یک دسته را انتخاب کن تا زیرگروه و فرم ثبت هزینه باز شود.", 14, Color.DKGRAY, false);
+        content.addView(categoryHint, lp(-1,-2,0,0,0,8));
+        String[][] categoryButtons = {
+            {"🏠 خانه", "خانه"}, {"🚗 ماشین", "ماشین"}, {"🏪 مغازه", "مغازه"},
+            {"🏫 مدرسه", "مدرسه"}, {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
+        };
+        for (String[] item : categoryButtons) {
+            Button categoryButton = button(item[0], Color.WHITE, dark, 17);
+            categoryButton.setMinHeight(dp(54));
+            categoryButton.setOnClickListener(v -> showCategorySubgroups(item[1]));
+            content.addView(categoryButton, lp(-1,-2,0,2,0,5));
+        }
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
@@ -235,6 +251,55 @@ public class MainActivity extends Activity {
         }
         // Unknown keys and runtime-only flags are deliberately not imported.
         return false;
+    }
+
+    private void showCategorySubgroups(String category) {
+        String[] groups;
+        if ("خانه".equals(category)) groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه"};
+        else if ("ماشین".equals(category)) groups = new String[]{"سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه‌های ماشین"};
+        else if ("مغازه".equals(category)) groups = new String[]{"خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه‌های مغازه"};
+        else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
+        else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
+        else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
+        new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
+            .setItems(groups, (dialog, which) -> showCategoryExpenseForm(category, groups[which])).setNegativeButton("انصراف", null).show();
+    }
+
+    private void showCategoryExpenseForm(String category, String subgroup) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText amountInput = new EditText(this);
+        amountInput.setHint("مبلغ به تومان (مثلاً ۱۵۰۰۰۰)");
+        amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(amountInput, lp(-1,-2,0,0,0,8));
+        EditText descriptionInput = new EditText(this);
+        descriptionInput.setHint("شرح اختیاری (مثلاً خرید نان)");
+        descriptionInput.setSingleLine(true);
+        form.addView(descriptionInput, lp(-1,-2,0,0,0,4));
+        new AlertDialog.Builder(this).setTitle(category + " ← " + subgroup)
+            .setView(form).setNegativeButton("لغو", null)
+            .setPositiveButton("ثبت هزینه", (dialog, which) -> {
+                String rawAmount = amountInput.getText().toString().trim()
+                    .replace("۰","0").replace("۱","1").replace("۲","2").replace("۳","3")
+                    .replace("۴","4").replace("۵","5").replace("۶","6").replace("۷","7")
+                    .replace("۸","8").replace("۹","9").replace("٬","").replace(",","");
+                long amount;
+                try { amount = Long.parseLong(rawAmount); }
+                catch (Exception e) { Toast.makeText(this, "مبلغ معتبر وارد کن.", Toast.LENGTH_LONG).show(); return; }
+                if (amount <= 0) { Toast.makeText(this, "مبلغ باید بیشتر از صفر باشد.", Toast.LENGTH_LONG).show(); return; }
+                if (amount > Long.MAX_VALUE - expenseTotal) { Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show(); return; }
+                String description = descriptionInput.getText().toString().trim();
+                expenseTotal += amount;
+                prefs.edit().putLong("expense", expenseTotal).apply();
+                String entryTitle = subgroup + (description.isEmpty() ? "" : " — " + description);
+                addEntry(category, entryTitle, amount);
+                refresh();
+                String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد.";
+                status.setText(confirmation);
+                say(confirmation);
+                Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+            }).show();
     }
 
     private void addVoiceCard(String title, String desc, String mode) {
