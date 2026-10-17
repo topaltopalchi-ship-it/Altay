@@ -75,13 +75,10 @@ public class MainActivity extends Activity {
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
 
-        TextView sectionTitle = text("دسته‌بندی‌های OBA", 19, dark, true);
-        content.addView(sectionTitle, lp(-1, -2, 0, 0, 0, 8));
-        addCategoryButton(content, "🏠 خانه", "home_records", "هزینه‌های خانه، خریدها، کارها و یادآوری‌ها");
-        addCategoryButton(content, "🚗 ماشین", "car_records", "سرویس، تعمیر، کیلومتر و هزینه‌های خودرو");
-        addCategoryButton(content, "📄 اسناد", "document_records", "مدارک مهم، تاریخ انقضا و محل نگهداری");
-        addCategoryButton(content, "🛡️ گارانتی وسایل", "warranty_records", "نام وسیله، شماره فاکتور و پایان گارانتی");
-        addCategoryButton(content, "🎒 مدرسه", "school_records", "تکالیف، برنامه مدرسه، شهریه و یادآوری‌ها");
+        Button allCategories = button("📂 همه بخش‌های OBA  •  ۱۳ دسته", Color.WHITE, dark, 17);
+        allCategories.setMinHeight(dp(58));
+        allCategories.setOnClickListener(v -> showCategoriesDialog());
+        content.addView(allCategories, lp(-1, -2, 0, 0, 0, 12));
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
@@ -187,6 +184,40 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+
+    private void showCategoriesDialog() {
+        String[] labels = {
+            "🏠 خانه", "🚗 ماشین", "📄 اسناد", "🛡️ گارانتی وسایل", "🎒 مدرسه",
+            "💰 امور مالی خانواده", "🛒 خرید و انبار خانه", "👨‍👩‍👧 خانواده",
+            "📅 تقویم و یادآوری‌ها", "🔧 تعمیرات و نگهداری", "🩺 سلامت خانواده",
+            "💼 کار و کسب‌وکار", "🔐 گاوصندوق دیجیتال"
+        };
+        String[] keys = {
+            "home_records", "car_records", "document_records", "warranty_records", "school_records",
+            "finance_records", "shopping_records", "family_records", "calendar_records",
+            "maintenance_records", "health_records", "business_records", "safe_records"
+        };
+        String[] hints = {
+            "هزینه‌های خانه، خریدها و کارهای روزمره",
+            "سرویس، تعمیر، کیلومتر و هزینه‌های خودرو",
+            "مدارک مهم، تاریخ انقضا و محل نگهداری",
+            "نام وسیله، شماره فاکتور و پایان گارانتی",
+            "تکالیف، برنامه مدرسه، شهریه و یادآوری‌ها",
+            "بودجه ماهانه، بدهی، طلب و اقساط؛ ثبت مالی جداگانه هم در صفحه اصلی هست",
+            "فهرست خرید و اقلام موردنیاز خانه",
+            "مناسبت‌ها و اطلاعات ضروری اعضای خانواده",
+            "قرارها، قبض‌ها و کارهای سررسیددار",
+            "پکیج، کولر، لوازم خانگی و تعمیرکار",
+            "نوبت پزشک، دارو و واکسن",
+            "سفارش‌ها، فروش و مطالبات کسب‌وکار",
+            "فهرست اسناد و اطلاعات ضروری؛ رمزهای حساس را اینجا ننویس"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("همه بخش‌های OBA")
+            .setItems(labels, (dialog, which) -> openCategory(keys[which], labels[which], hints[which]))
+            .setNegativeButton("بستن", null)
+            .show();
+    }
 
     private void addCategoryButton(LinearLayout content, String label, String key, String hint) {
         Button b = button(label + "   ›", Color.WHITE, dark, 17);
