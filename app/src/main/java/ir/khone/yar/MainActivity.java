@@ -389,6 +389,7 @@ public class MainActivity extends Activity {
                 if (rows.length() == 0) throw new Exception("پاسخ سهمیه از سرور معتبر نیست.");
                 JSONObject row = rows.getJSONObject(0);
                 boolean allowed = row.optBoolean("allowed", false);
+                boolean trialActive = row.optBoolean("trial_active", false);
                 int remaining = row.optInt("remaining", 0);
                 runOnUiThread(() -> {
                     if (!allowed) {
@@ -399,7 +400,11 @@ public class MainActivity extends Activity {
                         return;
                     }
                     usageGateApproved = true;
-                    status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
+                    if (trialActive) {
+                        status.setText("دورهٔ آزمایشی ۳۰روزهٔ اوبا فعال است.");
+                    } else {
+                        status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
+                    }
                     handleVoice(raw);
                 });
             } catch (Exception e) {
