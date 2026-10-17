@@ -238,7 +238,7 @@ public class MainActivity extends Activity {
                             while(keys.hasNext()) {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
-                                else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if (isBudgetOrExpenseCounter(key) || "income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
                                 else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
@@ -251,9 +251,15 @@ public class MainActivity extends Activity {
         } catch(Exception e) { Toast.makeText(this,"خطا در فایل پشتیبان؛ دوباره تلاش کن.",Toast.LENGTH_LONG).show(); }
     }
 
+    private boolean isBudgetOrExpenseCounter(String key) {
+        return key != null && (key.matches("budget_(home|vehicle|shop|school|health|other)")
+            || key.matches("category_expense_(home|vehicle|shop|school|health|other)")
+            || key.matches("budget_alerted_(home|vehicle|shop|school|health|other)"));
+    }
+
     private boolean isValidBackupPreference(String key, Object value) {
         if (key == null || value == null) return false;
-        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) {
+        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key) || isBudgetOrExpenseCounter(key)) {
             if (!(value instanceof Number)) return false;
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
@@ -964,7 +970,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         int qty = prefs.getInt(key, 0);
         prefs.edit().putInt(key, qty + 1).apply();
         addEntry("خرید: " + item, raw, amount);
-        long budget = prefs.getLong("home_budget", 0);
+        long budget = prefs.getLong("budget_home", prefs.getLong("home_budget", 0));
         String msg = item + " به مبلغ " + fmt(amount) + " تومان ثبت شد؛ یک قلم به موجودی اضافه شد و هزینه از حساب خانه کم شد.";
         if (budget > 0) msg += " مانده بودجه " + fmt(budget - expenseTotal) + " تومان است.";
         status.setText(msg); say(msg); refresh();
@@ -1249,7 +1255,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
     }
     private void refresh() {
         checkBudgetAlert();
-        if(totals!=null) { long budget=prefs.getLong("home_budget",0); totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده حساب: "+fmt(incomeTotal-expenseTotal)+" تومان" + (budget>0 ? "\n🎯 مانده بودجه خانه: "+fmt(budget-expenseTotal)+" تومان" : "\n🎯 بودجه را صوتی تعیین کن")); }
+        if(totals!=null) { long budget=prefs.getLong("budget_home", prefs.getLong("home_budget",0)); totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده حساب: "+fmt(incomeTotal-expenseTotal)+" تومان" + (budget>0 ? "\n🎯 مانده بودجه خانه: "+fmt(budget-categorySpent("خانه"))+" تومان" : "\n🎯 برای هر بخش سقف بودجه تعیین کن")); }
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
         if(inventoryView!=null) refreshInventory();
