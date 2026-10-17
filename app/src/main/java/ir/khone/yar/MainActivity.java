@@ -779,7 +779,10 @@ public class MainActivity extends Activity {
                     ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if (result != null && !result.isEmpty()) handleVoice(result.get(0));
                 }
-                public void onPartialResults(Bundle b) {}
+                public void onPartialResults(Bundle b) {
+                    ArrayList<String> partial = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (partial != null && !partial.isEmpty()) status.setText("شنیدم: " + partial.get(0));
+                }
                 public void onEvent(int a, Bundle b) {}
             });
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -787,11 +790,12 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
-            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L);
+            // Shorter silence windows reduce command latency; tune on the target Samsung device.
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 800L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 700L);
             recognizer.startListening(intent);
         } catch (Exception e) {
             status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
@@ -884,7 +888,23 @@ private String featureKeyForVoice(String raw) {
     }
 
     private void consumeFeatureUse(String featureKey, Runnable onAllowed) {
-        String token = getSharedPreferences("oba_auth", MODE_PRIVATE).getString("access_token", "");
+        SharedPreferences authPrefs = getSharedPreferences("oba_auth", MODE_PRIVATE);
+        if (authPrefs.getBoolean("guest_local", false)) {
+            String localKey = "local_usage_" + featureKey;
+            int used = authPrefs.getInt(localKey, 0);
+            if (used >= 10) {
+                status.setText("۱۰ استفادهٔ رایگان این قابلیت تمام شده است.");
+                new AlertDialog.Builder(this).setTitle("پایان سهمیهٔ رایگان")
+                    .setMessage("در حالت مهمان، ۱۰ استفادهٔ رایگان این قابلیت تمام شده است. برای ادامه وارد حساب کاربری شو.")
+                    .setPositiveButton("متوجه شدم", null).show();
+                return;
+            }
+            authPrefs.edit().putInt(localKey, used + 1).apply();
+            status.setText("حالت مهمان؛ " + (9 - used) + " استفادهٔ رایگان دیگر باقی مانده است.");
+            onAllowed.run();
+            return;
+        }
+        String token = authPrefs.getString("access_token", "");
         if (token.isEmpty()) {
             status.setText("برای استفاده از این قابلیت، ابتدا وارد حساب اوبا شو.");
             say("ابتدا وارد حساب اوبا شو");
