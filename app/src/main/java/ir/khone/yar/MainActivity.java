@@ -790,6 +790,10 @@ public class MainActivity extends Activity {
         prefs.edit().putInt("quota_record_" + key, countCategoryRecords(key) + 1).apply();
     }
 
+    private void syncCategoryQuota(String key) {
+        prefs.edit().putInt("quota_record_" + key, countCategoryRecords(key)).apply();
+    }
+
     private boolean canCreateCountedRecord(String preferenceKey, String label) {
         return canCreateCountedRecord(preferenceKey, label, prefs.getInt(preferenceKey, 0));
     }
@@ -885,7 +889,7 @@ public class MainActivity extends Activity {
                 }
                 String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
                 prefs.edit().putString(key, updated).apply();
-                incrementCategoryQuota(key);
+                syncCategoryQuota(key);
                 String saveMessage = repeatedLesson
                     ? "⚠️ هشدار: عنوان مشابهی قبلاً در درس‌های خانواده ثبت شده؛ علت و راه پیشگیری قبلی را بررسی کن."
                     : "در بخش " + label + " ذخیره شد.";
