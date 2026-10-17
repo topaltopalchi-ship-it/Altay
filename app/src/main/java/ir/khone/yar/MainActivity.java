@@ -269,6 +269,10 @@ public class MainActivity extends Activity {
             showSchoolChildrenDialog();
             return;
         }
+        if ("family_records".equals(parentKey)) {
+            showFamilySectionsDialog();
+            return;
+        }
         String[] labels;
         String[] keys;
         String[] hints;
@@ -528,6 +532,129 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    private void showFamilySectionsDialog() {
+        String[] labels = {
+            "👨‍👩‍👧 مدیریت اعضای خانواده",
+            "🎂 مناسبت‌ها",
+            "📞 تماس‌های ضروری",
+            "📝 یادداشت‌های خانواده"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("👨‍👩‍👧 خانواده")
+            .setItems(labels, (dialog, which) -> {
+                if (which == 0) {
+                    showFamilyMembersDialog();
+                } else {
+                    String[] keys = {"family_records_sub_0", "family_records_sub_1", "family_records_sub_2"};
+                    String[] hints = {
+                        "نام مناسبت و تاریخ",
+                        "نام و شماره تماس ضروری",
+                        "یادداشت‌های ضروری؛ از اطلاعات حساس غیرضروری خودداری کن"
+                    };
+                    openCategory(keys[which - 1], labels[which], hints[which - 1]);
+                }
+            })
+            .setNegativeButton("بازگشت", (dialog, which) -> showCategoriesDialog())
+            .show();
+    }
+
+    private void showFamilyMembersDialog() {
+        java.util.ArrayList<JSONObject> members = new java.util.ArrayList<>();
+        String saved = prefs.getString("family_members", "[]");
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(saved);
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item != null && !item.optString("name").trim().isEmpty()) members.add(item);
+            }
+        } catch (JSONException ignored) { }
+        String[] names = new String[members.size()];
+        StringBuilder details = new StringBuilder();
+        for (int i = 0; i < members.size(); i++) {
+            JSONObject item = members.get(i);
+            names[i] = item.optString("name");
+            String relation = item.optString("relation", "عضو خانواده");
+            if (details.length() > 0) details.append("\\n");
+            details.append("• ").append(names[i]).append(" — ").append(relation);
+        }
+        if (details.length() == 0) details.append("هنوز عضوی ثبت نشده است.");
+        new AlertDialog.Builder(this)
+            .setTitle("👨‍👩‍👧 اعضای خانواده")
+            .setMessage(details.toString())
+            .setItems(names, (dialog, which) -> new AlertDialog.Builder(this)
+                .setTitle(names[which])
+                .setMessage("این عضو از فهرست محلی خانواده حذف شود؟")
+                .setNegativeButton("لغو", null)
+                .setPositiveButton("حذف", (d, w) -> {
+                    members.remove(which);
+                    saveFamilyMembers(members);
+                    showFamilyMembersDialog();
+                }).show())
+            .setPositiveButton("➕ افزودن عضو", (dialog, which) -> showAddFamilyMemberDialog())
+            .setNeutralButton("بازگشت", (dialog, which) -> showFamilySectionsDialog())
+            .show();
+    }
+
+    private void showAddFamilyMemberDialog() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine(true);
+        nameField.setHint("نام عضو خانواده");
+        form.addView(nameField, lp(-1, -2, 0, 0, 0, 6));
+        EditText relationField = new EditText(this);
+        relationField.setSingleLine(true);
+        relationField.setHint("نسبت؛ مثلاً مادر، پدر، فرزند");
+        form.addView(relationField, lp(-1, -2, 0, 0, 0, 4));
+        new AlertDialog.Builder(this)
+            .setTitle("افزودن عضو خانواده")
+            .setMessage("این فهرست فعلاً فقط روی همین گوشی ذخیره می‌شود.")
+            .setView(form)
+            .setPositiveButton("ذخیره", (dialog, which) -> {
+                String name = nameField.getText().toString().trim();
+                String relation = relationField.getText().toString().trim();
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "نام عضو را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                java.util.ArrayList<JSONObject> members = new java.util.ArrayList<>();
+                try {
+                    org.json.JSONArray array = new org.json.JSONArray(prefs.getString("family_members", "[]"));
+                    for (int i = 0; i < array.length(); i++) {
+                        JSONObject item = array.optJSONObject(i);
+                        if (item != null) members.add(item);
+                    }
+                } catch (JSONException ignored) { }
+                for (JSONObject member : members) {
+                    if (member.optString("name").equalsIgnoreCase(name)) {
+                        Toast.makeText(this, "این نام قبلاً ثبت شده است.", Toast.LENGTH_SHORT).show();
+                        showFamilyMembersDialog();
+                        return;
+                    }
+                }
+                JSONObject member = new JSONObject();
+                try {
+                    member.put("name", name);
+                    member.put("relation", relation.isEmpty() ? "عضو خانواده" : relation);
+                    members.add(member);
+                    saveFamilyMembers(members);
+                } catch (JSONException ignored) {
+                    Toast.makeText(this, "ذخیره عضو انجام نشد.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                showFamilyMembersDialog();
+            })
+            .setNegativeButton("انصراف", (dialog, which) -> showFamilyMembersDialog())
+            .show();
+    }
+
+    private void saveFamilyMembers(java.util.ArrayList<JSONObject> members) {
+        org.json.JSONArray array = new org.json.JSONArray();
+        for (JSONObject member : members) array.put(member);
+        prefs.edit().putString("family_members", array.toString()).apply();
+    }
+
     private void showSchoolChildrenDialog() {
         String saved = prefs.getString("school_children", "");
         java.util.ArrayList<String> children = new java.util.ArrayList<>();
@@ -620,6 +747,10 @@ public class MainActivity extends Activity {
     }
 
     private void openCategory(String key, String label, String hint) {
+        if ("family_members".equals(key)) {
+            showFamilyMembersDialog();
+            return;
+        }
         String saved = prefs.getString(key, "");
         String message = saved.isEmpty() ? "هنوز موردی ثبت نشده است." : saved;
         new AlertDialog.Builder(this)
@@ -840,7 +971,8 @@ public class MainActivity extends Activity {
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
         }
-        if ("entries".equals(key) || "vehicleRecords".equals(key) || "school_children".equals(key)) {
+        if ("entries".equals(key) || "vehicleRecords".equals(key) || "school_children".equals(key)
+            || "family_members".equals(key)) {
             return value instanceof String && ((String) value).length() <= 20000;
         }
         String categoryPattern = "(home_records|car_records|document_records|warranty_records|school_records|finance_records|shopping_records|family_records|calendar_records|maintenance_records|health_records|business_records|safe_records|clothing_records|family_events|cleaning_records|emergency_savings|recurring_payments|pantry_records|lessons_records|school_child_[0-9a-f]+)(?:_sub_[0-9]{1,2})?";
