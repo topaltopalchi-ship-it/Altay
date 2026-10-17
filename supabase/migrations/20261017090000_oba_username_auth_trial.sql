@@ -58,7 +58,7 @@ begin
       else usage.used_count
     end,
     updated_at = now()
-  returning public.oba_feature_usage.used_count into new_count;
+  returning usage.used_count into new_count;
 
   return query select (new_count <= 10), new_count, greatest(0, 10 - new_count);
 end;
