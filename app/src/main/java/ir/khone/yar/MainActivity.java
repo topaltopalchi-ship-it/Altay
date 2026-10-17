@@ -763,12 +763,14 @@ public class MainActivity extends Activity {
 
     private int countCategoryRecords(String key) {
         String saved = prefs.getString(key, "");
-        if (saved.trim().isEmpty()) return 0;
         int count = 0;
-        for (String line : saved.split("\\n")) {
-            if (line.trim().startsWith("• ")) count++;
+        if (!saved.trim().isEmpty()) {
+            for (String line : saved.split("\\n")) {
+                if (line.trim().startsWith("• ")) count++;
+            }
         }
-        return count;
+        // Preserve the count for voice-driven entries that do not use a text-list field.
+        return Math.max(count, prefs.getInt("quota_record_" + key, 0));
     }
 
     private boolean canCreateRecord(String key, String label) {
@@ -869,7 +871,8 @@ public class MainActivity extends Activity {
                     }
                 }
                 String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
-                prefs.edit().putString(key, updated).apply();
+                prefs.edit().putString(key, updated)
+                    .putInt("quota_record_" + key, countCategoryRecords(key) + 1).apply();
                 String saveMessage = repeatedLesson
                     ? "⚠️ هشدار: عنوان مشابهی قبلاً در درس‌های خانواده ثبت شده؛ علت و راه پیشگیری قبلی را بررسی کن."
                     : "در بخش " + label + " ذخیره شد.";
@@ -887,7 +890,6 @@ public class MainActivity extends Activity {
     private void saveManualEntry(EditText descriptionField, EditText amountField, boolean income) {
         String sectionKey = income ? "quota_income" : "quota_expense";
         String sectionLabel = income ? "درآمدها" : "هزینه‌ها";
-        if (!canCreateCountedRecord(sectionKey, sectionLabel)) return;
         String description = descriptionField.getText().toString().trim();
         String rawAmount = normalize(amountField.getText().toString()).replaceAll("[,،\\s]", "");
         long amount;
@@ -906,6 +908,7 @@ public class MainActivity extends Activity {
             amountField.requestFocus();
             return;
         }
+        if (!canCreateCountedRecord(sectionKey, sectionLabel)) return;
         if (income) {
             incomeTotal += amount;
             prefs.edit().putLong("income", incomeTotal).putInt(sectionKey, prefs.getInt(sectionKey, 0) + 1).apply();
@@ -996,7 +999,7 @@ public class MainActivity extends Activity {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
                                 else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
-                                else if ("quota_income".equals(key) || "quota_expense".equals(key)) editor.putInt(key,((Number)value).intValue());
+                                else if ("quota_income".equals(key) || "quota_expense".equals(key) || key.matches("quota_record_[a-z0-9_]{1,100}")) editor.putInt(key,((Number)value).intValue());
                                 else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
@@ -1012,7 +1015,8 @@ public class MainActivity extends Activity {
     private boolean isValidBackupPreference(String key, Object value) {
         if (key == null || value == null) return false;
         if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)
-            || "quota_income".equals(key) || "quota_expense".equals(key)) {
+            || "quota_income".equals(key) || "quota_expense".equals(key)
+            || key.matches("quota_record_[a-z0-9_]{1,100}")) {
             if (!(value instanceof Number)) return false;
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
@@ -1152,9 +1156,9 @@ public class MainActivity extends Activity {
         if (mode.equals("expense") || mode.equals("income")) {
             String quotaKey = mode.equals("income") ? "quota_income" : "quota_expense";
             String quotaLabel = mode.equals("income") ? "درآمدها" : "هزینه‌ها";
-            if (!canCreateCountedRecord(quotaKey, quotaLabel)) return;
             long amount = parseAmount(s);
             if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return; }
+            if (!canCreateCountedRecord(quotaKey, quotaLabel)) return;
             String title = cleanDescription(s, mode);
             if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).putInt(quotaKey, prefs.getInt(quotaKey, 0) + 1).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
             else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).putInt(quotaKey, prefs.getInt(quotaKey, 0) + 1).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
