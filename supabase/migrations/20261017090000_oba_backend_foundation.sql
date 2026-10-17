@@ -64,7 +64,8 @@ using (
   user_id = (select auth.uid())
   or exists (
     select 1 from public.oba_household_members own
-    where own.household_id = household_id and own.user_id = (select auth.uid())
+    where own.household_id = oba_household_members.household_id
+      and own.user_id = (select auth.uid())
   )
 );
 
