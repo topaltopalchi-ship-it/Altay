@@ -1279,6 +1279,47 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
     private void handleVehicleVoice(String raw, String s) {
         boolean oil = contains(s, "روغن", "تعویض روغن");
         boolean service = oil || contains(s, "سرویس", "تعمیر", "لنت", "باتری", "لاستیک", "فیلتر", "شمع", "تسمه");
+        if (!service && contains(s, "کیلومتر فعلی", "کارکرد خودرو", "کارکرد ماشین", "کیلومتر ماشین")) {
+            String mileageText = s.replace("فعلی", " ").replace("خودرو", " ").replace("ماشین", " ");
+            long currentOdometer = extractMileage(mileageText);
+            if (currentOdometer <= 0) {
+                status.setText("کیلومتر فعلی را واضح بگو؛ مثلاً «کیلومتر فعلی ماشین ۱۲۰۰۰۰ کیلومتر».");
+                say("عدد کیلومتر فعلی ماشین را بگو");
+                return;
+            }
+            prefs.edit().putLong("vehicle_current_km", currentOdometer).apply();
+            long target = prefs.getLong("vehicle_next_km", 0L);
+            if (target > 0 && currentOdometer >= target && !prefs.getBoolean("vehicle_service_alerted", false)) {
+                prefs.edit().putBoolean("vehicle_service_alerted", true).apply();
+                String alert = "یادآوری اوبا: زمان سرویس بعدی خودرو رسیده است. کیلومتر فعلی " + fmt(currentOdometer) + " و موعد سرویس " + fmt(target) + " کیلومتر است.";
+                status.setText(alert); say(alert); Toast.makeText(this, alert, Toast.LENGTH_LONG).show();
+                try {
+                    android.app.NotificationManager manager = (android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+                    if (manager != null) {
+                        String channelId = "oba_vehicle_service";
+                        if (Build.VERSION.SDK_INT >= 26) {
+                            android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId, "یادآوری سرویس خودرو", android.app.NotificationManager.IMPORTANCE_HIGH);
+                            channel.enableVibration(true); manager.createNotificationChannel(channel);
+                        }
+                        android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                            ? new android.app.Notification.Builder(this, channelId)
+                            : new android.app.Notification.Builder(this).setPriority(android.app.Notification.PRIORITY_HIGH);
+                        builder.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("یادآوری سرویس خودرو")
+                            .setContentText("کیلومتر فعلی به موعد سرویس رسیده است.").setAutoCancel(true)
+                            .setDefaults(android.app.Notification.DEFAULT_SOUND | android.app.Notification.DEFAULT_VIBRATE);
+                        manager.notify(9817, builder.build());
+                    }
+                } catch (SecurityException ignored) {}
+            } else {
+                String message = target > 0
+                    ? "کیلومتر فعلی " + fmt(currentOdometer) + " ثبت شد؛ موعد سرویس در " + fmt(target) + " کیلومتر است."
+                    : "کیلومتر فعلی " + fmt(currentOdometer) + " ثبت شد. برای فعال شدن هشدار، سرویس بعدی را هم با کیلومتر آن ثبت کن.";
+                status.setText(message); say(message);
+            }
+            addEntry("کارکرد خودرو", "کیلومتر فعلی " + fmt(currentOdometer), 0);
+            refresh();
+            return;
+        }
         if (!service) {
             status.setText("برای ثبت خودرو بگو چه سرویسی انجام شد؛ مثلاً تعویض روغن در کیلومتر ۸۵ هزار.");
             say("نام سرویس خودرو را بگو");
@@ -1287,6 +1328,11 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
 
         long currentKm = extractMileage(s);
         long nextKm = extractNextMileage(s);
+        if (nextKm > 0) {
+            prefs.edit().putLong("vehicle_next_km", nextKm)
+                .putString("vehicle_next_service", kindForVehicle(oil))
+                .putBoolean("vehicle_service_alerted", false).apply();
+        }
         String date = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(new Date());
         String kind = oil ? "تعویض روغن" : "سرویس/تعمیر خودرو";
         StringBuilder detail = new StringBuilder(kind).append(" • ").append(date);
@@ -1316,6 +1362,10 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             status.setText("ثبت شد: " + kind + " در کیلومتر " + fmt(currentKm) + "؛ سرویس بعدی در " + fmt(nextKm) + " کیلومتر.");
             say("ثبت شد. " + kind + " در کیلومتر " + fmt(currentKm) + " و سرویس بعدی در کیلومتر " + fmt(nextKm));
         }
+    }
+
+    private String kindForVehicle(boolean oil) {
+        return oil ? "تعویض روغن" : "سرویس خودرو";
     }
 
     private long extractMileage(String s) {
