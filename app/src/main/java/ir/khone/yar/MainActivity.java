@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
 
-        Button allCategories = button("📂 همه بخش‌های OBA  •  ۱۹ دسته", Color.WHITE, dark, 17);
+        Button allCategories = button("📂 همه بخش‌های OBA  •  ۲۰ دسته", Color.WHITE, dark, 17);
         allCategories.setMinHeight(dp(58));
         allCategories.setOnClickListener(v -> showCategoriesDialog());
         content.addView(allCategories, lp(-1, -2, 0, 0, 0, 12));
@@ -192,13 +192,14 @@ public class MainActivity extends Activity {
             "📅 تقویم و یادآوری‌ها", "🔧 تعمیرات و نگهداری", "🩺 سلامت خانواده",
             "💼 کار و کسب‌وکار", "🔐 گاوصندوق دیجیتال", "👕 پوشاک و لباس خانواده",
             "🎉 برنامه‌ها و دورهمی‌های خانوادگی", "🧼 نظافت خانه و شست‌وشوی قالی",
-            "🛟 پس‌انداز و صندوق اضطراری", "🔁 قبض‌ها و اشتراک‌های دوره‌ای", "🥫 موجودی و تاریخ انقضای خوراکی‌ها"
+            "🛟 پس‌انداز و صندوق اضطراری", "🔁 قبض‌ها و اشتراک‌های دوره‌ای", "🥫 موجودی و تاریخ انقضای خوراکی‌ها",
+            "🧠 تجربه‌ها، اشتباهات و درس‌های خانواده"
         };
         String[] keys = {
             "home_records", "car_records", "document_records", "warranty_records", "school_records",
             "finance_records", "shopping_records", "family_records", "calendar_records",
             "maintenance_records", "health_records", "business_records", "safe_records", "clothing_records",
-            "family_events", "cleaning_records", "emergency_savings", "recurring_payments", "pantry_records"
+            "family_events", "cleaning_records", "emergency_savings", "recurring_payments", "pantry_records", "lessons_records"
         };
         String[] hints = {
             "هزینه‌های خانه، خریدها و کارهای روزمره",
@@ -219,7 +220,8 @@ public class MainActivity extends Activity {
             "زمان شست‌وشوی قالی و فرش، قالیشویی، هزینه، تحویل و شست‌وشوی بعدی",
             "هدف پس‌انداز، مبلغ کنارگذاشته‌شده و ذخیره هزینه‌های پیش‌بینی‌نشده",
             "قبض اینترنت، تلفن، پلتفرم‌ها و پرداخت‌های تکرارشونده با مبلغ و سررسید",
-            "مواد غذایی و لوازم مصرفی، مقدار موجود، تاریخ انقضا و نیاز به خرید"
+            "مواد غذایی و لوازم مصرفی، مقدار موجود، تاریخ انقضا و نیاز به خرید",
+            "ثبت اشتباه، علت، پیامد، راه پیشگیری و زمان یادآوری دوباره"
         };
         new AlertDialog.Builder(this)
             .setTitle("همه بخش‌های OBA")
@@ -453,6 +455,19 @@ public class MainActivity extends Activity {
                     "مواد شوینده، دستمال و اقلام مصرفی؛ مقدار باقی‌مانده",
                     "اقلام رو به اتمام یا تمام‌شده",
                     "نام قلم و مقدار مصرف‌شده یا دورریز برای مدیریت بهتر خرید"
+                };
+                break;
+            case "lessons_records":
+                labels = new String[] {
+                    "📝 ثبت اشتباه یا تجربه", "🔎 علت و پیامد", "🛡️ راه پیشگیری",
+                    "⏰ یادآوری برای جلوگیری از تکرار", "✅ نتیجه و درس آموخته‌شده"
+                };
+                hints = new String[] {
+                    "چه اتفاقی افتاد؟ تاریخ، موضوع و توضیح کوتاه را ثبت کن",
+                    "چه چیزی باعث آن شد و چه هزینه یا مشکلی ایجاد کرد؟",
+                    "دفعه بعد چه کاری انجام دهیم تا تکرار نشود؟",
+                    "زمان یادآوری و هشدار موردنیاز را مشخص کن؛ برای هشدار واقعی باید به سیستم یادآوری وصل شود",
+                    "چه چیزی یاد گرفتیم و آیا راه پیشگیری مؤثر بود؟"
                 };
                 break;
             default:
