@@ -610,9 +610,82 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14),dp(12),dp(14),dp(12));
         card.setBackground(round(Color.WHITE,16));
         TextView t = text(title,18,dark,true); card.addView(t);
-        TextView d = text(desc,13,Color.DKGRAY,false); card.addView(d, lp(-1,-2,0,4,0,0));
-        card.setOnClickListener(v -> startVoice(mode));
+        TextView d = text(desc,13,Color.DKGRAY,false); card.addView(d, lp(-1,-2,0,4,0,8));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button manual = button("✍️ ثبت دستی",Color.rgb(230,240,255),dark,14);
+        Button voice = button("🎙 ثبت صوتی",Color.rgb(225,250,239),dark,14);
+        manual.setOnClickListener(v -> showManualFeatureForm(title, mode));
+        voice.setOnClickListener(v -> startVoice(mode));
+        actions.addView(manual,new LinearLayout.LayoutParams(0,dp(44),1));
+        actions.addView(voice,new LinearLayout.LayoutParams(0,dp(44),1));
+        card.addView(actions);
         LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
+    }
+
+    private void showManualFeatureForm(String featureTitle, String mode) {
+        if ("reminder".equals(mode)) {
+            consumeFeatureUse("reminder", () -> showManualMaintenanceReminder());
+            return;
+        }
+        EditText description = new EditText(this);
+        description.setSingleLine(true);
+        description.setHint("شرح یا عنوان");
+        EditText amountInput = new EditText(this);
+        amountInput.setSingleLine(true);
+        amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        amountInput.setHint("مبلغ به تومان (در صورت نیاز)");
+        if ("calc".equals(mode)) {
+            description.setHint("عبارت محاسبه؛ مثلاً ۲۰۰۰۰ + ۳۰۰۰۰");
+            amountInput.setVisibility(View.GONE);
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(4));
+        form.addView(description,lp(-1,-2,0,2,0,6));
+        form.addView(amountInput,lp(-1,-2,0,2,0,4));
+        new AlertDialog.Builder(this).setTitle("ثبت دستی — " + featureTitle)
+            .setView(form).setNegativeButton("لغو",null)
+            .setPositiveButton("ثبت", (dialog,which) -> {
+                String title = description.getText().toString().trim();
+                String rawAmount = normalize(amountInput.getText().toString()).replace("٬","").replace(",","");
+                long amount = 0L;
+                try { if (!rawAmount.isEmpty()) amount = Long.parseLong(rawAmount); }
+                catch (Exception e) { Toast.makeText(this,"مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                if ("calc".equals(mode)) {
+                    if (title.isEmpty()) { Toast.makeText(this,"عبارت محاسبه را وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                    consumeFeatureUse("calc", () -> {
+                        try {
+                            String answer = "نتیجه محاسبه: " + new DecimalFormat("#,##0.####").format(VoiceCalculator.evaluate(normalize(title)));
+                            status.setText(answer); say(answer);
+                        } catch (Exception e) { status.setText("عبارت محاسبه معتبر نیست."); say("عبارت محاسبه معتبر نیست"); }
+                    });
+                    return;
+                }
+                if (title.isEmpty()) { Toast.makeText(this,"شرح را وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                if (amount < 0) { Toast.makeText(this,"مبلغ معتبر نیست.",Toast.LENGTH_LONG).show(); return; }
+                final long finalAmount = amount;
+                String quotaKey = mode;
+                if (!java.util.Arrays.asList("expense","income","shopping","task","vehicle","health").contains(mode)) quotaKey = "expense";
+                final String key = quotaKey;
+                consumeFeatureUse(key, () -> {
+                    if ("income".equals(mode)) {
+                        if (finalAmount <= 0 || finalAmount > Long.MAX_VALUE-incomeTotal) { Toast.makeText(this,"برای درآمد مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                        incomeTotal += finalAmount; prefs.edit().putLong("income",incomeTotal).apply();
+                        addEntry("درآمد",title,finalAmount);
+                    } else if ("expense".equals(mode) || "health".equals(mode) || "vehicle".equals(mode) || ("shopping".equals(mode) && finalAmount > 0)) {
+                        if (finalAmount <= 0 || finalAmount > Long.MAX_VALUE-expenseTotal) { Toast.makeText(this,"برای هزینه مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                        String category = "health".equals(mode) ? "سلامت" : "vehicle".equals(mode) ? "ماشین" : "خانه";
+                        expenseTotal += finalAmount; prefs.edit().putLong("expense",expenseTotal).apply();
+                        addCategorySpend(category,finalAmount); addEntry(category,title,finalAmount);
+                    } else {
+                        addEntry("shopping".equals(mode) ? "فهرست خرید" : "task".equals(mode) ? "کار خانه" : featureTitle,title,0);
+                    }
+                    refresh();
+                    String msg = "ثبت شد: " + title;
+                    status.setText(msg); say(msg);
+                });
+            }).show();
     }
 
     private void startVoice(String mode) {
