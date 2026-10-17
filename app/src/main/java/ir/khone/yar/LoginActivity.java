@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 public class LoginActivity extends Activity {
  private static final String API="https://sxyaujvliummbvzznejq.supabase.co/functions/v1/";
+ private static final String AUTH_API="https://sxyaujvliummbvzznejq.supabase.co/auth/v1/";
  private static final String API_KEY="sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
  private EditText username,password;
  private TextView status;
@@ -35,11 +36,44 @@ public class LoginActivity extends Activity {
   status=new TextView(this);status.setText("اطلاعات مالی فعلی همچنان روی همین گوشی ذخیره می‌شوند.");status.setGravity(Gravity.CENTER);status.setPadding(0,18,0,0);box.addView(status,new LinearLayout.LayoutParams(-1,-2));
   final TextView hint=intro;
   Runnable showChoices=()->{signup=false;username.setVisibility(android.view.View.GONE);password.setVisibility(android.view.View.GONE);action.setVisibility(android.view.View.GONE);mode.setVisibility(android.view.View.GONE);loginChoice.setVisibility(android.view.View.VISIBLE);signupChoice.setVisibility(android.view.View.VISIBLE);hint.setVisibility(android.view.View.VISIBLE);hint.setText("برای ادامه یکی از گزینه‌ها را انتخاب کن.");status.setText("اطلاعات مالی فعلی همچنان روی همین گوشی ذخیره می‌شوند.");};
-  loginChoice.setOnClickListener(v->showAuthForm(false,loginChoice,signupChoice,hint));
+  loginChoice.setOnClickListener(v->startGuestLogin(loginChoice,signupChoice,hint));
   signupChoice.setOnClickListener(v->showAuthForm(true,loginChoice,signupChoice,hint));
   action.setOnClickListener(v->submit());
   mode.setOnClickListener(v->showChoices.run());
   setContentView(box);
+ }
+ private void startGuestLogin(Button loginChoice,Button signupChoice,TextView hint){
+  if(busy)return;
+  busy=true;loginChoice.setEnabled(false);signupChoice.setEnabled(false);
+  hint.setText("در حال آماده‌سازی ورود رایگان...");
+  status.setText("برای ورود رایگان نیازی به نام کاربری و رمز عبور نیست.");
+  new Thread(()->{
+   HttpURLConnection c=null;
+   try{
+    c=(HttpURLConnection)new URL(AUTH_API+"signup").openConnection();
+    c.setRequestMethod("POST");c.setConnectTimeout(15000);c.setReadTimeout(15000);c.setDoOutput(true);
+    c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("apikey",API_KEY);
+    JSONObject body=new JSONObject();body.put("data",new JSONObject());
+    try(OutputStream out=c.getOutputStream()){out.write(body.toString().getBytes(StandardCharsets.UTF_8));}
+    int code=c.getResponseCode();InputStream stream=code>=200&&code<300?c.getInputStream():c.getErrorStream();
+    StringBuilder raw=new StringBuilder();
+    if(stream!=null)try(BufferedReader reader=new BufferedReader(new InputStreamReader(stream,StandardCharsets.UTF_8))){String line;while((line=reader.readLine())!=null)raw.append(line);}
+    JSONObject result=raw.length()==0?new JSONObject():new JSONObject(raw.toString());
+    String access=result.optString("access_token","");
+    if(code<200||code>=300||access.isEmpty()){
+     String error=result.optString("msg",result.optString("message",result.optString("error_description",result.optString("error","ورود رایگان فعال نشد."))));
+     throw new Exception(code==404||error.toLowerCase(java.util.Locale.ROOT).contains("anonymous")?"ورود مهمان در تنظیمات سرور فعال نیست؛ باید ورود ناشناس Supabase فعال شود.":error);
+    }
+    long seconds=result.optLong("expires_in",3600L);
+    getSharedPreferences("oba_auth",MODE_PRIVATE).edit().putString("access_token",access)
+      .putString("refresh_token",result.optString("refresh_token","")).putString("username","مهمان")
+      .putLong("expires_at",System.currentTimeMillis()+seconds*1000L).apply();
+    runOnUiThread(this::openApp);
+   }catch(Exception e){
+    String message=e.getMessage()==null?"ورود رایگان انجام نشد؛ اتصال اینترنت را بررسی کن.":e.getMessage();
+    runOnUiThread(()->{busy=false;loginChoice.setEnabled(true);signupChoice.setEnabled(true);hint.setText("برای ادامه یکی از گزینه‌ها را انتخاب کن.");status.setText(message);});
+   }finally{if(c!=null)c.disconnect();}
+  }).start();
  }
  private void showAuthForm(boolean create,Button loginChoice,Button signupChoice,TextView hint){
   signup=create;
