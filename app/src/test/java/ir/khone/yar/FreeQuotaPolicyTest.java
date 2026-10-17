@@ -29,12 +29,12 @@ public class FreeQuotaPolicyTest {
     @Test public void countsOnlyTopLevelBulletRecords() {
         assertEquals(0, FreeQuotaPolicy.countRecords("", 0));
         assertEquals(0, FreeQuotaPolicy.countRecords(null, 0));
-        assertEquals(2, FreeQuotaPolicy.countRecords("• آب\\n  جزئیات\\n• برق\\n  مبلغ: 500", 0));
+        assertEquals(2, FreeQuotaPolicy.countRecords("• آب\n  جزئیات\n• برق\n  مبلغ: 500", 0));
     }
 
     @Test public void reconcilesListAndVoiceRecordCountersWithoutDoubleCounting() {
-        assertEquals(4, FreeQuotaPolicy.countRecords("• آب\\n• برق", 4));
-        assertEquals(2, FreeQuotaPolicy.countRecords("• آب\\n• برق\\n• گاز", 2));
+        assertEquals(4, FreeQuotaPolicy.countRecords("• آب\n• برق", 4));
+        assertEquals(2, FreeQuotaPolicy.countRecords("• آب\n• برق\n• گاز", 2));
         assertEquals(0, FreeQuotaPolicy.countRecords("تفصیل بدون ثبت", -5));
     }
 }
