@@ -239,6 +239,7 @@ public class MainActivity extends Activity {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
                                 else if (isBudgetOrExpenseCounter(key) || "income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if (isBudgetAlertFlag(key) && value instanceof Boolean) editor.putBoolean(key,((Boolean)value).booleanValue());
                                 else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
@@ -253,8 +254,11 @@ public class MainActivity extends Activity {
 
     private boolean isBudgetOrExpenseCounter(String key) {
         return key != null && (key.matches("budget_(home|vehicle|shop|school|health|other)")
-            || key.matches("category_expense_(home|vehicle|shop|school|health|other)")
-            || key.matches("budget_alerted_(home|vehicle|shop|school|health|other)"));
+            || key.matches("category_expense_(home|vehicle|shop|school|health|other)"));
+    }
+
+    private boolean isBudgetAlertFlag(String key) {
+        return key != null && key.matches("budget_alerted_(home|vehicle|shop|school|health|other)");
     }
 
     private boolean isValidBackupPreference(String key, Object value) {
@@ -264,6 +268,7 @@ public class MainActivity extends Activity {
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
         }
+        if (isBudgetAlertFlag(key)) return value instanceof Boolean;
         if ("entries".equals(key) || "vehicleRecords".equals(key)) {
             return value instanceof String && ((String) value).length() <= 20000;
         }
