@@ -149,7 +149,7 @@ public class MainActivity extends Activity {
         TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(112,54,83),true); backupPanel.addView(backupTitle);
         TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
         Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(236,105,157),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
-        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
+        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(111,190,133),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
         content.addView(backupPanel,lp(-1,-2,0,8,0,14));
 
         TextView label = text("دسترسی سریع صوتی", 19, dark, true);
