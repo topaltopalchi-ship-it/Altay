@@ -605,6 +605,9 @@ public class MainActivity extends Activity {
 
 private String featureKeyForVoice(String raw) {
         String s = normalize(raw);
+        if (!pendingCategoryVoice.isEmpty() && contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) {
+            return categoryFeatureKey(pendingCategoryVoice);
+        }
         if (pendingMode != null && !pendingMode.equals("auto")) {
             if (pendingMode.startsWith("stock_")) return "inventory";
             return pendingMode;
