@@ -728,6 +728,8 @@ public class MainActivity extends Activity {
                     String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
                         e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
                         "تشخیص صدا انجام نشد. دوباره تلاش کن.";
+                    pendingCategoryVoice = "";
+                    pendingShopIncome = false;
                     status.setText(msg); say(msg);
                 }
                 public void onResults(Bundle b) {
@@ -938,6 +940,15 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         }
     }
 
+    private String inferExpenseCategory(String spoken) {
+        if (contains(spoken, "ماشین", "خودرو", "بنزین", "روغن موتور", "تعمیرگاه", "لاستیک")) return "ماشین";
+        if (contains(spoken, "مغازه", "فروشگاه", "جنس", "کالا", "فروش")) return "مغازه";
+        if (contains(spoken, "مدرسه", "دانش آموز", "دانش‌آموز", "کتاب درسی", "شهریه")) return "مدرسه";
+        if (contains(spoken, "دکتر", "پزشک", "دارو", "درمان", "آزمایش", "بیمارستان", "سلامت")) return "سلامت";
+        if (contains(spoken, "سایر", "متفرقه")) return "سایر";
+        return "خانه";
+    }
+
     private void handleVoice(String raw) {
         String spoken = normalize(raw);
         if ("wake".equals(pendingMode)) {
@@ -1010,10 +1021,11 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             } else {
                 String category = pendingCategoryVoice;
                 pendingCategoryVoice = "";
+                if (category.isEmpty()) category = inferExpenseCategory(s);
                 expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply();
-                if (!category.isEmpty()) addCategorySpend(category, amount);
-                addEntry(category.isEmpty() ? "هزینه" : category, title, amount);
-                say("هزینه " + fmt(amount) + " تومان " + (category.isEmpty() ? "ثبت شد" : "در بخش " + category + " ثبت شد"));
+                addCategorySpend(category, amount);
+                addEntry(category, title, amount);
+                say("هزینه " + fmt(amount) + " تومان در بخش " + category + " ثبت شد");
             }
             refresh(); return;
         }
