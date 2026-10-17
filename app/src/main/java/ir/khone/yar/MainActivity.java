@@ -101,6 +101,33 @@ public class MainActivity extends Activity {
         });
         content.addView(runTypedCommand, lp(-1, -2, 0, 0, 0, 10));
 
+        TextView manualTitle = text("📝 ثبت دستی درآمد و هزینه", 19, dark, true);
+        content.addView(manualTitle, lp(-1, -2, 0, 4, 0, 6));
+        EditText manualDescription = new EditText(this);
+        manualDescription.setSingleLine(true);
+        manualDescription.setTextSize(16);
+        manualDescription.setHint("شرح مورد؛ مثلاً خرید نان یا حقوق");
+        manualDescription.setPadding(dp(12), dp(8), dp(12), dp(8));
+        manualDescription.setBackground(round(Color.WHITE, 12));
+        content.addView(manualDescription, lp(-1, -2, 0, 0, 0, 5));
+        EditText manualAmount = new EditText(this);
+        manualAmount.setSingleLine(true);
+        manualAmount.setInputType(2);
+        manualAmount.setTextSize(16);
+        manualAmount.setHint("مبلغ به تومان");
+        manualAmount.setPadding(dp(12), dp(8), dp(12), dp(8));
+        manualAmount.setBackground(round(Color.WHITE, 12));
+        content.addView(manualAmount, lp(-1, -2, 0, 0, 0, 5));
+        LinearLayout manualButtons = new LinearLayout(this);
+        manualButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button saveExpense = button("ثبت هزینه", Color.rgb(205, 65, 65), Color.WHITE, 15);
+        saveExpense.setOnClickListener(v -> saveManualEntry(manualDescription, manualAmount, false));
+        Button saveIncome = button("ثبت درآمد", Color.rgb(0, 137, 90), Color.WHITE, 15);
+        saveIncome.setOnClickListener(v -> saveManualEntry(manualDescription, manualAmount, true));
+        manualButtons.addView(saveExpense, new LinearLayout.LayoutParams(0, dp(52), 1));
+        manualButtons.addView(saveIncome, new LinearLayout.LayoutParams(0, dp(52), 1));
+        content.addView(manualButtons, lp(-1, -2, 0, 0, 0, 12));
+
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
         wakeButton.setOnClickListener(v -> toggleWakeService());
@@ -152,6 +179,42 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+
+    private void saveManualEntry(EditText descriptionField, EditText amountField, boolean income) {
+        String description = descriptionField.getText().toString().trim();
+        String rawAmount = normalize(amountField.getText().toString()).replaceAll("[,،\\s]", "");
+        long amount;
+        try {
+            amount = Long.parseLong(rawAmount);
+        } catch (Exception ex) {
+            amount = 0;
+        }
+        if (description.isEmpty()) {
+            status.setText("لطفاً شرح مورد را بنویس.");
+            descriptionField.requestFocus();
+            return;
+        }
+        if (amount <= 0) {
+            status.setText("لطفاً مبلغ معتبر را به تومان وارد کن.");
+            amountField.requestFocus();
+            return;
+        }
+        if (income) {
+            incomeTotal += amount;
+            prefs.edit().putLong("income", incomeTotal).apply();
+            addEntry("درآمد", description, amount);
+        } else {
+            expenseTotal += amount;
+            prefs.edit().putLong("expense", expenseTotal).apply();
+            addEntry("هزینه", description, amount);
+        }
+        String message = (income ? "درآمد" : "هزینه") + " «" + description + "» به مبلغ " + fmt(amount) + " تومان ثبت شد.";
+        status.setText(message);
+        say(message);
+        descriptionField.setText("");
+        amountField.setText("");
+        refresh();
+    }
 
     private void createBackup() {
         try {
