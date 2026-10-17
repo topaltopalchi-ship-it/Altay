@@ -675,7 +675,6 @@ public class MainActivity extends Activity {
     }
 
     private void showAddSchoolChildDialog() {
-        if (!canCreateRecord("school_records", "مدرسه فرزندان")) return;
         EditText nameField = new EditText(this);
         nameField.setSingleLine(true);
         nameField.setHint("مثلاً آیسل یا مدرسه آیسل");
@@ -697,13 +696,17 @@ public class MainActivity extends Activity {
                         if (!item.isEmpty() && !names.contains(item)) names.add(item);
                     }
                 }
-                if (!names.contains(name)) names.add(name);
+                boolean isNewName = !names.contains(name);
+                if (isNewName) {
+                    if (!canCreateRecord("school_records", "مدرسه فرزندان")) return;
+                    names.add(name);
+                }
                 StringBuilder out = new StringBuilder();
                 for (String item : names) {
                     if (out.length() > 0) out.append("\n");
                     out.append(item);
                 }
-                if (!names.contains(name)) {
+                if (isNewName) {
                     prefs.edit().putString("school_children", out.toString()).apply();
                     incrementCategoryQuota("school_records");
                 }
