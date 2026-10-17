@@ -58,7 +58,12 @@ public class MainActivity extends Activity {
         incomeTotal = prefs.getLong("income", 0);
         expenseTotal = prefs.getLong("expense", 0);
         loadEntries();
-        tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
+        tts = new TextToSpeech(this, result -> {
+            if (tts != null && result == TextToSpeech.SUCCESS) {
+                int languageResult = tts.setLanguage(new Locale("fa", "IR"));
+                tts.setSpeechRate(1.05f);
+            }
+        });
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
@@ -132,6 +137,35 @@ public class MainActivity extends Activity {
         manualButtons.addView(saveExpense, new LinearLayout.LayoutParams(0, dp(52), 1));
         manualButtons.addView(saveIncome, new LinearLayout.LayoutParams(0, dp(52), 1));
         content.addView(manualButtons, lp(-1, -2, 0, 0, 0, 12));
+
+        LinearLayout calculatorPanel = new LinearLayout(this);
+        calculatorPanel.setOrientation(LinearLayout.VERTICAL);
+        calculatorPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        calculatorPanel.setBackground(round(Color.rgb(226, 246, 226), 20));
+        TextView calculatorTitle = text("🧮 ماشین‌حساب صوتی و دستی", 19, dark, true);
+        calculatorPanel.addView(calculatorTitle, lp(-1, -2, 0, 0, 0, 5));
+        TextView calculatorHint = text("عبارت را بنویس یا بگو؛ نمونه: 12500 + 3000 × 2", 13, dark, false);
+        calculatorPanel.addView(calculatorHint, lp(-1, -2, 0, 0, 0, 5));
+        EditText calculatorExpression = new EditText(this);
+        calculatorExpression.setSingleLine(true);
+        calculatorExpression.setTextSize(18);
+        calculatorExpression.setHint("مثلاً (12500 + 3000) * 2");
+        calculatorExpression.setPadding(dp(12), dp(8), dp(12), dp(8));
+        calculatorExpression.setBackground(round(Color.WHITE, 12));
+        calculatorPanel.addView(calculatorExpression, lp(-1, -2, 0, 0, 0, 8));
+        LinearLayout calculatorButtons = new LinearLayout(this);
+        calculatorButtons.setOrientation(LinearLayout.HORIZONTAL);
+        Button calculateManual = button("= محاسبه", Color.rgb(236, 105, 157), Color.WHITE, 15);
+        calculateManual.setOnClickListener(v -> calculateManualExpression(calculatorExpression, false));
+        Button calculateVoice = button("🎙 گفتن عبارت", Color.rgb(111, 190, 133), Color.WHITE, 15);
+        calculateVoice.setOnClickListener(v -> {
+            pendingMode = "calc";
+            startVoice("calc");
+        });
+        calculatorButtons.addView(calculateManual, new LinearLayout.LayoutParams(0, dp(50), 1));
+        calculatorButtons.addView(calculateVoice, new LinearLayout.LayoutParams(0, dp(50), 1));
+        calculatorPanel.addView(calculatorButtons, lp(-1, -2, 0, 0, 0, 6));
+        content.addView(calculatorPanel, lp(-1, -2, 0, 0, 0, 12));
 
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(196, 111, 153), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
@@ -844,8 +878,7 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
         }
         try {
-            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            if (recognizer == null) recognizer = SpeechRecognizer.createSpeechRecognizer(this);
             recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
                 public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
                 public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
@@ -1326,7 +1359,35 @@ public class MainActivity extends Activity {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
-    private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
+    private void calculateManualExpression(EditText expression, boolean speakResult) {
+        String raw = expression.getText().toString().trim();
+        if (raw.isEmpty()) {
+            status.setText("عبارت ریاضی را وارد کن؛ مثلاً 12500 + 3000 * 2");
+            return;
+        }
+        try {
+            double result = VoiceCalculator.evaluate(raw);
+            String resultText = new DecimalFormat("#,##0.####").format(result);
+            String answer = "نتیجه محاسبه: " + resultText;
+            status.setText(answer);
+            String oldHistory = prefs.getString("calculator_history", "");
+            String item = raw + " = " + resultText;
+            prefs.edit().putString("calculator_history", item + (oldHistory.isEmpty() ? "" : "\\n" + oldHistory)).apply();
+            if (speakResult) say(answer);
+        } catch (ArithmeticException ex) {
+            String message = ex.getMessage() == null ? "این محاسبه ممکن نیست." : ex.getMessage();
+            status.setText(message);
+            if (speakResult) say(message);
+        } catch (IllegalArgumentException ex) {
+            String message = "عبارت را بررسی کن؛ نمونه: (12500 + 3000) * 2";
+            status.setText(message);
+            if (speakResult) say(message);
+        }
+    }
+
+    private void say(String s) {
+        if (tts != null) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "khoneyar");
+    }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
         if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;
