@@ -337,9 +337,11 @@ public class MainActivity extends Activity {
     private String featureKeyForVoice(String raw) {
         String s = normalize(raw);
         if (pendingMode != null && !pendingMode.equals("auto")) {
-            if (pendingMode.equals("stock_use")) return "inventory";
+            if (pendingMode.startsWith("stock_")) return "inventory";
             return pendingMode;
         }
+        // Keep classification aligned with handleVoice() and never bill an
+        // unrecognized phrase as an expense by default.
         if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) return "budget";
         if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) return "inventory";
         if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) return "summary";
@@ -350,7 +352,8 @@ public class MainActivity extends Activity {
         if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) return "calc";
         if (contains(s,"خریدم","خرید کردم","خریداری کردم","خرید به قیمت","خرید به مبلغ","خرید","فهرست")) return "shopping";
         if (contains(s,"کار خانه","وظیفه","تمیزکاری")) return "task";
-        return "expense";
+        if (contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) return "expense";
+        return null;
     }
 
     private void consumeFeatureUseBeforeVoice(String raw) {
@@ -361,6 +364,19 @@ public class MainActivity extends Activity {
             return;
         }
         String featureKey = featureKeyForVoice(raw);
+        if (featureKey == null) {
+            String message = "متوجه نوع درخواست نشدم؛ لطفاً فرمان را واضح‌تر بگو.";
+            status.setText(message);
+            say(message);
+            return;
+        }
+        String normalized = normalize(raw);
+        if ((featureKey.equals("expense") || featureKey.equals("income")) && parseAmount(normalized) <= 0) {
+            String message = "مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان».";
+            status.setText(message);
+            say(message);
+            return;
+        }
         status.setText("در حال بررسی سهمیهٔ استفاده...");
         new Thread(() -> {
             HttpURLConnection connection = null;
