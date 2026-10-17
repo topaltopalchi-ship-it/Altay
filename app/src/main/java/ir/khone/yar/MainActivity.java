@@ -94,9 +94,9 @@ public class MainActivity extends Activity {
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
+        wakeButton = button("🎙 میانبر صوتی: اول بگو «اوبا»", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
-        wakeButton.setOnClickListener(v -> toggleWakeService());
+        wakeButton.setOnClickListener(v -> startVoice("wake"));
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
@@ -261,8 +261,27 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
-        new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> showCategoryExpenseForm(category, groups[which])).setNegativeButton("انصراف", null).show();
+
+        LinearLayout choices = new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        choices.setPadding(dp(16), dp(8), dp(16), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(choices);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("زیرگروه «" + category + "»")
+            .setView(scroll)
+            .setNegativeButton("بازگشت", null)
+            .create();
+        for (String group : groups) {
+            Button choice = button(group, Color.WHITE, dark, 16);
+            choice.setMinHeight(dp(54));
+            choice.setOnClickListener(v -> {
+                dialog.dismiss();
+                showCategoryExpenseForm(category, group);
+            });
+            choices.addView(choice, lp(-1, -2, 0, 3, 0, 5));
+        }
+        dialog.show();
     }
 
     private void showCategoryExpenseForm(String category, String subgroup) {
@@ -398,6 +417,29 @@ public class MainActivity extends Activity {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
+        if (mode.equals("wake")) {
+            if (contains(s, "اوبا", "اُبا", "وبا")) {
+                status.setText("اوبا آماده است؛ حالا نام بخش را بگو: خانه، ماشین، مغازه یا مدرسه.");
+                sayThenListenForNavigation("بله، در خدمتم");
+            } else {
+                status.setText("نام اوبا تشخیص داده نشد. دوباره روی میانبر صوتی بزن و بگو «اوبا».");
+                say("لطفاً بگو اوبا");
+            }
+            return;
+        }
+        if (mode.equals("navigate")) {
+            if (contains(s, "خانه", "خونه")) showCategorySubgroups("خانه");
+            else if (contains(s, "ماشین", "خودرو")) showCategorySubgroups("ماشین");
+            else if (contains(s, "مغازه", "فروشگاه", "کسب و کار")) showCategorySubgroups("مغازه");
+            else if (contains(s, "مدرسه", "مکتب")) showCategorySubgroups("مدرسه");
+            else if (contains(s, "سلامت", "دکتر", "درمان")) showCategorySubgroups("سلامت");
+            else if (contains(s, "سایر", "متفرقه")) showCategorySubgroups("سایر");
+            else {
+                status.setText("بخش را متوجه نشدم؛ بگو خانه، ماشین، مغازه یا مدرسه.");
+                say("بگو خانه، ماشین، مغازه یا مدرسه");
+            }
+            return;
+        }
         if (mode.equals("auto")) {
             if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
@@ -803,6 +845,30 @@ public class MainActivity extends Activity {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
+    private void sayThenListenForNavigation(String message) {
+        if (tts == null) {
+            startVoice("navigate");
+            return;
+        }
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) {}
+            @Override public void onDone(String utteranceId) {
+                if ("oba_wake_ack".equals(utteranceId)) {
+                    runOnUiThread(() -> startVoice("navigate"));
+                }
+            }
+            @Override public void onError(String utteranceId) {
+                if ("oba_wake_ack".equals(utteranceId)) {
+                    runOnUiThread(() -> status.setText("برای ادامه، نام بخش را لمس کن یا دوباره میانبر صوتی را بزن."));
+                }
+            }
+        });
+        int result = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "oba_wake_ack");
+        if (result == TextToSpeech.ERROR) {
+            startVoice("navigate");
+        }
+    }
+
     private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
