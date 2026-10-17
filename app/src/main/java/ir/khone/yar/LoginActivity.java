@@ -23,7 +23,7 @@ public class LoginActivity extends Activity {
  private boolean signup=false,busy=false;
  @Override public void onCreate(Bundle b){super.onCreate(b);
   SharedPreferences p=getSharedPreferences("oba_auth",MODE_PRIVATE);
-  if(!p.getString("access_token","").isEmpty()&&p.getLong("expires_at",0)>System.currentTimeMillis()){openApp();return;}
+  if(p.getBoolean("guest_local",false)||(!p.getString("access_token","").isEmpty()&&p.getLong("expires_at",0)>System.currentTimeMillis())){openApp();return;}
   LinearLayout box=new LinearLayout(this);box.setOrientation(1);box.setPadding(36,48,36,24);box.setGravity(Gravity.CENTER_HORIZONTAL);box.setBackgroundColor(Color.rgb(244,248,255));
   TextView title=new TextView(this);title.setText("اوبا • OBA");title.setTextSize(30);title.setTextColor(Color.rgb(32,52,105));title.setGravity(Gravity.CENTER);box.addView(title,new LinearLayout.LayoutParams(-1,-2));
   TextView intro=new TextView(this);intro.setText("برای ادامه یکی از گزینه‌ها را انتخاب کن.");intro.setTextSize(16);intro.setGravity(Gravity.CENTER);intro.setPadding(0,20,0,20);box.addView(intro,new LinearLayout.LayoutParams(-1,-2));
@@ -66,12 +66,16 @@ public class LoginActivity extends Activity {
     }
     long seconds=result.optLong("expires_in",3600L);
     getSharedPreferences("oba_auth",MODE_PRIVATE).edit().putString("access_token",access)
-      .putString("refresh_token",result.optString("refresh_token","")).putString("username","مهمان")
+      .putString("refresh_token",result.optString("refresh_token","")).putString("username","مهمان").putBoolean("guest_local",false)
       .putLong("expires_at",System.currentTimeMillis()+seconds*1000L).apply();
     runOnUiThread(this::openApp);
    }catch(Exception e){
-    String message=e.getMessage()==null?"ورود رایگان انجام نشد؛ اتصال اینترنت را بررسی کن.":e.getMessage();
-    runOnUiThread(()->{busy=false;loginChoice.setEnabled(true);signupChoice.setEnabled(true);hint.setText("برای ادامه یکی از گزینه‌ها را انتخاب کن.");status.setText(message);});
+    String message=e.getMessage()==null?"ورود رایگان آنلاین در دسترس نیست.":e.getMessage();
+    // Guest entry must not depend on Supabase anonymous sign-in being enabled.
+    // Local guest mode keeps app access available and applies per-feature local limits.
+    getSharedPreferences("oba_auth",MODE_PRIVATE).edit().remove("access_token").remove("refresh_token")
+      .putString("username","مهمان").putBoolean("guest_local",true).putLong("expires_at",Long.MAX_VALUE).apply();
+    runOnUiThread(()->{busy=false;status.setText("ورود مهمان محلی فعال شد؛ " + message);openApp();});
    }finally{if(c!=null)c.disconnect();}
   }).start();
  }
