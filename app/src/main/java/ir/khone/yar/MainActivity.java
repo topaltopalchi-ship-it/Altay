@@ -761,7 +761,46 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    private int countCategoryRecords(String key) {
+        String saved = prefs.getString(key, "");
+        if (saved.trim().isEmpty()) return 0;
+        int count = 0;
+        for (String line : saved.split("\\n")) {
+            if (line.trim().startsWith("• ")) count++;
+        }
+        return count;
+    }
+
+    private boolean canCreateRecord(String key, String label) {
+        return canCreateCountedRecord(key, label, countCategoryRecords(key));
+    }
+
+    private boolean canCreateCountedRecord(String preferenceKey, String label) {
+        return canCreateCountedRecord(preferenceKey, label, prefs.getInt(preferenceKey, 0));
+    }
+
+    private boolean canCreateCountedRecord(String preferenceKey, String label, int currentCount) {
+        if (currentCount < 10) return true;
+        showSubscriptionPrompt(label);
+        return false;
+    }
+
+    private void showSubscriptionPrompt(String label) {
+        new AlertDialog.Builder(this)
+            .setTitle("🎁 سهمیه رایگان این بخش تمام شده")
+            .setMessage("برای بخش «" + label + "» ده ثبت رایگان استفاده شده است. برای ثبت مورد یازدهم و ادامه استفاده، حساب OBA بساز و اشتراک سه‌ماهه را فعال کن. اطلاعات خانواده همچنان فقط روی همین گوشی می‌ماند.")
+            .setPositiveButton("ساخت حساب / خرید اشتراک", (dialog, which) ->
+                new AlertDialog.Builder(this)
+                    .setTitle("فعال‌سازی حساب OBA")
+                    .setMessage("اتصال احراز هویت و تأیید خرید هنوز روی سرور فعال نشده است. تا پیش از راه‌اندازی Supabase و اتصال تأیید خرید فروشگاه، امکان فعال‌سازی اشتراک از داخل برنامه وجود ندارد.")
+                    .setPositiveButton("متوجه شدم", null)
+                    .show())
+            .setNegativeButton("بعداً", null)
+            .show();
+    }
+
     private void showAddCategoryRecord(String key, String label, String hint) {
+        if (!canCreateRecord(key, label)) return;
         LinearLayout form = new LinearLayout(this);
         form.setPadding(dp(18), dp(8), dp(18), dp(4));
         form.setOrientation(LinearLayout.VERTICAL);
@@ -810,6 +849,8 @@ public class MainActivity extends Activity {
                     Toast.makeText(this, "عنوان را وارد کن.", Toast.LENGTH_SHORT).show();
                     return;
                 }
+                // Re-check at save time so a second open dialog cannot exceed the free limit.
+                if (!canCreateRecord(key, label)) return;
                 StringBuilder recordBuilder = new StringBuilder("• ").append(title);
                 if (!detail.isEmpty()) recordBuilder.append("\n  ").append(detail);
                 if (!amount.isEmpty()) recordBuilder.append("\n  مبلغ/مقدار: ").append(amount);
@@ -844,6 +885,9 @@ public class MainActivity extends Activity {
     }
 
     private void saveManualEntry(EditText descriptionField, EditText amountField, boolean income) {
+        String sectionKey = income ? "quota_income" : "quota_expense";
+        String sectionLabel = income ? "درآمدها" : "هزینه‌ها";
+        if (!canCreateCountedRecord(sectionKey, sectionLabel)) return;
         String description = descriptionField.getText().toString().trim();
         String rawAmount = normalize(amountField.getText().toString()).replaceAll("[,،\\s]", "");
         long amount;
@@ -864,11 +908,11 @@ public class MainActivity extends Activity {
         }
         if (income) {
             incomeTotal += amount;
-            prefs.edit().putLong("income", incomeTotal).apply();
+            prefs.edit().putLong("income", incomeTotal).putInt(sectionKey, prefs.getInt(sectionKey, 0) + 1).apply();
             addEntry("درآمد", description, amount);
         } else {
             expenseTotal += amount;
-            prefs.edit().putLong("expense", expenseTotal).apply();
+            prefs.edit().putLong("expense", expenseTotal).putInt(sectionKey, prefs.getInt(sectionKey, 0) + 1).apply();
             addEntry("هزینه", description, amount);
         }
         String message = (income ? "درآمد" : "هزینه") + " «" + description + "» به مبلغ " + fmt(amount) + " تومان ثبت شد.";
@@ -952,6 +996,7 @@ public class MainActivity extends Activity {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
                                 else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if ("quota_income".equals(key) || "quota_expense".equals(key)) editor.putInt(key,((Number)value).intValue());
                                 else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
@@ -966,7 +1011,8 @@ public class MainActivity extends Activity {
 
     private boolean isValidBackupPreference(String key, Object value) {
         if (key == null || value == null) return false;
-        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) {
+        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)
+            || "quota_income".equals(key) || "quota_expense".equals(key)) {
             if (!(value instanceof Number)) return false;
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
@@ -1104,11 +1150,14 @@ public class MainActivity extends Activity {
             else mode="expense";
         }
         if (mode.equals("expense") || mode.equals("income")) {
+            String quotaKey = mode.equals("income") ? "quota_income" : "quota_expense";
+            String quotaLabel = mode.equals("income") ? "درآمدها" : "هزینه‌ها";
+            if (!canCreateCountedRecord(quotaKey, quotaLabel)) return;
             long amount = parseAmount(s);
             if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return; }
             String title = cleanDescription(s, mode);
-            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
-            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
+            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).putInt(quotaKey, prefs.getInt(quotaKey, 0) + 1).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
+            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).putInt(quotaKey, prefs.getInt(quotaKey, 0) + 1).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
             refresh(); return;
         }
         if (mode.equals("calc")) {
