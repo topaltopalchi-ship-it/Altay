@@ -463,8 +463,8 @@ public class MainActivity extends Activity {
         long sectionLimit = prefs.getLong("budget_" + categorySlug(category), 0L);
         long sectionSpent = categorySpent(category);
         String sectionSummary = "هزینهٔ ثبت‌شده: " + fmt(sectionSpent) + " تومان"
-            + (sectionLimit > 0 ? "\\nسقف مجاز: " + fmt(sectionLimit) + " تومان | مانده: " + fmt(sectionLimit-sectionSpent) + " تومان"
-                : "\\nبرای این بخش هنوز سقف هزینه تعیین نشده است.");
+            + (sectionLimit > 0 ? "\nسقف مجاز: " + fmt(sectionLimit) + " تومان | مانده: " + fmt(sectionLimit-sectionSpent) + " تومان"
+                : "\nبرای این بخش هنوز سقف هزینه تعیین نشده است.");
         chooserContent.addView(text(sectionSummary,14,dark,true),lp(-1,-2,0,4,0,8));
         Button setSectionBudget = button("🔔 تنظیم سقف هزینه برای " + category,Color.rgb(255,235,238),Color.rgb(150,25,35),14);
         setSectionBudget.setOnClickListener(v -> showSingleCategoryBudgetForm(category));
