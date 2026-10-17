@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
-    private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
+    private int dark = Color.rgb(112, 54, 83), green = Color.rgb(111, 190, 133), cream = Color.rgb(255, 245, 249);
     private int cardIndex = 0;
 
     @Override public void onCreate(Bundle state) {
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
         allCategories.setOnClickListener(v -> showCategoriesDialog());
         content.addView(allCategories, lp(-1, -2, 0, 0, 0, 12));
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
+        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(236, 105, 157), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
@@ -93,7 +93,7 @@ public class MainActivity extends Activity {
         typedCommand.setPadding(dp(12), dp(10), dp(12), dp(10));
         typedCommand.setBackground(round(Color.WHITE, 14));
         content.addView(typedCommand, lp(-1, -2, 0, 4, 0, 6));
-        Button runTypedCommand = button("⌨️ اجرای فرمان نوشتاری", Color.rgb(0, 137, 123), Color.WHITE, 16);
+        Button runTypedCommand = button("⌨️ اجرای فرمان نوشتاری", Color.rgb(111, 190, 133), Color.WHITE, 16);
         runTypedCommand.setOnClickListener(v -> {
             String command = typedCommand.getText().toString().trim();
             if (command.isEmpty()) {
@@ -125,15 +125,15 @@ public class MainActivity extends Activity {
         content.addView(manualAmount, lp(-1, -2, 0, 0, 0, 5));
         LinearLayout manualButtons = new LinearLayout(this);
         manualButtons.setOrientation(LinearLayout.HORIZONTAL);
-        Button saveExpense = button("ثبت هزینه", Color.rgb(205, 65, 65), Color.WHITE, 15);
+        Button saveExpense = button("ثبت هزینه", Color.rgb(230, 93, 137), Color.WHITE, 15);
         saveExpense.setOnClickListener(v -> saveManualEntry(manualDescription, manualAmount, false));
-        Button saveIncome = button("ثبت درآمد", Color.rgb(0, 137, 90), Color.WHITE, 15);
+        Button saveIncome = button("ثبت درآمد", Color.rgb(111, 190, 133), Color.WHITE, 15);
         saveIncome.setOnClickListener(v -> saveManualEntry(manualDescription, manualAmount, true));
         manualButtons.addView(saveExpense, new LinearLayout.LayoutParams(0, dp(52), 1));
         manualButtons.addView(saveIncome, new LinearLayout.LayoutParams(0, dp(52), 1));
         content.addView(manualButtons, lp(-1, -2, 0, 0, 0, 12));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
+        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(196, 111, 153), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
         wakeButton.setOnClickListener(v -> toggleWakeService());
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
@@ -142,13 +142,13 @@ public class MainActivity extends Activity {
         content.addView(status, lp(-1,-2,0,0,0,12));
 
         totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
-        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
+        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(226, 246, 226), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
-        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
-        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
+        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,232,241),20));
+        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(112,54,83),true); backupPanel.addView(backupTitle);
         TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
-        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(255,143,0),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
+        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(236,105,157),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
         Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
         content.addView(backupPanel,lp(-1,-2,0,8,0,14));
 
