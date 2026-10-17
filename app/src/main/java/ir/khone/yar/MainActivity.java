@@ -34,6 +34,8 @@ import java.util.Calendar;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import org.json.JSONObject;
 import org.json.JSONException;
 
@@ -51,6 +53,9 @@ public class MainActivity extends Activity {
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
+    private boolean usageGateApproved = false;
+    private static final String OBA_SUPABASE_URL = "https://sxyaujvliummbvzznejq.supabase.co";
+    private static final String OBA_SUPABASE_KEY = "sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -290,15 +295,21 @@ public class MainActivity extends Activity {
                 if (amount <= 0) { Toast.makeText(this, "مبلغ باید بیشتر از صفر باشد.", Toast.LENGTH_LONG).show(); return; }
                 if (amount > Long.MAX_VALUE - expenseTotal) { Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show(); return; }
                 String description = descriptionInput.getText().toString().trim();
-                expenseTotal += amount;
-                prefs.edit().putLong("expense", expenseTotal).apply();
                 String entryTitle = subgroup + (description.isEmpty() ? "" : " — " + description);
-                addEntry(category, entryTitle, amount);
-                refresh();
-                String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد.";
-                status.setText(confirmation);
-                say(confirmation);
-                Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+                consumeFeatureUse(categoryFeatureKey(category), () -> {
+                    if (amount > Long.MAX_VALUE - expenseTotal) {
+                        Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    expenseTotal += amount;
+                    prefs.edit().putLong("expense", expenseTotal).apply();
+                    addEntry(category, entryTitle, amount);
+                    refresh();
+                    String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد.";
+                    status.setText(confirmation);
+                    say(confirmation);
+                    Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+                });
             }).show();
     }
 
@@ -394,7 +405,159 @@ public class MainActivity extends Activity {
         }
     }
 
+private String featureKeyForVoice(String raw) {
+        String s = normalize(raw);
+        if (pendingMode != null && !pendingMode.equals("auto")) {
+            if (pendingMode.startsWith("stock_")) return "inventory";
+            return pendingMode;
+        }
+        // Keep classification aligned with handleVoice() and never bill an
+        // unrecognized phrase as an expense by default.
+        if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) return "budget";
+        if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) return "inventory";
+        if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) return "summary";
+        if (contains(s,"سلامت","دکتر","پزشک","دارو","درمان","آزمایش","بیمارستان")) return "health";
+        if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) return "vehicle";
+        if (contains(s,"یادآوری","یادم بنداز","یادآور")) return "reminder";
+        if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) return "income";
+        if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) return "calc";
+        if (contains(s,"خریدم","خرید کردم","خریداری کردم","خرید به قیمت","خرید به مبلغ","خرید","فهرست")) return "shopping";
+        if (contains(s,"کار خانه","وظیفه","تمیزکاری")) return "task";
+        if (contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) return "expense";
+        return null;
+    }
+
+    private void consumeFeatureUseBeforeVoice(String raw) {
+        String featureKey = featureKeyForVoice(raw);
+        if (featureKey == null) {
+            String message = "متوجه نوع درخواست نشدم؛ لطفاً فرمان را واضح‌تر بگو.";
+            status.setText(message); say(message); return;
+        }
+        String normalized = normalize(raw);
+        if ((featureKey.equals("expense") || featureKey.equals("income") || featureKey.equals("health")) && parseAmount(normalized) <= 0) {
+            String message = "مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان».";
+            status.setText(message); say(message); return;
+        }
+        consumeFeatureUse(featureKey, () -> {
+            usageGateApproved = true;
+            handleVoice(raw);
+        });
+    }
+
+    private void consumeFeatureUse(String featureKey, Runnable onAllowed) {
+        String token = getSharedPreferences("oba_auth", MODE_PRIVATE).getString("access_token", "");
+        if (token.isEmpty()) {
+            status.setText("برای استفاده از این قابلیت، ابتدا وارد حساب اوبا شو.");
+            say("ابتدا وارد حساب اوبا شو");
+            return;
+        }
+        status.setText("در حال بررسی سهمیهٔ استفاده...");
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String effectiveToken = refreshSessionIfNeeded(token);
+                URL url = new URL(OBA_SUPABASE_URL + "/rest/v1/rpc/oba_consume_feature_use");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(12000);
+                connection.setReadTimeout(12000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+                connection.setRequestProperty("Authorization", "Bearer " + effectiveToken);
+                JSONObject body = new JSONObject();
+                body.put("p_feature_key", featureKey);
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int code = connection.getResponseCode();
+                java.io.InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
+                StringBuilder response = new StringBuilder();
+                if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) response.append(line);
+                }
+                if (code < 200 || code >= 300) throw new Exception("بررسی سهمیه انجام نشد (HTTP " + code + "). ورود و اینترنت را بررسی کن.");
+                org.json.JSONArray rows = new org.json.JSONArray(response.toString());
+                if (rows.length() == 0) throw new Exception("پاسخ سهمیه از سرور معتبر نیست.");
+                JSONObject row = rows.getJSONObject(0);
+                boolean allowed = row.optBoolean("allowed", false);
+                int remaining = row.optInt("remaining", 0);
+                runOnUiThread(() -> {
+                    if (!allowed) {
+                        status.setText("۱۰ استفادهٔ رایگان این قابلیت تمام شده است. برای ادامه، اشتراک لازم است.");
+                        new AlertDialog.Builder(this).setTitle("پایان سهمیهٔ رایگان")
+                            .setMessage("۱۰ استفادهٔ رایگان این قابلیت مصرف شده است. برای ادامه باید اشتراک تهیه کنی.")
+                            .setPositiveButton("متوجه شدم", null).show();
+                        return;
+                    }
+                    status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
+                    onAllowed.run();
+                });
+            } catch (Exception e) {
+                String message = e.getMessage() == null ? "بررسی سهمیه ممکن نشد. اتصال اینترنت و ورود به حساب را بررسی کن." : e.getMessage();
+                runOnUiThread(() -> { status.setText(message); say(message); });
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }).start();
+    }
+
+    private String categoryFeatureKey(String category) {
+        if ("خانه".equals(category)) return "home_expense";
+        if ("ماشین".equals(category)) return "vehicle_expense";
+        if ("مغازه".equals(category)) return "shop_expense";
+        if ("مدرسه".equals(category)) return "school_expense";
+        if ("سلامت".equals(category)) return "health_expense";
+        return "other_expense";
+    }
+
+private String refreshSessionIfNeeded(String currentToken) throws Exception {
+        SharedPreferences auth = getSharedPreferences("oba_auth", MODE_PRIVATE);
+        if (auth.getLong("expires_at", 0L) > System.currentTimeMillis() + 120000L) return currentToken;
+        String refreshToken = auth.getString("refresh_token", "");
+        if (refreshToken.isEmpty()) throw new Exception("نشست ورود منقضی شده است؛ دوباره وارد اوبا شو.");
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(OBA_SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token").openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(12000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+            JSONObject request = new JSONObject();
+            request.put("refresh_token", refreshToken);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            int code = c.getResponseCode();
+            java.io.InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+            StringBuilder raw = new StringBuilder();
+            if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) raw.append(line);
+            }
+            if (code < 200 || code >= 300) throw new Exception("تمدید ورود انجام نشد؛ دوباره وارد اوبا شو.");
+            JSONObject session = new JSONObject(raw.toString());
+            String access = session.optString("access_token", "");
+            String rotatedRefresh = session.optString("refresh_token", "");
+            if (access.isEmpty() || rotatedRefresh.isEmpty()) throw new Exception("پاسخ تمدید ورود معتبر نیست؛ دوباره وارد اوبا شو.");
+            long seconds = session.optLong("expires_in", 3600L);
+            auth.edit().putString("access_token", access).putString("refresh_token", rotatedRefresh)
+                .putLong("expires_at", System.currentTimeMillis() + seconds * 1000L).apply();
+            return access;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
     private void handleVoice(String raw) {
+        if (!usageGateApproved) {
+            consumeFeatureUseBeforeVoice(raw);
+            return;
+        }
+        usageGateApproved = false;
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
