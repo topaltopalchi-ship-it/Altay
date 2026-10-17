@@ -797,6 +797,10 @@ private String featureKeyForVoice(String raw) {
         if (!pendingCategoryVoice.isEmpty()) return categoryFeatureKey(pendingCategoryVoice);
         if (pendingMode != null && !pendingMode.equals("auto")) {
             if (pendingMode.startsWith("stock_")) return "inventory";
+            // Map UI modes to the exact allowlisted quota keys used by Supabase.
+            if ("vehicle".equals(pendingMode)) return "vehicle_expense";
+            if ("health".equals(pendingMode)) return "health_expense";
+            if ("expense".equals(pendingMode)) return "expense";
             return pendingMode;
         }
         // Keep classification aligned with handleVoice() and never bill an
@@ -953,8 +957,8 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         String spoken = normalize(raw);
         if ("wake".equals(pendingMode)) {
             if (contains(spoken, "اوبا", "اُبا", "وبا")) {
-                status.setText("بله، در خدمتم. حالا نام بخش را بگو.");
-                sayThenListenForNavigation("بله، در خدمتم");
+                status.setText("بویور؛ نام بخش را بگو.");
+                sayThenListenForNavigation("بویور");
             } else {
                 status.setText("نام اوبا تشخیص داده نشد. دوباره روی میانبر صوتی بزن و بگو «اوبا».");
                 say("لطفاً بگو اوبا");
