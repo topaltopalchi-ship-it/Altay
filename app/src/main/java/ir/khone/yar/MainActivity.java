@@ -1394,10 +1394,12 @@ public class MainActivity extends Activity {
         title = title.replace("هر ماه", "").replace("ماهانه", "").replace("فردا", "").replace("پس فردا", "").replace("پس‌فردا", "").replace("امروز", "").replace("امشب", "").replace("صبح", "").replace("شب", "").replace("بعدازظهر", "").replace("بعد از ظهر", "");
         title = title.replaceAll("ساعت\\s*[0-9]{1,2}(?:[:٫.][0-9]{2})?", "").replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
         if (title.isEmpty()) title = "یادآوری خانه";
+        if (!canCreateRecord("calendar_records", "تقویم و یادآوری‌ها")) return;
         int id = (int)(System.currentTimeMillis() & 0x7fffffff);
         long when = due.getTimeInMillis();
         String saved = when + "\n" + (monthly ? "monthly" : "once") + "\n" + title + "\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
+        incrementCategoryQuota("calendar_records");
         ReminderReceiver.schedule(this, id, when, title, monthly);
         String whenText = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(due.getTime());
         String confirmation = "یادآوری «" + title + "» برای " + whenText + (monthly ? " و تکرار ماهانه" : "") + " ثبت شد.";
