@@ -725,9 +725,18 @@ public class MainActivity extends Activity {
                 public void onBufferReceived(byte[] b) {}
                 public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
                 public void onError(int e) {
-                    String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
-                        e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
-                        "تشخیص صدا انجام نشد. دوباره تلاش کن.";
+                    String msg;
+                    if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        msg = "صدایی واضح دریافت نشد؛ گوشی را نزدیک‌تر بگیر و کمی بلندتر، آرام و شمرده صحبت کن.";
+                    } else if (e == SpeechRecognizer.ERROR_NETWORK || e == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || e == SpeechRecognizer.ERROR_SERVER || e == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
+                        msg = "سرویس تشخیص گفتار گوشی پاسخ نداد. اینترنت را بررسی کن و در تنظیمات گوشی، سرویس گفتار Google و زبان فارسی را فعال یا به‌روز کن؛ این خطا از حساسیت میکروفون نیست.";
+                    } else if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        msg = "اجازهٔ میکروفون داده نشده است؛ از تنظیمات برنامه اجازهٔ میکروفون را فعال کن.";
+                    } else if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                        msg = "میکروفون مشغول است؛ یک لحظه صبر کن و دوباره بزن.";
+                    } else {
+                        msg = "تشخیص صدا انجام نشد (کد " + e + "). دوباره تلاش کن و اگر تکرار شد سرویس گفتار فارسی گوشی را بررسی کن.";
+                    }
                     pendingCategoryVoice = "";
                     pendingShopIncome = false;
                     status.setText(msg); say(msg);
@@ -744,7 +753,11 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
-            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L);
             recognizer.startListening(intent);
         } catch (Exception e) {
             status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
