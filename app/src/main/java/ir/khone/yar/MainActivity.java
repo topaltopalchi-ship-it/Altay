@@ -1129,7 +1129,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         addEntry("خرید: " + item, raw, amount);
         long budget = prefs.getLong("budget_home", prefs.getLong("home_budget", 0));
         String msg = item + " به مبلغ " + fmt(amount) + " تومان ثبت شد؛ یک قلم به موجودی اضافه شد و هزینه از حساب خانه کم شد.";
-        if (budget > 0) msg += " مانده بودجه " + fmt(budget - expenseTotal) + " تومان است.";
+        if (budget > 0) msg += " مانده بودجه خانه " + fmt(budget - categorySpent("خانه")) + " تومان است.";
         status.setText(msg); say(msg); refresh();
     }
 
@@ -1141,7 +1141,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             try {
                 int qty = prefs.getInt(key, 0);
                 if (qty <= 0) continue;
-                if (out.length() > 0) out.append("\\n");
+                if (out.length() > 0) out.append("\n");
                 out.append("• ").append(key.substring(6)).append(" — ").append(qty).append(" قلم");
             } catch (Exception ignored) {}
         }
