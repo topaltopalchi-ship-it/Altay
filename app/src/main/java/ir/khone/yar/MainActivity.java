@@ -334,7 +334,29 @@ public class MainActivity extends Activity {
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
         if (mode.equals("auto")) {
-            if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
+            // Read-only voice commands must be checked before generic "مانده" financial summaries.
+            if (contains(s, "راهنمای برنامه", "چه کارهایی", "چه فرمان‌هایی", "فرمان‌های صوتی", "کمک کن")) {
+                String help = "می‌توانی بگویی: ثبت هزینه یا درآمد، تنظیم یا پرسیدن مانده بودجه، ماشین حساب، اضافه کردن خرید، پرسیدن موجودی، مصرف کردن کالا، ثبت کار خانه، یادآوری، ثبت سرویس خودرو، ثبت هزینه سلامت، گزارش مالی و نمایش آخرین ثبت‌ها.";
+                status.setText(help); say(help); return;
+            } else if (contains(s, "مانده بودجه", "بودجه باقی", "چقدر از بودجه", "باقی مانده بودجه")) {
+                long budget = prefs.getLong("home_budget", 0);
+                String answer = budget <= 0 ? "هنوز بودجه خانه تنظیم نشده است. بگو بودجه خانه پنج میلیون تومان." :
+                    "بودجه خانه " + fmt(budget) + " تومان است و با احتساب هزینه‌های ثبت‌شده، " + fmt(budget - expenseTotal) + " تومان باقی مانده است.";
+                status.setText(answer); say(answer); return;
+            } else if (contains(s, "آخرین ثبت", "گزارش هزینه", "هزینه ها را بخوان", "هزینه‌های خانه", "گزارش خانه")) {
+                StringBuilder report = new StringBuilder();
+                int count = Math.min(entries.size(), 5);
+                for (int i = 0; i < count; i++) {
+                    if (report.length() > 0) report.append(". ");
+                    report.append(entries.get(i));
+                }
+                String answer = report.length() == 0 ? "هنوز ثبتی وجود ندارد." : "آخرین ثبت‌ها. " + report;
+                status.setText(answer); say(answer); return;
+            } else if (contains(s, "سوابق خودرو", "سابقه خودرو", "سرویس های خودرو", "سرویس‌های خودرو")) {
+                String records = prefs.getString("vehicleRecords", "");
+                String answer = records.isEmpty() ? "هنوز سابقه‌ای برای خودرو ثبت نشده است." : "سوابق خودرو. " + records.replace("\\n", ". ");
+                status.setText(answer); say(answer); return;
+            } else if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
             else if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
