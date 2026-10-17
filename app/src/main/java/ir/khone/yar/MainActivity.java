@@ -75,6 +75,14 @@ public class MainActivity extends Activity {
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
 
+        TextView sectionTitle = text("دسته‌بندی‌های OBA", 19, dark, true);
+        content.addView(sectionTitle, lp(-1, -2, 0, 0, 0, 8));
+        addCategoryButton(content, "🏠 خانه", "home_records", "هزینه‌های خانه، خریدها، کارها و یادآوری‌ها");
+        addCategoryButton(content, "🚗 ماشین", "car_records", "سرویس، تعمیر، کیلومتر و هزینه‌های خودرو");
+        addCategoryButton(content, "📄 اسناد", "document_records", "مدارک مهم، تاریخ انقضا و محل نگهداری");
+        addCategoryButton(content, "🛡️ گارانتی وسایل", "warranty_records", "نام وسیله، شماره فاکتور و پایان گارانتی");
+        addCategoryButton(content, "🎒 مدرسه", "school_records", "تکالیف، برنامه مدرسه، شهریه و یادآوری‌ها");
+
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
@@ -179,6 +187,59 @@ public class MainActivity extends Activity {
         refresh();
     }
 
+
+    private void addCategoryButton(LinearLayout content, String label, String key, String hint) {
+        Button b = button(label + "   ›", Color.WHITE, dark, 17);
+        b.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        b.setMinHeight(dp(54));
+        b.setBackground(round(Color.WHITE, 14));
+        b.setOnClickListener(v -> openCategory(key, label, hint));
+        content.addView(b, lp(-1, -2, 0, 0, 0, 7));
+    }
+
+    private void openCategory(String key, String label, String hint) {
+        String saved = prefs.getString(key, "");
+        String message = saved.isEmpty() ? "هنوز موردی ثبت نشده است." : saved;
+        new AlertDialog.Builder(this)
+            .setTitle(label)
+            .setMessage(message)
+            .setPositiveButton("➕ ثبت مورد جدید", (dialog, which) -> showAddCategoryRecord(key, label, hint))
+            .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private void showAddCategoryRecord(String key, String label, String hint) {
+        LinearLayout form = new LinearLayout(this);
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        form.setOrientation(LinearLayout.VERTICAL);
+        EditText titleField = new EditText(this);
+        titleField.setSingleLine(true);
+        titleField.setHint("عنوان؛ مثلاً قبض آب یا کارت واکسن");
+        form.addView(titleField, lp(-1, -2, 0, 0, 0, 8));
+        EditText detailField = new EditText(this);
+        detailField.setMinLines(2);
+        detailField.setHint(hint);
+        form.addView(detailField, lp(-1, -2, 0, 0, 0, 4));
+        new AlertDialog.Builder(this)
+            .setTitle("ثبت در " + label)
+            .setView(form)
+            .setPositiveButton("ذخیره", (dialog, which) -> {
+                String title = titleField.getText().toString().trim();
+                String detail = detailField.getText().toString().trim();
+                if (title.isEmpty()) {
+                    Toast.makeText(this, "عنوان را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String record = "• " + title + (detail.isEmpty() ? "" : "\n  " + detail);
+                String old = prefs.getString(key, "");
+                String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
+                prefs.edit().putString(key, updated).apply();
+                Toast.makeText(this, "در بخش " + label + " ذخیره شد.", Toast.LENGTH_SHORT).show();
+                openCategory(key, label, hint);
+            })
+            .setNegativeButton("انصراف", null)
+            .show();
+    }
 
     private void saveManualEntry(EditText descriptionField, EditText amountField, boolean income) {
         String description = descriptionField.getText().toString().trim();
