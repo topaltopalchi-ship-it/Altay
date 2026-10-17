@@ -20,6 +20,7 @@ import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -77,6 +78,28 @@ public class MainActivity extends Activity {
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
+
+        EditText typedCommand = new EditText(this);
+        typedCommand.setSingleLine(false);
+        typedCommand.setMinLines(2);
+        typedCommand.setMaxLines(3);
+        typedCommand.setTextSize(16);
+        typedCommand.setHint("اگر صدا کار نکرد، فرمان را اینجا بنویس؛ مثلاً هزینه ۸۰ هزار تومان برای نان");
+        typedCommand.setPadding(dp(12), dp(10), dp(12), dp(10));
+        typedCommand.setBackground(round(Color.WHITE, 14));
+        content.addView(typedCommand, lp(-1, -2, 0, 4, 0, 6));
+        Button runTypedCommand = button("⌨️ اجرای فرمان نوشتاری", Color.rgb(0, 137, 123), Color.WHITE, 16);
+        runTypedCommand.setOnClickListener(v -> {
+            String command = typedCommand.getText().toString().trim();
+            if (command.isEmpty()) {
+                status.setText("اول فرمان را بنویس.");
+                return;
+            }
+            pendingMode = "auto";
+            handleVoice(command);
+            typedCommand.setText("");
+        });
+        content.addView(runTypedCommand, lp(-1, -2, 0, 0, 0, 10));
 
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
