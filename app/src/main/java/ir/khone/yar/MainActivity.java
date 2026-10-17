@@ -853,10 +853,14 @@ public class MainActivity extends Activity {
         tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
             @Override public void onStart(String utteranceId) {}
             @Override public void onDone(String utteranceId) {
-                runOnUiThread(() -> startVoice("navigate"));
+                if ("oba_wake_ack".equals(utteranceId)) {
+                    runOnUiThread(() -> startVoice("navigate"));
+                }
             }
             @Override public void onError(String utteranceId) {
-                runOnUiThread(() -> status.setText("برای ادامه، نام بخش را لمس کن یا دوباره میانبر صوتی را بزن."));
+                if ("oba_wake_ack".equals(utteranceId)) {
+                    runOnUiThread(() -> status.setText("برای ادامه، نام بخش را لمس کن یا دوباره میانبر صوتی را بزن."));
+                }
             }
         });
         int result = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "oba_wake_ack");
