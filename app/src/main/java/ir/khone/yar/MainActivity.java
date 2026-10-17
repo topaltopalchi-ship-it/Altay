@@ -764,7 +764,6 @@ public class MainActivity extends Activity {
         }
         try {
             if (recognizer != null) {
-                try { recognizer.cancel(); } catch (Exception ignored) {}
                 recognizer.destroy();
                 recognizer = null;
             }
