@@ -1,40 +1,46 @@
 # OBA Android backend setup
 
-OBA remains an Android-only application. This folder prepares a backend contract; it does not create a web version.
+OBA is an Android-only app. Family records, reminders, documents, expenses, home inventory, and all other personal household data remain on the device. No web version is planned.
 
-## What is included
+## Live Supabase project
 
-- `app/src/main/java/ir/khone/yar/BackendConfig.java`: reads the public Supabase URL and publishable key from Android `BuildConfig`.
-- `app/src/main/java/ir/khone/yar/MarketQuotesClient.java`: read-only REST client for market quote snapshots, with timeouts and safe user-facing errors.
-- `supabase/migrations/20261017090000_oba_backend_foundation.sql`: starting schema for household membership, subscription entitlements, and market quote snapshots. RLS is enabled on all exposed tables.
-- Android CI reads optional repository variables during APK builds. Empty values are allowed, so builds do not fail before Supabase is connected.
+- Project name: `OBA`
+- Project ref: `sxyaujvliummbvzznejq`
+- Region: `eu-central-1` (Frankfurt)
+- Plan selected: Free ($0/month quoted at creation; usage limits apply)
+- Project status: active and healthy
 
-## Configure GitHub Actions
+## Backend scope
 
-In GitHub repository settings, add these **Actions variables** (not secrets; they are public client configuration):
+- Supabase Auth is intended to manage sign-up, sign-in, password recovery, and password hashes. OBA must never store raw passwords in its own tables.
+- `oba_user_entitlements` stores only subscription metadata needed to check access: user ID, product/source, verification status, and start/expiry timestamps. Client writes are denied by RLS; a trusted purchase-verification function must activate subscriptions.
+- `oba_market_quotes` stores public market quote snapshots only. It contains no family-specific data. It is read-only for Android clients; a trusted server-side updater and a licensed/reliable provider still need to be configured.
+- No household/member tables are used on Supabase. Family records stay in Android local storage.
 
-- `OBA_SUPABASE_URL`: project URL, such as `https://YOUR_PROJECT_REF.supabase.co`
+## Android configuration
+
+`BackendConfig.java` reads these public client settings at build time:
+
+- `OBA_SUPABASE_URL`: `https://sxyaujvliummbvzznejq.supabase.co`
 - `OBA_SUPABASE_PUBLISHABLE_KEY`: a Supabase publishable key beginning with `sb_publishable_`
 
-Do not add a Supabase secret/service-role key to GitHub variables used by the APK. Do not embed third-party market-provider credentials in the Android app.
+They can be supplied as GitHub Actions repository variables or environment variables during a local build. The publishable key is public by design and must be paired with correct RLS policies. Never put a Supabase secret/service-role key or third-party market-provider credentials into the APK.
 
-## Before using a real Supabase project
+## Schema and security
 
-1. Link the intended Supabase account/project and confirm its project ID.
-2. Review and apply the SQL migration to that project, then inspect RLS/advisors.
-3. Add a trusted Edge Function to verify Bazaar purchase receipts with the provider's official server-side verification mechanism. The client must never be allowed to mark its own entitlement as active.
-4. Configure market-data provider credentials as Edge Function secrets, fetch quotes server-side, and update `oba_market_quotes`. Do not scrape from the Android app or invent fallback prices.
-5. Test anonymous reads, signed-in reads, and denied client writes against the actual project.
-6. Add authentication/session handling before enabling household syncing or entitlement reads.
+- Migration: `supabase/migrations/20261017090000_oba_backend_foundation.sql`
+- The migration has been applied to the live project.
+- RLS is enabled on both public tables.
+- Authenticated users can read only their own entitlement row.
+- Anonymous/authenticated clients can read market quotes, but cannot insert/update/delete quote rows.
+- Clients cannot write entitlement rows. Subscription activation must be performed by trusted server-side purchase verification.
 
-## Security model
+## Not yet implemented or activated
 
-- Publishable key in an APK is public by design; RLS is the security boundary.
-- No password is stored by OBA tables. Supabase Auth should manage credentials and password hashes.
-- The entitlement table has no client write policies. Purchase verification is a backend-only operation.
-- Market quote rows are read-only to app clients. A trusted backend job must update them and set `is_stale` accurately.
-- Household member writes are not enabled directly from the client; a validated server-side invite/membership flow is required.
+1. Android sign-up/sign-in/password-recovery screens and session storage.
+2. Verified subscription purchase flow for a three-month Bazaar product, including server-side receipt validation and renewal/expiry handling.
+3. A trusted server-side market data updater and an approved provider for gold, USD, silver, and coin prices.
+4. GitHub Actions public configuration variables, if they are not already set.
+5. End-to-end tests on a physical Android device.
 
-## Current limitation
-
-This is a repository scaffold only. It is not yet connected to a live Supabase project, the purchase verification function is not deployed, and market quotes are not live until a data provider and server-side updater are configured.
+The current free-quota prompt for the eleventh record is a local UI guard. It is not tamper-resistant until account and entitlement checks are implemented; clearing app data or reinstalling may reset local-only quota state. This limitation must not be presented as server-enforced protection.
