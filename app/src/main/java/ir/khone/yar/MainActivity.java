@@ -628,6 +628,10 @@ public class MainActivity extends Activity {
             consumeFeatureUse("reminder", () -> showManualMaintenanceReminder());
             return;
         }
+        if ("budget".equals(mode)) {
+            consumeFeatureUse("budget", () -> showBudgetLimitForm());
+            return;
+        }
         EditText description = new EditText(this);
         description.setSingleLine(true);
         description.setHint("شرح یا عنوان");
@@ -642,6 +646,15 @@ public class MainActivity extends Activity {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(16),dp(8),dp(16),dp(4));
+        android.widget.Spinner categoryPicker = null;
+        if ("expense".equals(mode)) {
+            String[] expenseCategories = new String[]{"خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر"};
+            categoryPicker = new android.widget.Spinner(this);
+            categoryPicker.setAdapter(new android.widget.ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, expenseCategories));
+            form.addView(text("دستهٔ هزینه",14,dark,false));
+            form.addView(categoryPicker,lp(-1,-2,0,2,0,6));
+        }
+        final android.widget.Spinner selectedCategoryPicker = categoryPicker;
         form.addView(description,lp(-1,-2,0,2,0,6));
         form.addView(amountInput,lp(-1,-2,0,2,0,4));
         new AlertDialog.Builder(this).setTitle("ثبت دستی — " + featureTitle)
@@ -675,7 +688,12 @@ public class MainActivity extends Activity {
                         addEntry("درآمد",title,finalAmount);
                     } else if ("expense".equals(mode) || "health".equals(mode) || "vehicle".equals(mode) || ("shopping".equals(mode) && finalAmount > 0)) {
                         if (finalAmount <= 0 || finalAmount > Long.MAX_VALUE-expenseTotal) { Toast.makeText(this,"برای هزینه مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
-                        String category = "health".equals(mode) ? "سلامت" : "vehicle".equals(mode) ? "ماشین" : "خانه";
+                        String category;
+                        if ("health".equals(mode)) category = "سلامت";
+                        else if ("vehicle".equals(mode)) category = "ماشین";
+                        else if ("shopping".equals(mode)) category = "سایر";
+                        else if (selectedCategoryPicker != null) category = (String) selectedCategoryPicker.getSelectedItem();
+                        else category = "خانه";
                         expenseTotal += finalAmount; prefs.edit().putLong("expense",expenseTotal).apply();
                         addCategorySpend(category,finalAmount); addEntry(category,title,finalAmount);
                     } else {
