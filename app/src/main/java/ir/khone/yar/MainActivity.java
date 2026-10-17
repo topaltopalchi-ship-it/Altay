@@ -501,22 +501,17 @@ public class MainActivity extends Activity {
                 if (rows.length() == 0) throw new Exception("پاسخ سهمیه از سرور معتبر نیست.");
                 JSONObject row = rows.getJSONObject(0);
                 boolean allowed = row.optBoolean("allowed", false);
-                boolean trialActive = row.optBoolean("trial_active", false);
                 int remaining = row.optInt("remaining", 0);
                 runOnUiThread(() -> {
                     if (!allowed) {
-                        status.setText("سهمیهٔ رایگان این قابلیت تمام شده است. برای ادامه، اشتراک لازم است.");
+                        status.setText("۱۰ استفادهٔ رایگان این قابلیت تمام شده است. برای ادامه، اشتراک لازم است.");
                         new AlertDialog.Builder(this).setTitle("پایان سهمیهٔ رایگان")
-                            .setMessage("۱۰ استفادهٔ رایگان این قابلیت مصرف شده است. بخش اشتراک هنوز آماده نیست.")
+                            .setMessage("۱۰ استفادهٔ رایگان این قابلیت مصرف شده است. برای ادامه باید اشتراک تهیه کنی.")
                             .setPositiveButton("متوجه شدم", null).show();
                         return;
                     }
                     usageGateApproved = true;
-                    if (trialActive) {
-                        status.setText("دورهٔ آزمایشی ۳۰روزهٔ اوبا فعال است.");
-                    } else {
-                        status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
-                    }
+                    status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
                     handleVoice(raw);
                 });
             } catch (Exception e) {
