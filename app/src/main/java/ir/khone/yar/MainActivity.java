@@ -608,21 +608,55 @@ public class MainActivity extends Activity {
         detailField.setMinLines(2);
         detailField.setHint(hint);
         form.addView(detailField, lp(-1, -2, 0, 0, 0, 4));
+
+        boolean trackAmount = key.equals("home_records_sub_13") || key.equals("home_records_sub_14")
+            || key.equals("maintenance_records_sub_6") || key.equals("finance_records_sub_7");
+        boolean canRemind = key.startsWith("home_records_sub_") || key.startsWith("maintenance_records_sub_")
+            || key.startsWith("lessons_records");
+        EditText amountField = null;
+        if (trackAmount) {
+            amountField = new EditText(this);
+            amountField.setSingleLine(true);
+            amountField.setInputType(2);
+            amountField.setHint(key.equals("home_records_sub_13") ? "مقدار مصرف یا مبلغ قبض (اختیاری)"
+                : key.equals("home_records_sub_14") ? "قیمت خرید یا تعداد (اختیاری)"
+                : key.equals("maintenance_records_sub_6") ? "هزینه آخرین خدمت (اختیاری)"
+                : "مبلغ تقریبی هزینه آینده (اختیاری)");
+            form.addView(amountField, lp(-1, -2, 0, 0, 0, 6));
+        }
+        EditText reminderField = null;
+        if (canRemind) {
+            reminderField = new EditText(this);
+            reminderField.setSingleLine(true);
+            reminderField.setHint("یادآوری اختیاری؛ مثلاً فردا ساعت ۹ صبح یا روز ۲۰ هر ماه ساعت ۱۰");
+            form.addView(reminderField, lp(-1, -2, 0, 0, 0, 4));
+        }
+        final EditText savedAmountField = amountField;
+        final EditText savedReminderField = reminderField;
         new AlertDialog.Builder(this)
             .setTitle("ثبت در " + label)
             .setView(form)
             .setPositiveButton("ذخیره", (dialog, which) -> {
                 String title = titleField.getText().toString().trim();
                 String detail = detailField.getText().toString().trim();
+                String amount = savedAmountField == null ? "" : savedAmountField.getText().toString().trim();
+                String reminderText = savedReminderField == null ? "" : savedReminderField.getText().toString().trim();
                 if (title.isEmpty()) {
                     Toast.makeText(this, "عنوان را وارد کن.", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                String record = "• " + title + (detail.isEmpty() ? "" : "\n  " + detail);
+                StringBuilder recordBuilder = new StringBuilder("• ").append(title);
+                if (!detail.isEmpty()) recordBuilder.append("\\n  ").append(detail);
+                if (!amount.isEmpty()) recordBuilder.append("\\n  مبلغ/مقدار: ").append(amount);
+                if (!reminderText.isEmpty()) recordBuilder.append("\\n  یادآوری: ").append(reminderText);
+                String record = recordBuilder.toString();
                 String old = prefs.getString(key, "");
-                String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
+                String updated = record + (old.isEmpty() ? "" : "\\n\\n" + old);
                 prefs.edit().putString(key, updated).apply();
                 Toast.makeText(this, "در بخش " + label + " ذخیره شد.", Toast.LENGTH_SHORT).show();
+                if (!reminderText.isEmpty()) {
+                    handleReminderVoice("یادآوری " + title + " " + reminderText, normalize("یادآوری " + title + " " + reminderText));
+                }
                 openCategory(key, label, hint);
             })
             .setNegativeButton("انصراف", null)
@@ -757,7 +791,11 @@ public class MainActivity extends Activity {
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
         }
-        if ("entries".equals(key) || "vehicleRecords".equals(key)) {
+        if ("entries".equals(key) || "vehicleRecords".equals(key) || "school_children".equals(key)) {
+            return value instanceof String && ((String) value).length() <= 20000;
+        }
+        String categoryPattern = "(home_records|car_records|document_records|warranty_records|school_records|finance_records|shopping_records|family_records|calendar_records|maintenance_records|health_records|business_records|safe_records|clothing_records|family_events|cleaning_records|emergency_savings|recurring_payments|pantry_records|lessons_records|school_child_[0-9a-f]+)(?:_sub_[0-9]{1,2})?";
+        if (key.matches(categoryPattern)) {
             return value instanceof String && ((String) value).length() <= 20000;
         }
         if (key.matches("reminder_[0-9]{1,10}")) {
