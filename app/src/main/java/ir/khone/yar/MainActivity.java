@@ -740,44 +740,97 @@ public class MainActivity extends Activity {
             }).show();
     }
 
+    private int voiceRetryCount = 0;
+    private boolean usingOnDeviceRecognition = false;
+
     private void startVoice(String mode) {
         pendingMode = mode;
+        voiceRetryCount = 0;
+        usingOnDeviceRecognition = false;
+        startVoiceInternal(mode, false);
+    }
+
+    private void startVoiceInternal(String mode, boolean preferOnDevice) {
+        pendingMode = mode;
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
-            say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
+            String message = "سرویس تشخیص گفتار اندروید در دسترس نیست. سرویس گفتار Google را به‌روز کن و دوباره تلاش کن.";
+            status.setText(message);
+            say(message);
+            showVoiceRetryDialog(message);
+            return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
         }
         try {
-            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            if (recognizer != null) {
+                try { recognizer.cancel(); } catch (Exception ignored) {}
+                recognizer.destroy();
+                recognizer = null;
+            }
+            if (preferOnDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
+                usingOnDeviceRecognition = true;
+            } else {
+                recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+                usingOnDeviceRecognition = false;
+            }
             recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
-                public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
+                public void onReadyForSpeech(Bundle b) { status.setText(usingOnDeviceRecognition ? "🎙 گوش می‌دهم… (حالت روی دستگاه)" : "🎙 گوش می‌دهم… حالا صحبت کن"); }
                 public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
                 public void onRmsChanged(float r) {}
                 public void onBufferReceived(byte[] b) {}
                 public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
                 public void onError(int e) {
+                    boolean serverError = e == SpeechRecognizer.ERROR_NETWORK
+                        || e == SpeechRecognizer.ERROR_NETWORK_TIMEOUT
+                        || e == SpeechRecognizer.ERROR_SERVER
+                        || e == SpeechRecognizer.ERROR_SERVER_DISCONNECTED;
+                    if (serverError && voiceRetryCount == 0) {
+                        voiceRetryCount = 1;
+                        status.setText("سرویس گفتار پاسخ نداد؛ یک بار دوباره تلاش می‌کنم…");
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                            () -> startVoiceInternal(pendingMode, false), 450L);
+                        return;
+                    }
+                    if (serverError && voiceRetryCount == 1 && !usingOnDeviceRecognition
+                            && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                            && SpeechRecognizer.isOnDeviceRecognitionAvailable(MainActivity.this)) {
+                        voiceRetryCount = 2;
+                        status.setText("اتصال سرویس گفتار مشکل دارد؛ حالت روی دستگاه را امتحان می‌کنم…");
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                            () -> startVoiceInternal(pendingMode, true), 350L);
+                        return;
+                    }
+
                     String msg;
                     if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        msg = "صدایی واضح دریافت نشد؛ گوشی را نزدیک‌تر بگیر و کمی بلندتر، آرام و شمرده صحبت کن.";
-                    } else if (e == SpeechRecognizer.ERROR_NETWORK || e == SpeechRecognizer.ERROR_NETWORK_TIMEOUT || e == SpeechRecognizer.ERROR_SERVER || e == SpeechRecognizer.ERROR_SERVER_DISCONNECTED) {
-                        msg = "سرویس تشخیص گفتار گوشی پاسخ نداد. اینترنت را بررسی کن و در تنظیمات گوشی، سرویس گفتار Google و زبان فارسی را فعال یا به‌روز کن؛ این خطا از حساسیت میکروفون نیست.";
+                        msg = "صدای واضحی تشخیص داده نشد. دوباره بزن و یک جملهٔ کوتاه و شمرده بگو.";
+                    } else if (serverError) {
+                        msg = "سرویس گفتار پس از تلاش مجدد هم پاسخ نداد. اینترنت و به‌روز بودن Speech Services by Google را بررسی کن.";
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                            && (e == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
+                                || e == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) {
+                        msg = "موتور تشخیص فعلی از فارسی پشتیبانی نمی‌کند؛ زبان فارسی سرویس گفتار Google را فعال یا دانلود کن.";
                     } else if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                        msg = "اجازهٔ میکروفون داده نشده است؛ از تنظیمات برنامه اجازهٔ میکروفون را فعال کن.";
+                        msg = "اجازهٔ میکروفون داده نشده است؛ از تنظیمات گوشی دسترسی میکروفون را فعال کن.";
                     } else if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                        msg = "میکروفون مشغول است؛ یک لحظه صبر کن و دوباره بزن.";
+                        msg = "میکروفون مشغول است. دوباره تلاش کن.";
                     } else {
-                        msg = "تشخیص صدا انجام نشد (کد " + e + "). دوباره تلاش کن و اگر تکرار شد سرویس گفتار فارسی گوشی را بررسی کن.";
+                        msg = "تشخیص صدا انجام نشد (کد " + e + "). دوباره تلاش کن.";
                     }
-                    pendingCategoryVoice = "";
-                    pendingShopIncome = false;
-                    status.setText(msg); say(msg);
+                    // Keep the selected category/income context until retry or explicit cancellation.
+                    status.setText(msg);
+                    say(msg);
+                    showVoiceRetryDialog(msg);
                 }
                 public void onResults(Bundle b) {
+                    voiceRetryCount = 0;
                     ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if (result != null && !result.isEmpty()) handleVoice(result.get(0));
+                    else showVoiceRetryDialog("متن گفتار دریافت نشد؛ دوباره امتحان کن.");
                 }
                 public void onPartialResults(Bundle b) {
                     ArrayList<String> partial = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
@@ -792,14 +845,33 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-            // Shorter silence windows reduce command latency; tune on the target Samsung device.
             intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 800L);
             intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L);
             intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 700L);
             recognizer.startListening(intent);
         } catch (Exception e) {
-            status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
+            String msg = "شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.";
+            status.setText(msg);
+            showVoiceRetryDialog(msg);
         }
+    }
+
+    private void showVoiceRetryDialog(String message) {
+        if (isFinishing() || isDestroyed()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("مشکل در دریافت صدا")
+            .setMessage(message)
+            .setPositiveButton("تلاش دوباره", (dialog, which) -> {
+                voiceRetryCount = 0;
+                startVoiceInternal(pendingMode, false);
+            })
+            .setNegativeButton("لغو", (dialog, which) -> {
+                pendingCategoryVoice = "";
+                pendingShopIncome = false;
+                usageGateApproved = false;
+                status.setText("فرمان صوتی لغو شد. می‌توانی دوباره از دکمهٔ صوتی شروع کنی.");
+            })
+            .show();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
