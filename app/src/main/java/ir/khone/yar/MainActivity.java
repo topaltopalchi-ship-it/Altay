@@ -782,7 +782,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean canCreateCountedRecord(String preferenceKey, String label, int currentCount) {
-        if (currentCount < 10) return true;
+        if (FreeQuotaPolicy.canCreate(currentCount)) return true;
         showSubscriptionPrompt(label);
         return false;
     }
