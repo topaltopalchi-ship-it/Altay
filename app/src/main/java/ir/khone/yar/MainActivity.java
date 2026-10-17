@@ -120,10 +120,10 @@ public class MainActivity extends Activity {
         alertPanel.addView(text("🔔 هشدارها و آلارم‌ها",18,Color.rgb(150,25,35),true));
         alertPanel.addView(text("برای عبور هزینه از سقف بودجه هشدار بگیر؛ برای زمان تعویض روغن، سرویس یا هر کار دیگری هم آلارم زمان‌دار تنظیم کن.",13,dark,false),lp(-1,-2,0,5,0,8));
         Button budgetAlert = button("🎯 تنظیم سقف هزینه / بودجه",Color.WHITE,dark,15);
-        budgetAlert.setOnClickListener(v -> showBudgetLimitForm());
+        budgetAlert.setOnClickListener(v -> consumeFeatureUse("budget", () -> showBudgetLimitForm()));
         alertPanel.addView(budgetAlert,lp(-1,-2,0,2,0,4));
         Button maintenanceAlert = button("🛠 تنظیم آلارم زمان تعویض یا سرویس",Color.WHITE,dark,15);
-        maintenanceAlert.setOnClickListener(v -> showManualMaintenanceReminder());
+        maintenanceAlert.setOnClickListener(v -> consumeFeatureUse("reminder", () -> showManualMaintenanceReminder()));
         alertPanel.addView(maintenanceAlert,lp(-1,-2,0,2,0,0));
         content.addView(alertPanel,lp(-1,-2,0,2,0,14));
 
@@ -467,7 +467,7 @@ public class MainActivity extends Activity {
                 : "\nبرای این بخش هنوز سقف هزینه تعیین نشده است.");
         chooserContent.addView(text(sectionSummary,14,dark,true),lp(-1,-2,0,4,0,8));
         Button setSectionBudget = button("🔔 تنظیم سقف هزینه برای " + category,Color.rgb(255,235,238),Color.rgb(150,25,35),14);
-        setSectionBudget.setOnClickListener(v -> showSingleCategoryBudgetForm(category));
+        setSectionBudget.setOnClickListener(v -> consumeFeatureUse("budget", () -> showSingleCategoryBudgetForm(category)));
         chooserContent.addView(setSectionBudget,lp(-1,-2,0,2,0,8));
         chooserContent.addView(choices);
         scroll.addView(chooserContent);
