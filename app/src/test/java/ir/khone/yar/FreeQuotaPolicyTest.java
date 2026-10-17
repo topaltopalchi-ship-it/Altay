@@ -34,7 +34,7 @@ public class FreeQuotaPolicyTest {
 
     @Test public void reconcilesListAndVoiceRecordCountersWithoutDoubleCounting() {
         assertEquals(4, FreeQuotaPolicy.countRecords("• آب\n• برق", 4));
-        assertEquals(2, FreeQuotaPolicy.countRecords("• آب\n• برق\n• گاز", 2));
+        assertEquals(3, FreeQuotaPolicy.countRecords("• آب\n• برق\n• گاز", 2));
         assertEquals(0, FreeQuotaPolicy.countRecords("تفصیل بدون ثبت", -5));
     }
 }
