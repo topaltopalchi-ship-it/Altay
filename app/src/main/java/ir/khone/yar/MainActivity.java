@@ -271,6 +271,12 @@ public class MainActivity extends Activity {
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(8), dp(6), dp(8), dp(6));
+        scroll.addView(list);
+        final AlertDialog chooser = new AlertDialog.Builder(this)
+            .setTitle("هزینه‌های بخش " + section)
+            .setView(scroll)
+            .setNegativeButton("بستن", null)
+            .create();
         for (int i = 0; i < items.length; i += 2) {
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
@@ -281,7 +287,7 @@ public class MainActivity extends Activity {
                 itemButton.setBackground(round(Color.WHITE, 14));
                 itemButton.setElevation(dp(1));
                 itemButton.setOnClickListener(v -> {
-                    // Open the amount form only after the user chooses a specific category.
+                    chooser.dismiss();
                     showCategoryExpenseDialog(section, selectedItem);
                 });
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1f);
@@ -290,12 +296,7 @@ public class MainActivity extends Activity {
             }
             list.addView(row, new LinearLayout.LayoutParams(-1, -2));
         }
-        scroll.addView(list);
-        new AlertDialog.Builder(this)
-            .setTitle("هزینه‌های بخش " + section)
-            .setView(scroll)
-            .setNegativeButton("بستن", null)
-            .show();
+        chooser.show();
     }
 
     private void showCategoryExpenseDialog(String section, String item) {
