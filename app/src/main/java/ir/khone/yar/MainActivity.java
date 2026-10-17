@@ -140,6 +140,10 @@ public class MainActivity extends Activity {
         cards = new LinearLayout(this); cards.setOrientation(LinearLayout.VERTICAL);
         addVoiceCard("🧾 ثبت مخارج", "بگو: «خرج ۱۲۰ هزار تومان برای خرید»", "expense");
         addVoiceCard("💰 ثبت درآمد", "بگو: «درآمد ۵ میلیون تومان حقوق»", "income");
+        Button calculatorButton = button("🧮 باز کردن ماشین‌حساب", Color.rgb(225,238,255), dark, 18);
+        calculatorButton.setMinHeight(dp(60));
+        calculatorButton.setOnClickListener(v -> showCalculatorDialog());
+        content.addView(calculatorButton, lp(-1,-2,0,4,0,6));
         addVoiceCard("🧮 ماشین‌حساب صوتی", "بگو: «ماشین حساب ۲۰۰۰۰ جمع ۳۰۰۰۰»", "calc");
         addVoiceCard("🛒 فهرست خرید", "بگو: «به فهرست خرید شیر اضافه کن»", "shopping");
         addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
@@ -168,6 +172,35 @@ public class MainActivity extends Activity {
     }
 
 
+    private void showCalculatorDialog() {
+        LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(dp(14),dp(8),dp(14),dp(8));
+        TextView display = text("۰",28,dark,true); display.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL); display.setPadding(dp(12),dp(12),dp(12),dp(12)); display.setMinHeight(dp(64)); display.setBackground(round(Color.rgb(244,248,255),12));
+        panel.addView(display,lp(-1,-2,0,0,0,10));
+        String[][] keys = {{"C","⌫","÷","×"},{"7","8","9","−"},{"4","5","6","+"},{"1","2","3","("},{"0",".",")","="}};
+        final String[] expression = {""};
+        LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
+        for (String[] row : keys) {
+            LinearLayout line = new LinearLayout(this); line.setOrientation(LinearLayout.HORIZONTAL);
+            for (String key : row) {
+                Button b = button(key,"=".equals(key)?Color.rgb(0,157,112):Color.WHITE,"=".equals(key)?Color.WHITE:dark,21); b.setMinHeight(dp(54));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0,dp(56),1); p.setMargins(dp(3),dp(3),dp(3),dp(3)); line.addView(b,p);
+                b.setOnClickListener(v -> {
+                    if ("C".equals(key)) expression[0]="";
+                    else if ("⌫".equals(key)) { if(!expression[0].isEmpty()) expression[0]=expression[0].substring(0,expression[0].length()-1); }
+                    else if ("=".equals(key)) {
+                        try { double result=VoiceCalculator.evaluate(expression[0]); String resultText=result==Math.rint(result)?fmt((long)result):String.format(Locale.US,"%.4f",result); display.setText(resultText); expression[0]=Double.toString(result); status.setText("نتیجهٔ ماشین‌حساب: "+resultText); say("نتیجه "+resultText); }
+                        catch(Exception ex) { status.setText("عبارت ریاضی را بررسی کن."); say("عبارت را بررسی کن"); } return;
+                    } else { expression[0]+=key.equals("×")?"*":key.equals("÷")?"/":key.equals("−")?"-":key; }
+                    display.setText(expression[0].isEmpty()?"۰":expression[0].replace("*","×").replace("/","÷").replace("-","−"));
+                });
+            }
+            grid.addView(line,new LinearLayout.LayoutParams(-1,-2));
+        }
+        panel.addView(grid,lp(-1,-2,0,0,0,8));
+        Button voice=button("🎙 محاسبه با صدا",Color.rgb(220,247,238),dark,18); voice.setMinHeight(dp(58)); panel.addView(voice,lp(-1,-2,0,6,0,4));
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("ماشین‌حساب اوبا").setView(panel).setNegativeButton("بستن",null).create();
+        voice.setOnClickListener(v->{dialog.dismiss();startVoice("calc");}); dialog.show();
+    }
     private void createBackup() {
         try {
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
