@@ -381,6 +381,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
+                String effectiveToken = refreshSessionIfNeeded(token);
                 URL url = new URL(OBA_SUPABASE_URL + "/rest/v1/rpc/oba_consume_feature_use");
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
@@ -389,7 +390,7 @@ public class MainActivity extends Activity {
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/json");
                 connection.setRequestProperty("apikey", OBA_SUPABASE_KEY);
-                connection.setRequestProperty("Authorization", "Bearer " + token);
+                connection.setRequestProperty("Authorization", "Bearer " + effectiveToken);
                 JSONObject body = new JSONObject();
                 body.put("p_feature_key", featureKey);
                 try (OutputStream out = connection.getOutputStream()) {
@@ -435,6 +436,46 @@ public class MainActivity extends Activity {
                 if (connection != null) connection.disconnect();
             }
         }).start();
+    }
+
+    private String refreshSessionIfNeeded(String currentToken) throws Exception {
+        SharedPreferences auth = getSharedPreferences("oba_auth", MODE_PRIVATE);
+        if (auth.getLong("expires_at", 0L) > System.currentTimeMillis() + 120000L) return currentToken;
+        String refreshToken = auth.getString("refresh_token", "");
+        if (refreshToken.isEmpty()) throw new Exception("نشست ورود منقضی شده است؛ دوباره وارد اوبا شو.");
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(OBA_SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token").openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(12000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+            JSONObject request = new JSONObject();
+            request.put("refresh_token", refreshToken);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            int code = c.getResponseCode();
+            java.io.InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+            StringBuilder raw = new StringBuilder();
+            if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) raw.append(line);
+            }
+            if (code < 200 || code >= 300) throw new Exception("تمدید ورود انجام نشد؛ دوباره وارد اوبا شو.");
+            JSONObject session = new JSONObject(raw.toString());
+            String access = session.optString("access_token", "");
+            String rotatedRefresh = session.optString("refresh_token", "");
+            if (access.isEmpty() || rotatedRefresh.isEmpty()) throw new Exception("پاسخ تمدید ورود معتبر نیست؛ دوباره وارد اوبا شو.");
+            long seconds = session.optLong("expires_in", 3600L);
+            auth.edit().putString("access_token", access).putString("refresh_token", rotatedRefresh)
+                .putLong("expires_at", System.currentTimeMillis() + seconds * 1000L).apply();
+            return access;
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     private void handleVoice(String raw) {
