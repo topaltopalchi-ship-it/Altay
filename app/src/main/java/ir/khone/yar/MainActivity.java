@@ -702,7 +702,7 @@ public class MainActivity extends Activity {
                     }
                     refresh();
                     String msg = "ثبت شد: " + title;
-                    status.setText(msg); say(msg);
+                    status.setText(msg); say("بیلدیم");
                 });
             }).show();
     }
