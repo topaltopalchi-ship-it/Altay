@@ -525,7 +525,6 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             pendingCategoryVoice = category;
             status.setText("برای ثبت در بخش " + category + " بگو: هزینه، مبلغ و شرح آن؛ مثلاً «هزینه ۸۰ هزار تومان برای نان».");
-            say("مبلغ و شرح را بگو");
             startVoice("auto");
         });
         choices.addView(voiceChoice, lp(-1,-2,0,8,0,5));
