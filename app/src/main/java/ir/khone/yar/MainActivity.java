@@ -647,8 +647,8 @@ public class MainActivity extends Activity {
                 }
                 StringBuilder recordBuilder = new StringBuilder("• ").append(title);
                 if (!detail.isEmpty()) recordBuilder.append("\n  ").append(detail);
-                if (!amount.isEmpty()) recordBuilder.append("\\n  مبلغ/مقدار: ").append(amount);
-                if (!reminderText.isEmpty()) recordBuilder.append("\\n  یادآوری: ").append(reminderText);
+                if (!amount.isEmpty()) recordBuilder.append("\n  مبلغ/مقدار: ").append(amount);
+                if (!reminderText.isEmpty()) recordBuilder.append("\n  یادآوری: ").append(reminderText);
                 String record = recordBuilder.toString();
                 String old = prefs.getString(key, "");
                 String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
