@@ -865,6 +865,7 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             long amount = parseAmount(s);
             if (amount <= 0) {
                 pendingCategoryVoice = "";
+                pendingShopIncome = false;
                 status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return;
             }
             String title = cleanDescription(s, mode);
