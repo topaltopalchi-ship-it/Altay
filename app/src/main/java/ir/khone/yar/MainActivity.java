@@ -20,6 +20,8 @@ import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
+import android.text.InputType;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -78,6 +80,17 @@ public class MainActivity extends Activity {
         content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+
+        TextView sectionTitle = text("بخش‌های برنامه", 21, dark, true);
+        content.addView(sectionTitle, lp(-1, -2, 0, 0, 0, 8));
+        LinearLayout sectionRow1 = new LinearLayout(this); sectionRow1.setOrientation(LinearLayout.HORIZONTAL);
+        addSectionButton(sectionRow1, "🏠 خانه", "خانه", new String[]{"لوازم خانه","مواد غذایی","قبض آب","قبض برق","قبض گاز","اجاره و شارژ","وسایل برقی","تعمیرات خانه","نظافت و شوینده","سایر مخارج"});
+        addSectionButton(sectionRow1, "🚗 ماشین", "ماشین", new String[]{"روغن موتور","تسمه تایم","بیمه","لاستیک","باتری","لنت ترمز","معاینه فنی","بنزین","تعمیرات","سرویس دوره‌ای"});
+        content.addView(sectionRow1, lp(-1, -2, 0, 0, 0, 6));
+        LinearLayout sectionRow2 = new LinearLayout(this); sectionRow2.setOrientation(LinearLayout.HORIZONTAL);
+        addSectionButton(sectionRow2, "🏪 مغازه", "مغازه", new String[]{"خرید جنس","فروش و درآمد","اجاره مغازه","حقوق کارکنان","قبض‌ها","تجهیزات","تعمیرات","سایر مخارج"});
+        addSectionButton(sectionRow2, "🎓 مدرسه", "مدرسه", new String[]{"شهریه","کتاب و دفتر","لوازم‌التحریر","لباس مدرسه","سرویس مدرسه","غذا و خوراکی","فعالیت‌ها","سایر مخارج"});
+        content.addView(sectionRow2, lp(-1, -2, 0, 0, 0, 14));
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
@@ -240,6 +253,61 @@ public class MainActivity extends Activity {
         }
         // Unknown keys and runtime-only flags are deliberately not imported.
         return false;
+    }
+
+    private void addSectionButton(LinearLayout row, String label, String section, String[] items) {
+        Button b = button(label, Color.WHITE, dark, 18);
+        b.setMinHeight(dp(76));
+        b.setBackground(round(Color.WHITE, 18));
+        b.setElevation(dp(2));
+        b.setOnClickListener(v -> showSectionItems(section, items));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1f);
+        p.setMargins(dp(3), dp(3), dp(3), dp(3));
+        row.addView(b, p);
+    }
+
+    private void showSectionItems(String section, String[] items) {
+        new AlertDialog.Builder(this)
+            .setTitle("هزینه‌های بخش " + section)
+            .setItems(items, (dialog, which) -> showCategoryExpenseDialog(section, items[which]))
+            .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private void showCategoryExpenseDialog(String section, String item) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText amount = new EditText(this);
+        amount.setSingleLine(true);
+        amount.setInputType(InputType.TYPE_CLASS_NUMBER);
+        amount.setHint("مبلغ به تومان");
+        box.addView(amount, new LinearLayout.LayoutParams(-1, -2));
+        EditText note = new EditText(this);
+        note.setSingleLine(true);
+        note.setHint("توضیحات (اختیاری)");
+        box.addView(note, new LinearLayout.LayoutParams(-1, -2));
+        new AlertDialog.Builder(this)
+            .setTitle("ثبت هزینه: " + item)
+            .setView(box)
+            .setPositiveButton("ثبت هزینه", (dialog, which) -> {
+                String raw = normalize(amount.getText().toString()).replace(",", "").replace("٬", "").trim();
+                long value;
+                try { value = Long.parseLong(raw); } catch (Exception e) { value = 0; }
+                if (value <= 0) {
+                    Toast.makeText(this, "لطفاً مبلغ معتبر وارد کن.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String detail = note.getText().toString().trim();
+                expenseTotal += value;
+                prefs.edit().putLong("expense", expenseTotal).apply();
+                addEntry("هزینه " + section + " / " + item, detail.isEmpty() ? item : detail, value);
+                refresh();
+                status.setText("هزینهٔ " + item + " ثبت شد: " + fmt(value) + " تومان");
+                Toast.makeText(this, "هزینه ثبت شد.", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("لغو", null)
+            .show();
     }
 
     private void addVoiceCard(String title, String desc, String mode) {
