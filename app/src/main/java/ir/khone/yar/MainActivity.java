@@ -220,6 +220,10 @@ public class MainActivity extends Activity {
     }
 
     private void showSubcategories(String parentKey, String parentLabel, String parentHint) {
+        if ("school_records".equals(parentKey)) {
+            showSchoolChildrenDialog();
+            return;
+        }
         String[] labels;
         String[] keys;
         String[] hints;
@@ -372,6 +376,88 @@ public class MainActivity extends Activity {
             .setTitle(parentLabel + " • زیرشاخه‌ها")
             .setItems(labels, (dialog, which) -> openCategory(keys[which], labels[which], hints[which]))
             .setNegativeButton("بازگشت", (dialog, which) -> showCategoriesDialog())
+            .show();
+    }
+
+    private void showSchoolChildrenDialog() {
+        String saved = prefs.getString("school_children", "");
+        java.util.ArrayList<String> children = new java.util.ArrayList<>();
+        if (!saved.trim().isEmpty()) {
+            for (String name : saved.split("\\n")) {
+                if (!name.trim().isEmpty() && !children.contains(name.trim())) children.add(name.trim());
+            }
+        }
+        String[] names = children.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle("🎒 مدرسه فرزندان")
+            .setItems(names, (dialog, which) -> showSchoolSectionsDialog(names[which]))
+            .setPositiveButton("➕ افزودن نام فرزند / مدرسه", (dialog, which) -> showAddSchoolChildDialog())
+            .setNeutralButton("بازگشت", (dialog, which) -> showCategoriesDialog())
+            .show();
+    }
+
+    private void showAddSchoolChildDialog() {
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine(true);
+        nameField.setHint("مثلاً آیسل یا مدرسه آیسل");
+        new AlertDialog.Builder(this)
+            .setTitle("نام فرزند یا مدرسه")
+            .setView(nameField)
+            .setPositiveButton("ثبت", (dialog, which) -> {
+                String name = nameField.getText().toString().trim();
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "لطفاً نام را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                name = name.replaceFirst("^(مدرسه|فرزند)\\s+", "").trim();
+                String saved = prefs.getString("school_children", "");
+                java.util.ArrayList<String> names = new java.util.ArrayList<>();
+                if (!saved.trim().isEmpty()) {
+                    for (String item : saved.split("\\n")) {
+                        item = item.trim();
+                        if (!item.isEmpty() && !names.contains(item)) names.add(item);
+                    }
+                }
+                if (!names.contains(name)) names.add(name);
+                StringBuilder out = new StringBuilder();
+                for (String item : names) {
+                    if (out.length() > 0) out.append("\\n");
+                    out.append(item);
+                }
+                prefs.edit().putString("school_children", out.toString()).apply();
+                showSchoolSectionsDialog(name);
+            })
+            .setNegativeButton("انصراف", (dialog, which) -> showSchoolChildrenDialog())
+            .show();
+    }
+
+    private void showSchoolSectionsDialog(String childName) {
+        String[] labels = {
+            "📚 درس‌ها و تکالیف", "⏰ یادآوری‌ها و برنامه مدرسه",
+            "🚌 هزینه سرویس مدرسه", "💳 شهریه و هزینه‌های مدرسه",
+            "📖 کلاس خصوصی و فوق‌برنامه", "🎒 لوازم‌التحریر و لباس فرم",
+            "📝 امتحان‌ها و نمره‌ها", "👩‍🏫 جلسه با معلم و ارتباط با مدرسه",
+            "🧾 سایر هزینه‌ها و یادداشت‌ها"
+        };
+        String[] hints = {
+            "نام درس، تکلیف، صفحه یا تمرین، تاریخ تحویل و وضعیت انجام",
+            "عنوان یادآوری، تاریخ و ساعت؛ مثل جلسه اولیا یا آوردن کتاب",
+            "مبلغ سرویس، نام راننده یا مسیر، موعد پرداخت و وضعیت پرداخت",
+            "شهریه، کمک‌هزینه، اردو، بیمه یا سایر مبالغ؛ مبلغ و سررسید پرداخت",
+            "نام کلاس، معلم، روز و ساعت، شهریه و موعد پرداخت",
+            "فهرست اقلام، تعداد، اندازه، مبلغ و زمان خرید",
+            "نام درس، تاریخ امتحان، موضوع و نتیجه دلخواه برای پیگیری",
+            "نام معلم، زمان جلسه، موضوع گفتگو و پیگیری‌های لازم",
+            "عنوان، مبلغ در صورت نیاز، تاریخ و جزئیات"
+        };
+        String keyBase = "school_child_" + Integer.toHexString(childName.hashCode());
+        String[] keys = new String[labels.length];
+        for (int i = 0; i < labels.length; i++) keys[i] = keyBase + "_sub_" + i;
+        new AlertDialog.Builder(this)
+            .setTitle("مدرسه " + childName)
+            .setItems(labels, (dialog, which) -> openCategory(keys[which], "مدرسه " + childName + " • " + labels[which], hints[which]))
+            .setPositiveButton("➕ افزودن نام دیگر", (dialog, which) -> showAddSchoolChildDialog())
+            .setNegativeButton("بازگشت به فهرست", (dialog, which) -> showSchoolChildrenDialog())
             .show();
     }
 
