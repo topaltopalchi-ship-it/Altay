@@ -808,16 +808,19 @@ public class MainActivity extends Activity {
                         msg = "صدای واضحی تشخیص داده نشد. دوباره بزن و یک جملهٔ کوتاه و شمرده بگو.";
                     } else if (serverError) {
                         msg = "سرویس گفتار پس از تلاش مجدد هم پاسخ نداد. اینترنت و به‌روز بودن Speech Services by Google را بررسی کن.";
-                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                            && (e == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
-                                || e == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)) {
-                        msg = "موتور تشخیص فعلی از فارسی پشتیبانی نمی‌کند؛ زبان فارسی سرویس گفتار Google را فعال یا دانلود کن.";
+                    } else if (e == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
+                            || e == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+                        msg = "زبان فارسی برای سرویس تشخیص گفتار آماده نیست. در تنظیمات برنامهٔ Google یا Speech Services زبان فارسی را فعال یا دانلود کن.";
                     } else if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                         msg = "اجازهٔ میکروفون داده نشده است؛ از تنظیمات گوشی دسترسی میکروفون را فعال کن.";
                     } else if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                        msg = "میکروفون مشغول است. دوباره تلاش کن.";
+                        msg = "میکروفون مشغول است. چند لحظه صبر کن و دوباره تلاش کن.";
+                    } else if (e == SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) {
+                        msg = "درخواست‌های صوتی زیاد شده است. چند ثانیه صبر کن و دوباره بزن.";
+                    } else if (e == SpeechRecognizer.ERROR_CLIENT || e == SpeechRecognizer.ERROR_AUDIO) {
+                        msg = "شروع دریافت صدا با مشکل روبه‌رو شد. دوباره تلاش کن و مطمئن شو برنامهٔ دیگری از میکروفون استفاده نمی‌کند.";
                     } else {
-                        msg = "تشخیص صدا انجام نشد (کد " + e + "). دوباره تلاش کن.";
+                        msg = "تشخیص گفتار انجام نشد. سرویس گفتار Google و زبان فارسی را بررسی کن و دوباره تلاش کن.";
                     }
                     // Keep the selected category/income context until retry or explicit cancellation.
                     status.setText(msg);
