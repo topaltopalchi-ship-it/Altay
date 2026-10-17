@@ -1014,12 +1014,16 @@ public class MainActivity extends Activity {
 
     private boolean isValidBackupPreference(String key, Object value) {
         if (key == null || value == null) return false;
-        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)
-            || "quota_income".equals(key) || "quota_expense".equals(key)
-            || key.matches("quota_record_[a-z0-9_]{1,100}")) {
+        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) {
             if (!(value instanceof Number)) return false;
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
+        }
+        if ("quota_income".equals(key) || "quota_expense".equals(key)
+            || key.matches("quota_record_[a-z0-9_]{1,100}")) {
+            if (!(value instanceof Number)) return false;
+            double number = ((Number) value).doubleValue();
+            return Double.isFinite(number) && number >= 0 && number <= Integer.MAX_VALUE && number == Math.rint(number);
         }
         if ("entries".equals(key) || "vehicleRecords".equals(key) || "school_children".equals(key)
             || "family_members".equals(key)) {
