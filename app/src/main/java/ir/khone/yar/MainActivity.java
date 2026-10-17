@@ -772,14 +772,8 @@ public class MainActivity extends Activity {
 
     private int countCategoryRecords(String key) {
         String saved = prefs.getString(key, "");
-        int count = 0;
-        if (!saved.trim().isEmpty()) {
-            for (String line : saved.split("\\n")) {
-                if (line.trim().startsWith("• ")) count++;
-            }
-        }
-        // Preserve the count for voice-driven entries that do not use a text-list field.
-        return Math.max(count, prefs.getInt("quota_record_" + key, 0));
+        // Preserve voice-driven entries that do not use a text-list field.
+        return FreeQuotaPolicy.countRecords(saved, prefs.getInt("quota_record_" + key, 0));
     }
 
     private boolean canCreateRecord(String key, String label) {
