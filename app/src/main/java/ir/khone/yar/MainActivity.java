@@ -6,7 +6,6 @@ import android.app.AlertDialog;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.os.Build;
-import android.os.Handler;
 import android.provider.Settings;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -402,8 +401,7 @@ public class MainActivity extends Activity {
         if (mode.equals("wake")) {
             if (contains(s, "اوبا", "اُبا", "وبا")) {
                 status.setText("اوبا آماده است؛ حالا نام بخش را بگو: خانه، ماشین، مغازه یا مدرسه.");
-                say("بله، در خدمتم");
-                new Handler(getMainLooper()).postDelayed(() -> startVoice("navigate"), 1300);
+                sayThenListenForNavigation("بله، در خدمتم");
             } else {
                 status.setText("نام اوبا تشخیص داده نشد. دوباره روی میانبر صوتی بزن و بگو «اوبا».");
                 say("لطفاً بگو اوبا");
@@ -828,6 +826,26 @@ public class MainActivity extends Activity {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
+    private void sayThenListenForNavigation(String message) {
+        if (tts == null) {
+            startVoice("navigate");
+            return;
+        }
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) {}
+            @Override public void onDone(String utteranceId) {
+                runOnUiThread(() -> startVoice("navigate"));
+            }
+            @Override public void onError(String utteranceId) {
+                runOnUiThread(() -> status.setText("برای ادامه، نام بخش را لمس کن یا دوباره میانبر صوتی را بزن."));
+            }
+        });
+        int result = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "oba_wake_ack");
+        if (result == TextToSpeech.ERROR) {
+            startVoice("navigate");
+        }
+    }
+
     private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
