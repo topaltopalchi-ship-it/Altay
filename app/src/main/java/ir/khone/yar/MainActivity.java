@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
         addSectionButton(sectionRow1, "🚗 ماشین", "ماشین", new String[]{"روغن موتور","تسمه تایم","بیمه","لاستیک","باتری","لنت ترمز","معاینه فنی","بنزین","تعمیرات","سرویس دوره‌ای"});
         content.addView(sectionRow1, lp(-1, -2, 0, 0, 0, 6));
         LinearLayout sectionRow2 = new LinearLayout(this); sectionRow2.setOrientation(LinearLayout.HORIZONTAL);
-        addSectionButton(sectionRow2, "🏪 مغازه", "مغازه", new String[]{"خرید جنس","فروش و درآمد","اجاره مغازه","حقوق کارکنان","قبض‌ها","تجهیزات","تعمیرات","سایر مخارج"});
+        addSectionButton(sectionRow2, "🏪 مغازه", "مغازه", new String[]{"خرید جنس","بسته‌بندی و فروش","اجاره مغازه","حقوق کارکنان","قبض‌ها","تجهیزات","تعمیرات","سایر مخارج"});
         addSectionButton(sectionRow2, "🎓 مدرسه", "مدرسه", new String[]{"شهریه","کتاب و دفتر","لوازم‌التحریر","لباس مدرسه","سرویس مدرسه","غذا و خوراکی","فعالیت‌ها","سایر مخارج"});
         content.addView(sectionRow2, lp(-1, -2, 0, 0, 0, 14));
 
@@ -267,9 +267,33 @@ public class MainActivity extends Activity {
     }
 
     private void showSectionItems(String section, String[] items) {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(6), dp(8), dp(6));
+        for (int i = 0; i < items.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = i; j < Math.min(i + 2, items.length); j++) {
+                final String selectedItem = items[j];
+                Button itemButton = button(selectedItem, Color.WHITE, dark, 15);
+                itemButton.setMinHeight(dp(58));
+                itemButton.setBackground(round(Color.WHITE, 14));
+                itemButton.setElevation(dp(1));
+                itemButton.setOnClickListener(v -> {
+                    // Open the amount form only after the user chooses a specific category.
+                    showCategoryExpenseDialog(section, selectedItem);
+                });
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1f);
+                p.setMargins(dp(4), dp(4), dp(4), dp(4));
+                row.addView(itemButton, p);
+            }
+            list.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+        scroll.addView(list);
         new AlertDialog.Builder(this)
             .setTitle("هزینه‌های بخش " + section)
-            .setItems(items, (dialog, which) -> showCategoryExpenseDialog(section, items[which]))
+            .setView(scroll)
             .setNegativeButton("بستن", null)
             .show();
     }
