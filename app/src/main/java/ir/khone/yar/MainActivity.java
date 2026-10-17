@@ -646,12 +646,12 @@ public class MainActivity extends Activity {
                     return;
                 }
                 StringBuilder recordBuilder = new StringBuilder("• ").append(title);
-                if (!detail.isEmpty()) recordBuilder.append("\\n  ").append(detail);
+                if (!detail.isEmpty()) recordBuilder.append("\n  ").append(detail);
                 if (!amount.isEmpty()) recordBuilder.append("\\n  مبلغ/مقدار: ").append(amount);
                 if (!reminderText.isEmpty()) recordBuilder.append("\\n  یادآوری: ").append(reminderText);
                 String record = recordBuilder.toString();
                 String old = prefs.getString(key, "");
-                String updated = record + (old.isEmpty() ? "" : "\\n\\n" + old);
+                String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
                 prefs.edit().putString(key, updated).apply();
                 Toast.makeText(this, "در بخش " + label + " ذخیره شد.", Toast.LENGTH_SHORT).show();
                 if (!reminderText.isEmpty()) {
