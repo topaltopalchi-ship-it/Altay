@@ -651,9 +651,24 @@ public class MainActivity extends Activity {
                 if (!reminderText.isEmpty()) recordBuilder.append("\n  یادآوری: ").append(reminderText);
                 String record = recordBuilder.toString();
                 String old = prefs.getString(key, "");
+                boolean repeatedLesson = false;
+                if (key.startsWith("lessons_records") && !old.isEmpty()) {
+                    String normalizedTitle = normalize(title).toLowerCase(Locale.ROOT);
+                    for (String line : old.split("\\n")) {
+                        String prior = line.replaceFirst("^\\s*•\\s*", "").trim();
+                        if (!prior.isEmpty() && normalize(prior).toLowerCase(Locale.ROOT).startsWith(normalizedTitle)) {
+                            repeatedLesson = true;
+                            break;
+                        }
+                    }
+                }
                 String updated = record + (old.isEmpty() ? "" : "\n\n" + old);
                 prefs.edit().putString(key, updated).apply();
-                Toast.makeText(this, "در بخش " + label + " ذخیره شد.", Toast.LENGTH_SHORT).show();
+                String saveMessage = repeatedLesson
+                    ? "⚠️ هشدار: عنوان مشابهی قبلاً در درس‌های خانواده ثبت شده؛ علت و راه پیشگیری قبلی را بررسی کن."
+                    : "در بخش " + label + " ذخیره شد.";
+                Toast.makeText(this, saveMessage, Toast.LENGTH_LONG).show();
+                if (repeatedLesson) { status.setText(saveMessage); say("هشدار. این اشتباه یا تجربه قبلاً ثبت شده است."); }
                 if (!reminderText.isEmpty()) {
                     handleReminderVoice("یادآوری " + title + " " + reminderText, normalize("یادآوری " + title + " " + reminderText));
                 }
