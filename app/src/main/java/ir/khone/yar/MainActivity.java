@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     private Model offlineModel;
     private SpeechService offlineSpeech;
     private volatile boolean modelDownloadInProgress = false;
+    private boolean pendingOfflineVoice = false;
     private static final String OFFLINE_MODEL_NAME = "vosk-model-small-fa-0.42";
     private static final String OFFLINE_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip";
     private Button wakeButton;
@@ -107,7 +108,7 @@ public class MainActivity extends Activity {
         allCategories.setOnClickListener(v -> showCategoriesDialog());
         content.addView(allCategories, lp(-1, -2, 0, 0, 0, 12));
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(236, 105, 157), Color.WHITE, 20);
+        Button speak = button("🌐 صدای آنلاین؛ صحبت کن", Color.rgb(236, 105, 157), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
@@ -1249,9 +1250,11 @@ public class MainActivity extends Activity {
     private void startOfflineVoice(String mode) {
         pendingMode = mode;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingOfflineVoice = true;
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
             return;
         }
+        pendingOfflineVoice = false;
         status.setText("در حال آماده‌سازی تشخیص صدای آفلاین فارسی…");
         new Thread(() -> {
             try {
@@ -1357,7 +1360,12 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == AUDIO_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startVoice(pendingMode);
+        if (requestCode == AUDIO_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+            if (pendingOfflineVoice) {
+                pendingOfflineVoice = false;
+                startOfflineVoice(pendingMode);
+            } else startVoice(pendingMode);
+        }
         else if (requestCode == 46 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startWakeService();
         else { status.setText("برای فرمان صوتی باید اجازهٔ میکروفون بدهی."); say("برای استفاده صوتی اجازه میکروفون لازم است"); }
     }
