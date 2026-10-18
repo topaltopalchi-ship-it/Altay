@@ -148,7 +148,12 @@ public class MainActivity extends Activity {
         smartBtn.setMinHeight(dp(44));
         smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
         content.addView(smartBtn, lp(-1, -2, 0, 2, 0, 4));
-        root.addView(content, new LinearLayout.LayoutParams(-1,0,1));
+        // Keep every home-screen action reachable on short displays by scrolling the content.
+        ScrollView homeScroll = new ScrollView(this);
+        homeScroll.setFillViewport(false);
+        homeScroll.setClipToPadding(false);
+        homeScroll.addView(content, new ScrollView.LayoutParams(-1, -2));
+        root.addView(homeScroll, new LinearLayout.LayoutParams(-1, 0, 1));
         TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
         root.addView(foot, lp(-1,-2,0,8,0,0));
         setContentView(root);
