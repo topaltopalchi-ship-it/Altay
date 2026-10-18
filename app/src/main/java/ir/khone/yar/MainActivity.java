@@ -804,10 +804,23 @@ public class MainActivity extends Activity {
                         return;
                     }
 
-                    String msg;
+                    // Silence or an unclear phrase is normal during voice follow-ups.
+                    // Retry quietly once; never show the disruptive Android-style error dialog.
                     if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        msg = "صدای واضحی تشخیص داده نشد. دوباره بزن و یک جملهٔ کوتاه و شمرده بگو.";
-                    } else if (serverError) {
+                        if (voiceRetryCount < 1) {
+                            voiceRetryCount++;
+                            status.setText("🎙 گوش می‌دهم…");
+                            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                                () -> startVoiceInternal(pendingMode, false), 350L);
+                        } else {
+                            voiceRetryCount = 0;
+                            status.setText("هر وقت آماده‌ای، دوباره صحبت کن.");
+                        }
+                        return;
+                    }
+
+                    String msg;
+                    if (serverError) {
                         msg = "سرویس گفتار پس از تلاش مجدد هم پاسخ نداد. اینترنت و به‌روز بودن Speech Services by Google را بررسی کن.";
                     } else if (e == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
                             || e == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
