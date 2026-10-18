@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
         if (categories.isEmpty()) {
             // Older records predate chart totals; use visible saved entries as a best-effort starting point.
             for (String row : entries) {
-                String[] parts = row.split("\\\\s*•\\\\s*");
+                String[] parts = row.split("\\s*•\\s*");
                 if (parts.length < 3) continue;
                 String category = parts[0].trim();
                 if (!java.util.Arrays.asList(names).contains(category)) continue;
