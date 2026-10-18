@@ -31,7 +31,6 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     private Listener listener;
 
     public void start(Context context, File modelDirectory, Listener callback) {
-        stop();
         stopped = false;
         delivered = false;
         listener = callback;
@@ -64,6 +63,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
 
     public void stop() {
         stopped = true;
+        loader.shutdownNow();
         SpeechService service = speechService;
         speechService = null;
         if (service != null) {
