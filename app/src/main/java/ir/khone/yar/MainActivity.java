@@ -514,14 +514,14 @@ public class MainActivity extends Activity {
                         detailsByCategory.get(category).add((subgroup.isEmpty() ? "" : subgroup + " — ") + item + " : " + fmt(amount) + " تومان");
                     } catch (Exception ignored) {}
                 }
-                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\\n\\n");
+                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\n\n");
                 for (String category : categories) {
                     report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
-                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\\n");
-                    report.append("\\n");
+                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\n");
+                    report.append("\n");
                 }
                 if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-                new AlertDialog.Builder(this).setTitle("مخارج " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
+                new AlertDialog.Builder(this).setTitle("مخارج " + jd + " " + months[jm-1] + " " + jy).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
             }).show();
     }
 
