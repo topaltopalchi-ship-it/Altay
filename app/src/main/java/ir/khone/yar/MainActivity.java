@@ -1277,7 +1277,8 @@ public class MainActivity extends Activity {
                                     if (!recognized.isEmpty()) {
                                         handled = true;
                                         if (offlineSpeech != null) {
-                                            offlineSpeech.stop();
+                                            try { offlineSpeech.stop(); } catch (Exception ignored) {}
+                                            try { offlineSpeech.shutdown(); } catch (Exception ignored) {}
                                             offlineSpeech = null;
                                         }
                                         handleVoice(recognized);
@@ -1876,6 +1877,7 @@ public class MainActivity extends Activity {
         if(recognizer!=null) recognizer.destroy();
         if(offlineSpeech!=null) {
             try { offlineSpeech.stop(); } catch (Exception ignored) {}
+            try { offlineSpeech.shutdown(); } catch (Exception ignored) {}
             offlineSpeech = null;
         }
         if(offlineModel!=null) {
