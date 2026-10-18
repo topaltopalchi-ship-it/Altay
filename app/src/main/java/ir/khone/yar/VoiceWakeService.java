@@ -142,6 +142,7 @@ public class VoiceWakeService extends Service {
     private String normalize(String text) {
         return text.toLowerCase(Locale.ROOT).replace('‌', ' ').replace(" ", "")
             .replace("‌", "").replace("ئ", "ی").replace("ك", "ک").replace("ي", "ی")
+            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا")
             .replace("ه", "ه");
     }
 
