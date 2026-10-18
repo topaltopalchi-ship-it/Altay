@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private OfflineVoskSpeechEngine offlineEngine;
     private Button wakeButton;
     private TextToSpeech tts;
     private String pendingMode = "auto";
@@ -928,8 +929,13 @@ public class MainActivity extends Activity {
         if (installed != null) {
             new AlertDialog.Builder(this)
                 .setTitle("مدل گفتار آفلاین فارسی")
-                .setMessage("مدل فارسی روی گوشی دانلود شده است. اتصال آن به موتور تشخیص گفتار آفلاین هنوز تکمیل نشده؛ فعلاً فرمان صوتی از روش فعلی استفاده می‌کند.")
-                .setPositiveButton("باشه", null)
+                .setMessage("مدل فارسی روی گوشی آماده است. اگر حالت آفلاین را فعال کنی، فرمان‌های صوتی از این به بعد روی گوشی پردازش می‌شوند و به اینترنت نیاز ندارند.")
+                .setNegativeButton("بستن", null)
+                .setPositiveButton("فعال‌کردن حالت آفلاین", (dialog, which) -> {
+                    prefs.edit().putString("speech_engine", "offline").apply();
+                    status.setText("حالت گفتار آفلاین فعال شد. برای فرمان بعدی دکمهٔ صحبت را بزن.");
+                    Toast.makeText(this, "حالت آفلاین فعال شد.", Toast.LENGTH_LONG).show();
+                })
                 .show();
             return;
         }
@@ -949,11 +955,15 @@ public class MainActivity extends Activity {
                         }
                     }
                     @Override public void onInstalled(File modelDirectory) {
-                        status.setText("مدل فارسی دانلود شد؛ اتصال موتور آفلاین در مرحلهٔ بعدی انجام می‌شود.");
+                        status.setText("مدل فارسی دانلود شد؛ می‌توانی حالت آفلاین را فعال کنی.");
                         new AlertDialog.Builder(MainActivity.this)
                             .setTitle("دانلود کامل شد")
-                            .setMessage("مدل فارسی روی گوشی ذخیره شد. تشخیص گفتار آفلاین هنوز فعال نشده و باید در مرحلهٔ بعد به موتور صوتی متصل شود.")
-                            .setPositiveButton("باشه", null)
+                            .setMessage("مدل فارسی روی گوشی ذخیره شد. برای استفاده از آن، حالت آفلاین را فعال کن.")
+                            .setNegativeButton("بعداً", null)
+                            .setPositiveButton("فعال‌کردن حالت آفلاین", (d, w) -> {
+                                prefs.edit().putString("speech_engine", "offline").apply();
+                                status.setText("حالت گفتار آفلاین فعال شد. برای فرمان بعدی دکمهٔ صحبت را بزن.");
+                            })
                             .show();
                     }
                     @Override public void onError(String message) {
@@ -969,8 +979,43 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    private void startOfflineVoice(String mode) {
+        File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (modelDirectory == null) {
+            status.setText("برای گفتار آفلاین ابتدا مدل فارسی را دانلود کن.");
+            showOfflineModelConsent();
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
+        }
+        try {
+            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
+            if (offlineEngine != null) offlineEngine.stop();
+            offlineEngine = new OfflineVoskSpeechEngine();
+            offlineEngine.start(this, modelDirectory, new OfflineVoskSpeechEngine.Listener() {
+                @Override public void onStatus(String message) {
+                    if (status != null) status.setText(message);
+                }
+                @Override public void onText(String text) {
+                    if (status != null) status.setText("شنیدم: «" + text + "»");
+                    handleVoice(text);
+                }
+                @Override public void onError(String message) {
+                    if (status != null) status.setText(message);
+                    say(message);
+                }
+            });
+        } catch (Exception e) {
+            status.setText("شروع گفتار آفلاین ممکن نشد؛ مدل را بررسی کن و دوباره تلاش کن.");
+        }
+    }
+
     private void startVoice(String mode) {
         pendingMode = mode;
+        if ("offline".equals(prefs.getString("speech_engine", "online"))) { startOfflineVoice(mode); return; }
+        if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
             say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
@@ -1621,6 +1666,7 @@ public class MainActivity extends Activity {
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
+        if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
         if(recognizer!=null) recognizer.destroy();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
