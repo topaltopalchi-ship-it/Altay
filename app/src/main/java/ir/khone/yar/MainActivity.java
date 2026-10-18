@@ -104,6 +104,7 @@ public class MainActivity extends Activity {
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
         speak.setMinHeight(dp(52)); speak.setOnClickListener(v -> startVoice("auto"));
+        speak.setOnLongClickListener(v -> { showOfflineModelConsent(); return true; });
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
@@ -915,6 +916,57 @@ public class MainActivity extends Activity {
         TextView d = text(desc,13,Color.DKGRAY,false); card.addView(d, lp(-1,-2,0,4,0,0));
         card.setOnClickListener(v -> startVoice(mode));
         LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
+    }
+
+
+    /**
+     * Long-press the existing voice button to manage the optional offline Persian model.
+     * This adds no visible UI element and never downloads without explicit consent.
+     */
+    private void showOfflineModelConsent() {
+        File installed = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (installed != null) {
+            new AlertDialog.Builder(this)
+                .setTitle("مدل گفتار آفلاین فارسی")
+                .setMessage("مدل فارسی روی گوشی دانلود شده است. اتصال آن به موتور تشخیص گفتار آفلاین هنوز تکمیل نشده؛ فعلاً فرمان صوتی از روش فعلی استفاده می‌کند.")
+                .setPositiveButton("باشه", null)
+                .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("دانلود مدل گفتار آفلاین فارسی")
+            .setMessage("برای دریافت مدل فارسی Vosk حدود ۵۳ مگابایت اینترنت لازم است و پس از نصب فضای بیشتری روی گوشی اشغال می‌شود. پس از دانلود، مدل روی همین گوشی ذخیره خواهد شد. دانلود فقط با تأیید تو شروع می‌شود. بهتر است از Wi‑Fi استفاده کنی.")
+            .setNegativeButton("فعلاً نه", null)
+            .setPositiveButton("موافقم؛ دانلود کن", (dialog, which) -> {
+                status.setText("در حال دانلود مدل گفتار آفلاین فارسی…");
+                OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
+                    @Override public void onProgress(long downloadedBytes, long totalBytes) {
+                        if (totalBytes > 0) {
+                            int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
+                            status.setText("دریافت مدل گفتار آفلاین: " + percent + "%");
+                        } else {
+                            status.setText("در حال دریافت مدل گفتار آفلاین فارسی…");
+                        }
+                    }
+                    @Override public void onInstalled(File modelDirectory) {
+                        status.setText("مدل فارسی دانلود شد؛ اتصال موتور آفلاین در مرحلهٔ بعدی انجام می‌شود.");
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("دانلود کامل شد")
+                            .setMessage("مدل فارسی روی گوشی ذخیره شد. تشخیص گفتار آفلاین هنوز فعال نشده و باید در مرحلهٔ بعد به موتور صوتی متصل شود.")
+                            .setPositiveButton("باشه", null)
+                            .show();
+                    }
+                    @Override public void onError(String message) {
+                        status.setText("دانلود مدل ناموفق بود: " + message);
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("دانلود ناموفق بود")
+                            .setMessage(message + "\\nمی‌توانی بعداً دوباره تلاش کنی.")
+                            .setPositiveButton("باشه", null)
+                            .show();
+                    }
+                });
+            })
+            .show();
     }
 
     private void startVoice(String mode) {
