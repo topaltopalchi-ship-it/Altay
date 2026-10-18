@@ -262,7 +262,46 @@ public class MainActivity extends Activity {
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
         new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> showCategoryExpenseForm(category, groups[which])).setNegativeButton("انصراف", null).show();
+            .setItems(groups, (dialog, which) -> showEntryMethodDialog(category, groups[which]))
+            .setNegativeButton("انصراف", null).show();
+    }
+
+    private void showEntryMethodDialog(String category, String subgroup) {
+        LinearLayout choices = new LinearLayout(this);
+        choices.setOrientation(LinearLayout.VERTICAL);
+        choices.setPadding(dp(18), dp(8), dp(18), dp(8));
+
+        Button manual = button("⌨️  ثبت دستی", Color.WHITE, Color.WHITE, 17);
+        manual.setMinHeight(dp(54));
+        manual.setOnClickListener(v -> {
+            // Close the method chooser before opening the manual form.
+            showCategoryExpenseForm(category, subgroup);
+        });
+        choices.addView(manual, lp(-1, -2, 0, 4, 0, 8));
+
+        Button voice = button("🎙  ثبت صوتی", Color.WHITE, Color.WHITE, 17);
+        voice.setMinHeight(dp(54));
+        voice.setOnClickListener(v -> {
+            status.setText("برای «" + category + " / " + subgroup + "» هزینه و مبلغ را بگو.");
+            startVoice("auto");
+        });
+        choices.addView(voice, lp(-1, -2, 0, 0, 0, 4));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(category + " ← " + subgroup)
+            .setView(choices)
+            .setNegativeButton("انصراف", null)
+            .create();
+        manual.setOnClickListener(v -> {
+            dialog.dismiss();
+            showCategoryExpenseForm(category, subgroup);
+        });
+        voice.setOnClickListener(v -> {
+            dialog.dismiss();
+            status.setText("برای «" + category + " / " + subgroup + "» هزینه و مبلغ را بگو.");
+            startVoice("auto");
+        });
+        dialog.show();
     }
 
     private void showCategoryExpenseForm(String category, String subgroup) {
