@@ -144,6 +144,78 @@ public class MainActivity extends Activity {
         calendarBtn.setMinHeight(dp(48));
         calendarBtn.setOnClickListener(v -> showExpenseCalendar());
         content.addView(calendarBtn, lp(-1, -2, 0, 2, 0, 6));
+
+    /** Opens a tappable calculator screen; the voice entry action stays below the keypad. */
+    private void showCalculatorScreen() {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(14), dp(12), dp(14), dp(12));
+
+        EditText expression = new EditText(this);
+        expression.setSingleLine(true);
+        expression.setTextDirection(View.TEXT_DIRECTION_LTR);
+        expression.setGravity(Gravity.CENTER);
+        expression.setTextSize(24);
+        expression.setHint("مثلاً ۲۰۰۰۰۰ + ۳۰");
+        panel.addView(expression, lp(-1, dp(58), 0, 0, 0, 10));
+
+        TextView result = text("نتیجه: —", 19, dark, true);
+        result.setGravity(Gravity.CENTER);
+        panel.addView(result, lp(-1, -2, 0, 4, 0, 8));
+
+        String[][] keys = {
+            {"۷","۸","۹","÷"}, {"۴","۵","۶","×"}, {"۱","۲","۳","−"}, {"۰","۰۰","⌫","+"}
+        };
+        for (String[] rowKeys : keys) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (String key : rowKeys) {
+                Button keyButton = button(key, Color.WHITE, dark, 19);
+                keyButton.setMinHeight(dp(48));
+                LinearLayout.LayoutParams kp = new LinearLayout.LayoutParams(0, dp(50), 1);
+                kp.setMargins(dp(3), dp(2), dp(3), dp(2));
+                keyButton.setOnClickListener(v -> {
+                    String current = expression.getText().toString();
+                    if ("⌫".equals(key)) {
+                        if (!current.isEmpty()) expression.setText(current.substring(0, current.length()-1));
+                    } else {
+                        String addition = key.replace("÷", "/").replace("×", "*").replace("−", "-");
+                        expression.append(addition);
+                    }
+                });
+                row.addView(keyButton, kp);
+            }
+            panel.addView(row, lp(-1, -2, 0, 0, 0, 0));
+        }
+
+        Button calculate = button("＝ محاسبه", Color.rgb(42, 72, 170), Color.WHITE, 18);
+        calculate.setMinHeight(dp(50));
+        calculate.setOnClickListener(v -> {
+            try {
+                double value = VoiceCalculator.evaluate(expression.getText().toString());
+                result.setText("نتیجه: " + fmt(Math.round(value)));
+            } catch (Exception ex) {
+                result.setText("عبارت را بررسی کن");
+                Toast.makeText(this, ex.getMessage() == null ? "محاسبه نامعتبر است" : ex.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+        panel.addView(calculate, lp(-1, -2, 0, 8, 0, 8));
+
+        Button voice = button("🎙️ ثبت صوتی", Color.TRANSPARENT, dark, 17);
+        voice.setMinHeight(dp(48));
+        voice.setOnClickListener(v -> {
+            status.setText("عبارت ریاضی را بگو؛ مثلاً «ماشین حساب ۲۰۰ جمع ۳۰»");
+            startVoice("calc");
+        });
+        panel.addView(voice, lp(-1, -2, 0, 0, 0, 2));
+
+        new AlertDialog.Builder(this)
+            .setTitle("🧮 ماشین حساب")
+            .setView(panel)
+            .setPositiveButton("بستن", null)
+            .show();
+    }
+
         Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
         smartBtn.setMinHeight(dp(44));
         smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
