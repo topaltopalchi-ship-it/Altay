@@ -136,6 +136,10 @@ public class MainActivity extends Activity {
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
+        Button inventoryBtn = button("📦 موجودی", Color.rgb(224, 240, 255), dark, 16);
+        inventoryBtn.setMinHeight(dp(48));
+        inventoryBtn.setOnClickListener(v -> showInventoryScreen());
+        content.addView(inventoryBtn, lp(-1, -2, 0, 2, 0, 2));
         Button calendarBtn = button("🗓️ تقویم مخارج روزانه", Color.rgb(224, 240, 255), dark, 15);
         calendarBtn.setMinHeight(dp(48));
         calendarBtn.setOnClickListener(v -> showExpenseCalendar());
@@ -1321,6 +1325,17 @@ public class MainActivity extends Activity {
         String msg = item + " به مبلغ " + fmt(amount) + " تومان ثبت شد؛ یک قلم به موجودی اضافه شد و هزینه از حساب خانه کم شد.";
         if (budget > 0) msg += " مانده بودجه " + fmt(budget - expenseTotal) + " تومان است.";
         status.setText(msg); say(msg); refresh();
+    }
+
+    private void showInventoryScreen() {
+        inventoryView = text("", 17, dark, false);
+        inventoryView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        refreshInventory();
+        new AlertDialog.Builder(this)
+            .setTitle("📦 موجودی")
+            .setView(inventoryView)
+            .setPositiveButton("بستن", null)
+            .show();
     }
 
     private void refreshInventory() {
