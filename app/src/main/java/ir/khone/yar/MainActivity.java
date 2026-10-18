@@ -149,6 +149,24 @@ public class MainActivity extends Activity {
         calendarBtn.setOnClickListener(v -> showExpenseCalendar());
         content.addView(calendarBtn, lp(-1, -2, 0, 2, 0, 6));
 
+        Button calculatorBtn = button("🧮 ماشین حساب", Color.rgb(224, 240, 255), dark, 16);
+        calculatorBtn.setMinHeight(dp(48));
+        calculatorBtn.setOnClickListener(v -> showCalculatorScreen());
+        content.addView(calculatorBtn, lp(-1, -2, 0, 2, 0, 2));
+
+        Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
+        smartBtn.setMinHeight(dp(44));
+        smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
+        content.addView(smartBtn, lp(-1, -2, 0, 2, 0, 4));
+        root.addView(content, new LinearLayout.LayoutParams(-1,0,1));
+        TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
+        root.addView(foot, lp(-1,-2,0,8,0,0));
+        setContentView(root);
+        refresh();
+    }
+
+
+
     /** Opens a tappable calculator screen; the voice entry action stays below the keypad. */
     private void showCalculatorScreen() {
         LinearLayout panel = new LinearLayout(this);
@@ -183,8 +201,7 @@ public class MainActivity extends Activity {
                     if ("⌫".equals(key)) {
                         if (!current.isEmpty()) expression.setText(current.substring(0, current.length()-1));
                     } else {
-                        String addition = key.replace("÷", "/").replace("×", "*").replace("−", "-");
-                        expression.append(addition);
+                        expression.append(key.replace("÷", "/").replace("×", "*").replace("−", "-"));
                     }
                 });
                 row.addView(keyButton, kp);
@@ -219,19 +236,6 @@ public class MainActivity extends Activity {
             .setPositiveButton("بستن", null)
             .show();
     }
-
-        Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
-        smartBtn.setMinHeight(dp(44));
-        smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
-        content.addView(smartBtn, lp(-1, -2, 0, 2, 0, 4));
-        root.addView(content, new LinearLayout.LayoutParams(-1,0,1));
-        TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
-        root.addView(foot, lp(-1,-2,0,8,0,0));
-        setContentView(root);
-        refresh();
-    }
-
-
 
 
     private static final int[] CHART_COLORS = new int[]{Color.rgb(52,152,219), Color.rgb(46,204,113), Color.rgb(243,156,18), Color.rgb(155,89,182), Color.rgb(231,76,60), Color.rgb(26,188,156), Color.rgb(241,196,15)};
