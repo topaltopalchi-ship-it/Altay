@@ -516,7 +516,7 @@ public class MainActivity extends Activity {
                 }
                 StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\n\n");
                 for (String category : categories) {
-                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
+                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\n");
                     for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\n");
                     report.append("\n");
                 }
