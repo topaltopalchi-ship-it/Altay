@@ -519,60 +519,6 @@ public class MainActivity extends Activity {
             }).show();
     }
 
-        Calendar today = Calendar.getInstance();
-        new android.app.DatePickerDialog(this, (picker, year, month, day) -> {
-            Calendar selected = Calendar.getInstance();
-            selected.set(year, month, day, 0, 0, 0);
-            selected.set(Calendar.MILLISECOND, 0);
-            long start = selected.getTimeInMillis();
-            selected.add(Calendar.DAY_OF_MONTH, 1);
-            long end = selected.getTimeInMillis();
-
-            String history = prefs.getString("oba_expense_history", "");
-            java.util.LinkedHashMap<String, Long> totalsByCategory = new java.util.LinkedHashMap<>();
-            java.util.LinkedHashMap<String, java.util.List<String>> detailsByCategory = new java.util.LinkedHashMap<>();
-            String[] categories = {"خانه", "مدرسه", "ماشین", "سلامت", "سایر"};
-            for (String category : categories) {
-                totalsByCategory.put(category, 0L);
-                detailsByCategory.put(category, new java.util.ArrayList<>());
-            }
-            long dayTotal = 0L;
-            if (!history.trim().isEmpty()) {
-                for (String row : history.split("\\n")) {
-                    String[] parts = row.split("\\t", -1);
-                    if (parts.length < 5) continue;
-                    try {
-                        long timestamp = Long.parseLong(parts[0]);
-                        if (timestamp < start || timestamp >= end) continue;
-                        String category = parts[1].trim();
-                        if (!totalsByCategory.containsKey(category)) category = "سایر";
-                        long amount = Long.parseLong(parts[4]);
-                        totalsByCategory.put(category, totalsByCategory.get(category) + amount);
-                        dayTotal += amount;
-                        String subgroup = parts[2].trim();
-                        String item = parts[3].trim();
-                        String description = (subgroup.isEmpty() ? "" : subgroup + " — ") + item + " : " + fmt(amount) + " تومان";
-                        detailsByCategory.get(category).add(description);
-                    } catch (Exception ignored) { }
-                }
-            }
-            StringBuilder report = new StringBuilder();
-            report.append("مجموع مخارج: ").append(fmt(dayTotal)).append(" تومان\\n\\n");
-            for (String category : categories) {
-                long amount = totalsByCategory.get(category);
-                report.append("● ").append(category).append(": ").append(fmt(amount)).append(" تومان\\n");
-                for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\\n");
-                report.append("\\n");
-            }
-            if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-            String dateText = String.format(java.util.Locale.getDefault(), "%04d/%02d/%02d", year, month + 1, day);
-            new AlertDialog.Builder(this)
-                .setTitle("مخارج روز " + dateText)
-                .setMessage(report.toString().trim())
-                .setPositiveButton("باشه", null)
-                .setNeutralButton("انتخاب روز دیگر", (dialog, which) -> showExpenseCalendar())
-                .show();
-        }, today.get(Calendar.YEAR), today.get(Calendar.MONTH), today.get(Calendar.DAY_OF_MONTH)).show();
     }
 
     private void showExpenseArchive() {
