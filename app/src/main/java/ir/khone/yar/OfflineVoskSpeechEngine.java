@@ -97,7 +97,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         delivered = true;
         Listener callback = listener;
         if (callback != null) main.post(() -> {
-            if (!stopped) callback.onText(text);
+            callback.onText(text);
         });
         stop();
     }
@@ -127,6 +127,6 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
 
     private void postError(String message) {
         Listener callback = listener;
-        if (callback != null) main.post(() -> { if (!stopped) callback.onError(message); });
+        if (callback != null) main.post(() -> callback.onError(message));
     }
 }
