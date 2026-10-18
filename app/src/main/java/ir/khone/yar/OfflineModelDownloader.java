@@ -77,6 +77,7 @@ public final class OfflineModelDownloader {
 
                 long total = connection.getContentLength();
                 long downloaded = 0;
+                long lastProgressReport = 0;
                 try (InputStream in = new BufferedInputStream(connection.getInputStream());
                      FileOutputStream out = new FileOutputStream(stagingZip)) {
                     byte[] buffer = new byte[16384];
@@ -84,8 +85,11 @@ public final class OfflineModelDownloader {
                     while ((count = in.read(buffer)) != -1) {
                         out.write(buffer, 0, count);
                         downloaded += count;
-                        final long progress = downloaded;
-                        MAIN.post(() -> callback.onProgress(progress, total));
+                        if (downloaded - lastProgressReport >= 262144 || (total > 0 && downloaded >= total)) {
+                            final long progress = downloaded;
+                            MAIN.post(() -> callback.onProgress(progress, total));
+                            lastProgressReport = downloaded;
+                        }
                     }
                     out.getFD().sync();
                 }
