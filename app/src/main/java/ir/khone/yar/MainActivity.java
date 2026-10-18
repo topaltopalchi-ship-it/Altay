@@ -1113,8 +1113,9 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             else if (contains(spoken, "سلامت", "دکتر", "درمان")) showCategorySubgroups("سلامت");
             else if (contains(spoken, "سایر", "متفرقه")) showCategorySubgroups("سایر");
             else {
-                status.setText("بخش را متوجه نشدم؛ بگو خانه، ماشین، مغازه یا مدرسه.");
-                say("نام بخش را دوباره بگو");
+                String retryMessage = "بخش را متوجه نشدم؛ خانه، ماشین، مغازه، مدرسه، سلامت یا سایر را بگو.";
+                status.setText(retryMessage);
+                sayThenListenForNavigation(retryMessage);
             }
             return;
         }
@@ -1614,8 +1615,8 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void sayThenListenForNavigation(String message) {
         if (tts == null || !ttsReady) {
-            status.setText("بویور؛ حالا نام بخش را بگو و برای ادامه دکمهٔ صوتی را بزن.");
-            say(message);
+            status.setText("بله، در خدمتم؛ حالا نام بخش را بگو.");
+            startVoice("navigate");
             return;
         }
         tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
@@ -1624,7 +1625,10 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
                 if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> startVoice("navigate"));
             }
             @Override public void onError(String utteranceId) {
-                if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> status.setText("برای ادامه، نام بخش را لمس کن یا دوباره میانبر صوتی را بزن."));
+                if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> {
+                    status.setText("بله، در خدمتم؛ نام بخش را بگو.");
+                    startVoice("navigate");
+                });
             }
         });
         int result = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "oba_wake_ack");
