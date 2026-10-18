@@ -136,6 +136,10 @@ public class MainActivity extends Activity {
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
+        Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
+        smartBtn.setMinHeight(dp(44));
+        smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
+        content.addView(smartBtn, lp(-1, -2, 0, 2, 0, 4));
         root.addView(content, new LinearLayout.LayoutParams(-1,0,1));
         TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
         root.addView(foot, lp(-1,-2,0,8,0,0));
@@ -147,6 +151,77 @@ public class MainActivity extends Activity {
 
 
     private static final int[] CHART_COLORS = new int[]{Color.rgb(52,152,219), Color.rgb(46,204,113), Color.rgb(243,156,18), Color.rgb(155,89,182), Color.rgb(231,76,60), Color.rgb(26,188,156), Color.rgb(241,196,15)};
+
+    private void showSmartExpenseAnalysis() {
+        java.util.LinkedHashMap<String, Long> categories = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Long> subgroups = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Long> items = new java.util.LinkedHashMap<>();
+        String[] names = new String[]{"خانه", "مدرسه", "ماشین", "مغازه", "سلامت", "سایر"};
+        long all = 0;
+        for (String name : names) {
+            long amount = prefs.getLong("oba_chart_cat_" + name, 0L);
+            if (amount > 0) { categories.put(name, amount); all += amount; }
+            for (String subgroup : subgroupNames(name)) {
+                long sub = prefs.getLong("oba_chart_sub_" + name + "_" + subgroup, 0L);
+                if (sub > 0) subgroups.put(name + " / " + subgroup, sub);
+            }
+        }
+        // Use only explicitly described, categorized purchases for item-level insights.
+        for (String name : names) {
+            for (String subgroup : subgroupNames(name)) {
+                String prefix = "oba_smart_item_" + name + "_" + subgroup + "_";
+                java.util.Map<String, ?> allPrefs = prefs.getAll();
+                for (String key : allPrefs.keySet()) {
+                    if (!key.startsWith(prefix)) continue;
+                    Object value = allPrefs.get(key);
+                    if (value instanceof Long && ((Long)value) > 0) {
+                        String label = key.substring(prefix.length()).replace('_', ' ').trim();
+                        items.put(name + " / " + label, ((Long)value));
+                    }
+                }
+            }
+        }
+        if (categories.isEmpty() && subgroups.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("🧠 تحلیل هوشمند هزینه‌ها")
+                .setMessage("برای تحلیل دقیق، هزینه‌ها را از دکمه‌های دسته‌بندی ثبت کن و در شرح خرید نام مورد را هم بنویس؛ مثلاً «نان» یا «سینما». هرچه ثبت‌ها کامل‌تر باشد، پیشنهادها مفیدتر می‌شوند.")
+                .setPositiveButton("متوجه شدم", null).show();
+            return;
+        }
+        StringBuilder report = new StringBuilder();
+        report.append("🧠 گزارش هزینه‌ها\\n\\n");
+        if (all > 0) report.append("مجموع هزینه‌های دسته‌بندی‌شده: ").append(fmt(all)).append(" تومان\\n\\n");
+        java.util.ArrayList<java.util.Map.Entry<String, Long>> ranked = new java.util.ArrayList<>(subgroups.entrySet());
+        java.util.Collections.sort(ranked, (a,b) -> Long.compare(b.getValue(), a.getValue()));
+        if (!ranked.isEmpty()) {
+            report.append("بیشترین محل‌های خرج ثبت‌شده:\\n");
+            int limit = Math.min(5, ranked.size());
+            for (int i=0; i<limit; i++) {
+                java.util.Map.Entry<String,Long> e = ranked.get(i);
+                double pct = all > 0 ? e.getValue()*100.0/all : 0;
+                report.append("• ").append(e.getKey()).append(" — ").append(fmt(e.getValue())).append(" تومان");
+                if (all > 0) report.append(" ( ").append(String.format(Locale.getDefault(), "%.1f", pct)).append("٪ از کل )");
+                report.append("\\n");
+            }
+            report.append("\\n");
+        }
+        java.util.ArrayList<java.util.Map.Entry<String, Long>> topItems = new java.util.ArrayList<>(items.entrySet());
+        java.util.Collections.sort(topItems, (a,b) -> Long.compare(b.getValue(), a.getValue()));
+        if (!topItems.isEmpty()) {
+            report.append("خریدهای دارای شرح که بیشترین مبلغ را دارند:\\n");
+            for (int i=0; i<Math.min(5, topItems.size()); i++) {
+                java.util.Map.Entry<String,Long> e=topItems.get(i);
+                report.append("• ").append(e.getKey()).append(" — ").append(fmt(e.getValue())).append(" تومان\\n");
+            }
+            report.append("\\n");
+        }
+        report.append("💡 پیشنهادهای صرفه‌جویی:\\n")
+            .append("• برای نان و خوراکی‌ها، خرید روزانه را با نیاز واقعی خانواده هماهنگ کن تا دورریز کم شود.\\n")
+            .append("• برای سینما و تفریح، یک سقف ماهانه تعیین کن و پیش از خرید بلیت، هزینهٔ کل خانواده را بررسی کن.\\n")
+            .append("• هزینه‌های تکراری را هفته‌ای یک‌بار مرور کن و برای هر مورد سقف قابل‌قبول بگذار.\\n\\n")
+            .append("توجه: این گزارش بر اساس مبالغ ثبت‌شده است؛ تا وقتی سابقهٔ زمانی کافی وجود نداشته باشد، اوبا نمی‌تواند با قطعیت بگوید خرجی نسبت به ماه قبل زیاد شده است. برای هشدار دقیق‌تر، نام خرید و مبلغ را در شرح هزینه ثبت کن.");
+        new AlertDialog.Builder(this).setTitle("🧠 تحلیل هوشمند هزینه‌ها")
+            .setMessage(report.toString()).setPositiveButton("باشه", null).show();
+    }
 
     private void showExpenseCharts() {
         java.util.LinkedHashMap<String, Long> categories = new java.util.LinkedHashMap<>();
@@ -1209,6 +1284,17 @@ public class MainActivity extends Activity {
             prefs.edit().putLong("oba_chart_cat_" + type, prefs.getLong("oba_chart_cat_" + type, 0L) + amount).apply();
             String subgroup = title.split(" — ", 2)[0].trim();
             if (!subgroup.isEmpty()) prefs.edit().putLong("oba_chart_sub_" + type + "_" + subgroup, prefs.getLong("oba_chart_sub_" + type + "_" + subgroup, 0L) + amount).apply();
+            String[] titleParts = title.split(" — ", 2);
+            if (titleParts.length > 1) {
+                String item = titleParts[1].trim();
+                if (!item.isEmpty()) {
+                    String safeItem = item.replaceAll("[^\\\\p{L}\\\\p{N} ]", "").trim().replace(' ', '_');
+                    if (!safeItem.isEmpty()) {
+                        String itemKey = "oba_smart_item_" + type + "_" + subgroup + "_" + safeItem;
+                        prefs.edit().putLong(itemKey, prefs.getLong(itemKey, 0L) + amount).apply();
+                    }
+                }
+            }
         }
         String row = type + " • " + title + (amount>0 ? " • " + fmt(amount) + " تومان" : "");
         entries.add(0,row); while(entries.size()>12) entries.remove(entries.size()-1);
