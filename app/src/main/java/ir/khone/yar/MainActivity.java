@@ -332,10 +332,11 @@ public class MainActivity extends Activity {
         if ("خانه".equals(category)) {
             groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "📄 اسکن مدارک خانه", "سایر هزینه‌های خانه"};
         }
+        final String[] subgroupOptions = groups;
         new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> {
-                if ("خانه".equals(category) && "📄 اسکن مدارک خانه".equals(groups[which])) showHomeDocuments();
-                else showEntryMethodDialog(category, groups[which]);
+            .setItems(subgroupOptions, (dialog, which) -> {
+                if ("خانه".equals(category) && "📄 اسکن مدارک خانه".equals(subgroupOptions[which])) showHomeDocuments();
+                else showEntryMethodDialog(category, subgroupOptions[which]);
             }).setNegativeButton("انصراف", null).show();
     }
 
