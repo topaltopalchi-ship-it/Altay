@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: oba-vosk-fa
+    runtime: docker
+    plan: free
+    dockerfilePath: ./server/vosk/Dockerfile
+    dockerContext: ./server/vosk
+    healthCheckPath: /health
+    autoDeploy: false
