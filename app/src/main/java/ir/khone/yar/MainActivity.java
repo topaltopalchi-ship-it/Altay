@@ -36,12 +36,28 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import org.json.JSONObject;
 import org.json.JSONException;
+import org.vosk.Model;
+import org.vosk.Recognizer;
+import org.vosk.android.SpeechService;
+import org.vosk.android.RecognitionListener;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.BufferedInputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
     private TextView status, totals, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private Model offlineModel;
+    private SpeechService offlineSpeech;
+    private volatile boolean modelDownloadInProgress = false;
+    private static final String OFFLINE_MODEL_NAME = "vosk-model-small-fa-0.42";
+    private static final String OFFLINE_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip";
     private Button wakeButton;
     private TextToSpeech tts;
     private String pendingMode = "auto";
@@ -98,6 +114,10 @@ public class MainActivity extends Activity {
         Button languageSettings = button("🌐 تنظیم زبان فارسی برای صدا", Color.rgb(112, 54, 83), Color.WHITE, 16);
         languageSettings.setOnClickListener(v -> showPersianVoiceSettings());
         content.addView(languageSettings, lp(-1, -2, 0, 2, 0, 8));
+
+        Button offlineVoice = button("📴 صدای آفلاین فارسی (بدون اینترنت)", Color.rgb(72, 132, 105), Color.WHITE, 16);
+        offlineVoice.setOnClickListener(v -> requestOfflineVoice());
+        content.addView(offlineVoice, lp(-1, -2, 0, 2, 0, 10));
 
         EditText typedCommand = new EditText(this);
         typedCommand.setSingleLine(false);
@@ -1128,6 +1148,171 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
     }
 
+
+    private File getOfflineModelDirectory() {
+        return new File(getFilesDir(), OFFLINE_MODEL_NAME);
+    }
+
+    private void requestOfflineVoice() {
+        File modelDir = getOfflineModelDirectory();
+        if (new File(modelDir, "conf").isDirectory() && new File(modelDir, "am").isDirectory()) {
+            startOfflineVoice(pendingMode);
+            return;
+        }
+        if (modelDownloadInProgress) {
+            status.setText("دانلود مدل فارسی هنوز در حال انجام است؛ لطفاً صبر کن.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("تشخیص صدای آفلاین فارسی")
+            .setMessage("برای فعال شدن گفتار فارسی بدون اینترنت، یک مدل حدود ۵۳ مگابایتی یک‌بار دانلود و روی همین گوشی ذخیره می‌شود. ادامه می‌دهی؟ اگر انصراف بدهی، دکمه صدای آنلاین همچنان در دسترس است.")
+            .setNegativeButton("فعلاً نه", (dialog, which) ->
+                status.setText("حالت آنلاین همچنان فعال است؛ برای استفاده آفلاین هر وقت خواستی این دکمه را بزن."))
+            .setPositiveButton("دانلود مدل", (dialog, which) -> downloadOfflineModel())
+            .show();
+    }
+
+    private void downloadOfflineModel() {
+        if (modelDownloadInProgress) return;
+        modelDownloadInProgress = true;
+        status.setText("در حال دانلود مدل فارسی آفلاین؛ لطفاً اینترنت را قطع نکن…");
+        new Thread(() -> {
+            File zipFile = new File(getFilesDir(), "vosk-fa-model.zip");
+            File extractDir = new File(getFilesDir(), "vosk-model-extract");
+            boolean success = false;
+            try {
+                HttpURLConnection connection = (HttpURLConnection) new URL(OFFLINE_MODEL_URL).openConnection();
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(45000);
+                connection.setInstanceFollowRedirects(true);
+                connection.setRequestProperty("User-Agent", "OBA-Android");
+                try (java.io.InputStream input = new BufferedInputStream(connection.getInputStream());
+                     FileOutputStream output = new FileOutputStream(zipFile)) {
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                } finally {
+                    connection.disconnect();
+                }
+                if (extractDir.exists()) deleteRecursively(extractDir);
+                if (!extractDir.mkdirs() && !extractDir.isDirectory()) throw new java.io.IOException("Cannot create extraction directory");
+                try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(new java.io.FileInputStream(zipFile)))) {
+                    ZipEntry entry;
+                    String root = extractDir.getCanonicalPath() + File.separator;
+                    while ((entry = zip.getNextEntry()) != null) {
+                        File out = new File(extractDir, entry.getName());
+                        String canonical = out.getCanonicalPath();
+                        if (!canonical.startsWith(root)) throw new java.io.IOException("Unsafe model archive entry");
+                        if (entry.isDirectory()) {
+                            if (!out.isDirectory() && !out.mkdirs()) throw new java.io.IOException("Cannot create model directory");
+                        } else {
+                            File parent = out.getParentFile();
+                            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new java.io.IOException("Cannot create model folder");
+                            try (FileOutputStream output = new FileOutputStream(out)) {
+                                byte[] buffer = new byte[8192];
+                                int count;
+                                while ((count = zip.read(buffer)) != -1) output.write(buffer, 0, count);
+                            }
+                        }
+                        zip.closeEntry();
+                    }
+                }
+                File extractedModel = new File(extractDir, OFFLINE_MODEL_NAME);
+                if (!new File(extractedModel, "conf").isDirectory() || !new File(extractedModel, "am").isDirectory()) {
+                    throw new java.io.IOException("Model archive structure is unexpected");
+                }
+                File finalDir = getOfflineModelDirectory();
+                if (finalDir.exists()) deleteRecursively(finalDir);
+                if (!extractedModel.renameTo(finalDir)) throw new java.io.IOException("Could not install model");
+                success = true;
+            } catch (Exception e) {
+                android.util.Log.e("OBA", "Offline Persian model download failed", e);
+            } finally {
+                if (zipFile.exists()) zipFile.delete();
+                if (extractDir.exists()) deleteRecursively(extractDir);
+                modelDownloadInProgress = false;
+            }
+            final boolean downloaded = success;
+            runOnUiThread(() -> {
+                if (downloaded) {
+                    status.setText("مدل فارسی آماده شد؛ حالا تشخیص آفلاین را شروع می‌کنم…");
+                    startOfflineVoice(pendingMode);
+                } else {
+                    status.setText("دانلود یا نصب مدل انجام نشد. اینترنت را بررسی کن و دوباره تلاش کن؛ صدای آنلاین هنوز قابل استفاده است.");
+                    new AlertDialog.Builder(this).setMessage("دانلود مدل فارسی ناموفق بود. اتصال اینترنت را بررسی کن و دوباره امتحان کن.")
+                        .setPositiveButton("باشه", null).show();
+                }
+            });
+        }, "oba-vosk-model-download").start();
+    }
+
+    private void startOfflineVoice(String mode) {
+        pendingMode = mode;
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
+        }
+        status.setText("در حال آماده‌سازی تشخیص صدای آفلاین فارسی…");
+        new Thread(() -> {
+            try {
+                if (offlineModel == null) offlineModel = new Model(getOfflineModelDirectory().getAbsolutePath());
+                runOnUiThread(() -> {
+                    try {
+                        if (offlineSpeech != null) {
+                            offlineSpeech.stop();
+                            offlineSpeech = null;
+                        }
+                        Recognizer voskRecognizer = new Recognizer(offlineModel, 16000.0f);
+                        offlineSpeech = new SpeechService(voskRecognizer, 16000.0f);
+                        status.setText("📴 گوش می‌دهم؛ فارسی صحبت کن (بدون اینترنت)");
+                        offlineSpeech.startListening(new RecognitionListener() {
+                            private boolean handled = false;
+                            private void process(String json) {
+                                if (handled || json == null) return;
+                                try {
+                                    String recognized = new JSONObject(json).optString("text", "").trim();
+                                    if (!recognized.isEmpty()) {
+                                        handled = true;
+                                        if (offlineSpeech != null) {
+                                            offlineSpeech.stop();
+                                            offlineSpeech = null;
+                                        }
+                                        handleVoice(recognized);
+                                    }
+                                } catch (JSONException ignored) {}
+                            }
+                            @Override public void onPartialResult(String hypothesis) {}
+                            @Override public void onResult(String hypothesis) { process(hypothesis); }
+                            @Override public void onFinalResult(String hypothesis) {
+                                process(hypothesis);
+                                if (!handled) status.setText("صدایی تشخیص داده نشد؛ دوباره تلاش کن.");
+                            }
+                            @Override public void onError(Exception exception) {
+                                status.setText("تشخیص آفلاین صدا با خطا روبه‌رو شد؛ دوباره تلاش کن.");
+                            }
+                            @Override public void onTimeout() {
+                                if (!handled) status.setText("زمان شنیدن تمام شد؛ دوباره تلاش کن.");
+                            }
+                        }, 12000);
+                    } catch (Exception e) {
+                        android.util.Log.e("OBA", "Could not start offline speech", e);
+                        status.setText("شروع صدای آفلاین ممکن نشد؛ می‌توانی حالت آنلاین را امتحان کنی.");
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("OBA", "Could not load offline Persian model", e);
+                runOnUiThread(() -> status.setText("بارگذاری مدل آفلاین انجام نشد؛ دوباره دانلودش کن یا از حالت آنلاین استفاده کن."));
+            }
+        }, "oba-vosk-start").start();
+    }
+
+    private void deleteRecursively(File file) {
+        if (file == null || !file.exists()) return;
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteRecursively(child);
+        file.delete();
+    }
+
     private void startVoice(String mode) {
         pendingMode = mode;
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
@@ -1681,6 +1866,14 @@ public class MainActivity extends Activity {
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
         if(recognizer!=null) recognizer.destroy();
+        if(offlineSpeech!=null) {
+            try { offlineSpeech.stop(); } catch (Exception ignored) {}
+            offlineSpeech = null;
+        }
+        if(offlineModel!=null) {
+            try { offlineModel.close(); } catch (Exception ignored) {}
+            offlineModel = null;
+        }
         if(tts!=null) tts.shutdown();
         super.onDestroy();
     }
