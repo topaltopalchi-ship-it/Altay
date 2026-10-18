@@ -182,7 +182,7 @@ public class MainActivity extends Activity {
                 }
             }
         }
-        if (categories.isEmpty() && subgroups.isEmpty()) {
+        if (categories.isEmpty() && subgroups.isEmpty() && prefs.getString("oba_expense_history", "").isEmpty()) {
             new AlertDialog.Builder(this).setTitle("🧠 تحلیل هوشمند هزینه‌ها")
                 .setMessage("برای تحلیل دقیق، هزینه‌ها را از دکمه‌های دسته‌بندی ثبت کن و در شرح خرید نام مورد را هم بنویس؛ مثلاً «نان» یا «سینما». هرچه ثبت‌ها کامل‌تر باشد، پیشنهادها مفیدتر می‌شوند.")
                 .setPositiveButton("متوجه شدم", null).show();
