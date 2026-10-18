@@ -26,15 +26,31 @@ public class ReminderReceiver extends BroadcastReceiver {
     private static final String CHANNEL_NAME = "یادآوری‌های OBA";
 
     public static void schedule(Context context, int id, long when, String title, boolean monthly) {
+        scheduleOne(context, id, id, when, title, monthly, false);
+        long earlyWhen = when - 2L * 60L * 60L * 1000L;
+        if (earlyWhen > System.currentTimeMillis()) {
+            scheduleOne(context, earlyRequestCode(id), id, earlyWhen, title, monthly, true);
+        } else {
+            cancelAlarm(context, earlyRequestCode(id));
+        }
+    }
+
+    private static int earlyRequestCode(int id) { return id ^ 0x40000000; }
+
+    private static void scheduleOne(Context context, int requestCode, int reminderId, long when, String title,
+                                    boolean monthly, boolean early) {
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         Intent intent = new Intent(context, ReminderReceiver.class);
-        intent.putExtra("id", id);
+        intent.putExtra("id", reminderId);
         intent.putExtra("title", title);
         intent.putExtra("monthly", monthly);
-        PendingIntent pending = PendingIntent.getBroadcast(context, id, intent,
+        intent.putExtra("early", early);
+        PendingIntent pending = PendingIntent.getBroadcast(context, requestCode, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         if (alarms != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarms.canScheduleExactAlarms()) {
+                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
             } else {
                 alarms.set(AlarmManager.RTC_WAKEUP, when, pending);
@@ -42,13 +58,18 @@ public class ReminderReceiver extends BroadcastReceiver {
         }
     }
 
-    public static void cancel(Context context, int id) {
+    private static void cancelAlarm(Context context, int requestCode) {
         AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         Intent intent = new Intent(context, ReminderReceiver.class);
-        PendingIntent pending = PendingIntent.getBroadcast(context, id, intent,
+        PendingIntent pending = PendingIntent.getBroadcast(context, requestCode, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         if (alarms != null) alarms.cancel(pending);
         pending.cancel();
+    }
+
+    public static void cancel(Context context, int id) {
+        cancelAlarm(context, id);
+        cancelAlarm(context, earlyRequestCode(id));
         context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE).edit()
                 .remove("reminder_" + id).apply();
     }
@@ -63,6 +84,8 @@ public class ReminderReceiver extends BroadcastReceiver {
         String title = intent == null ? null : intent.getStringExtra("title");
         if (title == null || title.trim().isEmpty()) title = "زمان انجام کار رسیده است";
         boolean monthly = intent != null && intent.getBooleanExtra("monthly", false);
+        boolean early = intent != null && intent.getBooleanExtra("early", false);
+        String spokenTitle = early ? "دو ساعت تا زمان یادآوری باقی مانده. " + title : "یادآوری اوبا. " + title;
 
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -75,9 +98,9 @@ public class ReminderReceiver extends BroadcastReceiver {
                     ? new Notification.Builder(context, CHANNEL_ID)
                     : new Notification.Builder(context);
             builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                    .setContentTitle("⏰ یادآوری OBA")
+                    .setContentTitle(early ? "⏰ یادآوری OBA؛ دو ساعت مانده" : "⏰ یادآوری OBA")
                     .setContentText(title)
-                    .setStyle(new Notification.BigTextStyle().bigText(title))
+                    .setStyle(new Notification.BigTextStyle().bigText(spokenTitle))
                     .setAutoCancel(true)
                     .setContentIntent(contentIntent)
                     .setCategory(Notification.CATEGORY_ALARM)
@@ -86,13 +109,15 @@ public class ReminderReceiver extends BroadcastReceiver {
                 builder.setPriority(Notification.PRIORITY_MAX);
             }
             try {
-                manager.notify(id, builder.build());
+                manager.notify(early ? earlyRequestCode(id) : id, builder.build());
             } catch (SecurityException ignored) {
                 // Notification permission may be denied by the user.
             }
         }
 
-        speakReminder(context.getApplicationContext(), "یادآوری اوبا. " + title, goAsync());
+        speakReminder(context.getApplicationContext(), spokenTitle, goAsync());
+
+        if (early) return;
 
         if (monthly) {
             rescheduleMonthly(context, id, title);
