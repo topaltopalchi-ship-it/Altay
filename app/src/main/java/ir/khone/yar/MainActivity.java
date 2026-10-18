@@ -1288,7 +1288,7 @@ public class MainActivity extends Activity {
             if (titleParts.length > 1) {
                 String item = titleParts[1].trim();
                 if (!item.isEmpty()) {
-                    String safeItem = item.replaceAll("[^\\\\p{L}\\\\p{N} ]", "").trim().replace(' ', '_');
+                    String safeItem = item.replaceAll("[^\\p{L}\\p{N} ]", "").trim().replace(' ', '_');
                     if (!safeItem.isEmpty()) {
                         String itemKey = "oba_smart_item_" + type + "_" + subgroup + "_" + safeItem;
                         prefs.edit().putLong(itemKey, prefs.getLong(itemKey, 0L) + amount).apply();
