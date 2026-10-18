@@ -102,9 +102,10 @@ public class MainActivity extends Activity {
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button("🎙 میانبر صوتی: اول بگو «اوبا»", Color.rgb(124, 83, 210), Color.WHITE, 16);
+        wakeButton = button("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
         wakeButton.setMinHeight(dp(58));
-        wakeButton.setOnClickListener(v -> startVoice("wake"));
+        wakeButton.setOnClickListener(v -> toggleWakeService());
+        if (prefs.getBoolean("wake_enabled", false)) wakeButton.setText("🔕 خاموش کردن شنیدن نام OBA");
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
@@ -1119,6 +1120,18 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
             }
             return;
         }
+        if ("auto".equals(pendingMode)) {
+            String categoryCommand = resolveCategoryCommand(spoken);
+            if (categoryCommand != null) {
+                pendingCategoryVoice = categoryCommand;
+                pendingShopIncome = false;
+                showCategorySubgroups(categoryCommand);
+                String prompt = "بخش " + categoryCommand + " باز شد. حالا مبلغ و شرح هزینه را بگو؛ مثلاً هشتاد هزار تومان برای خرید لوازم.";
+                status.setText(prompt);
+                sayThenListenForCommand(prompt, "auto");
+                return;
+            }
+        }
         if (!usageGateApproved) {
             consumeFeatureUseBeforeVoice(raw);
             return;
@@ -1167,10 +1180,8 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
                 String category = pendingCategoryVoice;
                 pendingCategoryVoice = "";
                 if (category.isEmpty()) category = inferExpenseCategory(s);
-                expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply();
-                addCategorySpend(category, amount);
-                addEntry(category, title, amount);
-                say("بیلدیم");
+                showVoiceExpenseConfirmation(category, title, amount);
+                return;
             }
             refresh(); return;
         }
@@ -1613,6 +1624,72 @@ private String refreshSessionIfNeeded(String currentToken) throws Exception {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
+    private String resolveCategoryCommand(String spoken) {
+        String command = spoken == null ? "" : spoken.trim().replace(" ", "").replace("‌", "");
+        if (command.equals("خانه") || command.equals("خونه") || command.equals("بخشخانه")) return "خانه";
+        if (command.equals("ماشین") || command.equals("خودرو") || command.equals("بخشماشین")) return "ماشین";
+        if (command.equals("مغازه") || command.equals("فروشگاه") || command.equals("بخش‌مغازه")) return "مغازه";
+        if (command.equals("مدرسه") || command.equals("مکتب") || command.equals("بخشمدرسه")) return "مدرسه";
+        if (command.equals("سلامت") || command.equals("بخشسلامت")) return "سلامت";
+        if (command.equals("سایر") || command.equals("متفرقه") || command.equals("بخشسایر")) return "سایر";
+        return null;
+    }
+
+    private void sayThenListenForCommand(String message, String mode) {
+        if (tts == null || !ttsReady) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> startVoice(mode), 250L);
+            return;
+        }
+        final String utteranceId = "oba_followup_" + System.currentTimeMillis();
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String id) {}
+            @Override public void onDone(String id) {
+                if (utteranceId.equals(id)) runOnUiThread(() -> startVoice(mode));
+            }
+            @Override public void onError(String id) {
+                if (utteranceId.equals(id)) runOnUiThread(() -> startVoice(mode));
+            }
+        });
+        if (tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, utteranceId) == TextToSpeech.ERROR) {
+            startVoice(mode);
+        }
+    }
+
+    private void showVoiceExpenseConfirmation(String category, String title, long amount) {
+        if (amount <= 0 || amount > Long.MAX_VALUE - expenseTotal) {
+            String message = "مبلغ هزینه معتبر نیست؛ لطفاً دوباره تلاش کن.";
+            status.setText(message);
+            say(message);
+            return;
+        }
+        String message = "این هزینه ثبت شود؟\\nبخش: " + category + "\\nشرح: " + title + "\\nمبلغ: " + fmt(amount) + " تومان";
+        status.setText("در انتظار تأیید ثبت هزینه در بخش " + category + "…");
+        say("هزینه " + fmt(amount) + " تومان برای " + title + " در بخش " + category + ". برای ثبت تأیید کن.");
+        new AlertDialog.Builder(this)
+            .setTitle("تأیید ثبت هزینه")
+            .setMessage(message)
+            .setPositiveButton("بله، ثبت کن", (dialog, which) -> {
+                if (amount > Long.MAX_VALUE - expenseTotal) {
+                    status.setText("مبلغ بیش از حد مجاز است.");
+                    say("مبلغ بیش از حد مجاز است");
+                    return;
+                }
+                expenseTotal += amount;
+                prefs.edit().putLong("expense", expenseTotal).apply();
+                addCategorySpend(category, amount);
+                addEntry(category, title, amount);
+                refresh();
+                String confirmation = "هزینه " + fmt(amount) + " تومان در بخش " + category + " ثبت شد.";
+                status.setText(confirmation);
+                say(confirmation);
+            })
+            .setNegativeButton("لغو", (dialog, which) -> {
+                status.setText("ثبت هزینه لغو شد؛ اطلاعات مالی تغییر نکرد.");
+                say("ثبت هزینه لغو شد");
+            })
+            .show();
+    }
+
     private void sayThenListenForNavigation(String message) {
         if (tts == null || !ttsReady) {
             status.setText("بله، در خدمتم؛ حالا نام بخش را بگو.");
