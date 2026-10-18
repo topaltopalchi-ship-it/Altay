@@ -74,104 +74,100 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(cream);
-        root.setPadding(dp(18), dp(18), dp(18), dp(12));
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        TextView brand = text("🏠 OBA", 29, dark, true); brand.setGravity(Gravity.CENTER);
-        content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
-        TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
-        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(cream);
+        root.setPadding(dp(16), dp(12), dp(16), dp(10));
 
-        TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 20, dark, true);
-        content.addView(categoryTitle, lp(-1,-2,0,4,0,8));
-        TextView categoryHint = text("یک دسته را انتخاب کن تا زیرگروه و فرم ثبت هزینه باز شود.", 14, Color.DKGRAY, false);
-        content.addView(categoryHint, lp(-1,-2,0,0,0,8));
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+
+        TextView brand = text("🏠 OBA", 30, dark, true);
+        brand.setGravity(Gravity.CENTER);
+        content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
+        TextView subtitle = text("مدیریت سادهٔ هزینه‌ها", 15, Color.DKGRAY, false);
+        subtitle.setGravity(Gravity.CENTER);
+        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 14));
+
+        TextView categoryTitle = text("دسته‌بندی‌ها", 20, dark, true);
+        content.addView(categoryTitle, lp(-1, -2, 0, 4, 0, 8));
         String[][] categoryButtons = {
-            {"🏠 خانه", "خانه"}, {"🚗 ماشین", "ماشین"}, {"🏪 مغازه", "مغازه"},
-            {"🏫 مدرسه", "مدرسه"}, {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
+            {"🏠 خانه", "خانه"}, {"🏫 مدرسه", "مدرسه"},
+            {"🏪 مغازه", "مغازه"}, {"🚗 ماشین", "ماشین"},
+            {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
         };
-        for (String[] item : categoryButtons) {
-            Button categoryButton = button(item[0], Color.WHITE, dark, 17);
-            categoryButton.setMinHeight(dp(54));
-            categoryButton.setOnClickListener(v -> showCategorySubgroups(item[1]));
-            content.addView(categoryButton, lp(-1,-2,0,2,0,5));
+        for (int i = 0; i < categoryButtons.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = i; j < Math.min(i + 2, categoryButtons.length); j++) {
+                final String category = categoryButtons[j][1];
+                Button categoryButton = button(categoryButtons[j][0], Color.WHITE, dark, 17);
+                categoryButton.setMinHeight(dp(62));
+                categoryButton.setOnClickListener(v -> showCategorySubgroups(category));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(62), 1);
+                p.setMargins(dp(4), dp(3), dp(4), dp(3));
+                row.addView(categoryButton, p);
+            }
+            content.addView(row, lp(-1, -2, 0, 0, 0, 2));
         }
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
-        speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
-        content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
-
-        wakeButton = button("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
-        wakeButton.setMinHeight(dp(58));
-        wakeButton.setOnClickListener(v -> toggleWakeService());
-        if (prefs.getBoolean("wake_enabled", false)) wakeButton.setText("🔕 خاموش کردن شنیدن نام OBA");
-        content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
-        status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
-        status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
-        content.addView(status, lp(-1,-2,0,0,0,12));
-
-        totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
-        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
-        content.addView(totals, lp(-1,-2,0,0,0,12));
+        totals = text("", 17, dark, true);
+        totals.setGravity(Gravity.CENTER);
+        totals.setPadding(dp(14), dp(16), dp(14), dp(16));
+        totals.setBackground(round(Color.rgb(225, 250, 239), 22));
+        content.addView(totals, lp(-1, -2, 0, 14, 0, 12));
 
         LinearLayout alertPanel = new LinearLayout(this);
         alertPanel.setOrientation(LinearLayout.VERTICAL);
-        alertPanel.setPadding(dp(14),dp(12),dp(14),dp(12));
-        alertPanel.setBackground(round(Color.rgb(255,235,238),18));
-        alertPanel.addView(text("🔔 هشدارها و آلارم‌ها",18,Color.rgb(150,25,35),true));
-        alertPanel.addView(text("برای عبور هزینه از سقف بودجه هشدار بگیر؛ برای زمان تعویض روغن، سرویس یا هر کار دیگری هم آلارم زمان‌دار تنظیم کن.",13,dark,false),lp(-1,-2,0,5,0,8));
-        Button budgetAlert = button("🎯 تنظیم سقف هزینه / بودجه",Color.WHITE,dark,15);
+        alertPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        alertPanel.setBackground(round(Color.rgb(255, 235, 238), 18));
+        alertPanel.addView(text("🔔 هشدارها و آلارم‌ها", 18, Color.rgb(150, 25, 35), true));
+        alertPanel.addView(text("سقف هزینه، بودجهٔ بخش‌ها و یادآوری سرویس یا کارهای مهم را مدیریت کن.", 13, dark, false),
+            lp(-1, -2, 0, 5, 0, 8));
+        Button budgetAlert = button("🎯 تنظیم سقف هزینه / بودجه", Color.WHITE, dark, 15);
         budgetAlert.setOnClickListener(v -> consumeFeatureUse("budget", () -> showBudgetLimitForm()));
-        alertPanel.addView(budgetAlert,lp(-1,-2,0,2,0,4));
-        Button maintenanceAlert = button("🛠 تنظیم آلارم زمان تعویض یا سرویس",Color.WHITE,dark,15);
+        alertPanel.addView(budgetAlert, lp(-1, -2, 0, 2, 0, 4));
+        Button maintenanceAlert = button("🛠 تنظیم زمان یادآوری یا سرویس", Color.WHITE, dark, 15);
         maintenanceAlert.setOnClickListener(v -> consumeFeatureUse("reminder", () -> showManualMaintenanceReminder()));
-        alertPanel.addView(maintenanceAlert,lp(-1,-2,0,2,0,0));
-        content.addView(alertPanel,lp(-1,-2,0,2,0,14));
+        alertPanel.addView(maintenanceAlert, lp(-1, -2, 0, 2, 0, 0));
+        content.addView(alertPanel, lp(-1, -2, 0, 2, 0, 12));
 
-        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
-        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
-        TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
-        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(255,143,0),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
-        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
-        content.addView(backupPanel,lp(-1,-2,0,8,0,14));
+        LinearLayout backupPanel = new LinearLayout(this);
+        backupPanel.setOrientation(LinearLayout.VERTICAL);
+        backupPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        backupPanel.setBackground(round(Color.rgb(255, 243, 224), 20));
+        backupPanel.addView(text("🛡️ پشتیبان‌گیری اطلاعات", 17, Color.rgb(124, 70, 0), true));
+        backupPanel.addView(text("برای بازیابی اطلاعات در صورت حذف برنامه یا تعویض گوشی، نسخهٔ پشتیبان بگیر.", 13, dark, false),
+            lp(-1, -2, 0, 5, 0, 8));
+        Button saveBackup = button("📥 ذخیره نسخهٔ پشتیبان", Color.rgb(255, 143, 0), Color.WHITE, 16);
+        saveBackup.setOnClickListener(v -> createBackup());
+        backupPanel.addView(saveBackup, lp(-1, -2, 0, 2, 0, 4));
+        Button restoreBackup = button("📤 بازیابی نسخهٔ پشتیبان", Color.rgb(0, 137, 123), Color.WHITE, 16);
+        restoreBackup.setOnClickListener(v -> chooseBackup());
+        backupPanel.addView(restoreBackup, lp(-1, -2, 0, 2, 0, 0));
+        content.addView(backupPanel, lp(-1, -2, 0, 2, 0, 12));
 
-        TextView label = text("دسترسی سریع صوتی", 19, dark, true);
-        content.addView(label, lp(-1,-2,0,6,0,8));
-        cards = new LinearLayout(this); cards.setOrientation(LinearLayout.VERTICAL);
-        addVoiceCard("🧾 ثبت مخارج", "بگو: «خرج ۱۲۰ هزار تومان برای خرید»", "expense");
-        addVoiceCard("💰 ثبت درآمد", "بگو: «درآمد ۵ میلیون تومان حقوق»", "income");
-        Button calculatorButton = button("🧮 باز کردن ماشین‌حساب", Color.rgb(225,238,255), dark, 18);
-        calculatorButton.setMinHeight(dp(60));
-        calculatorButton.setOnClickListener(v -> showCalculatorDialog());
-        content.addView(calculatorButton, lp(-1,-2,0,4,0,6));
-        addVoiceCard("🧮 ماشین‌حساب صوتی", "بگو: «ماشین حساب ۲۰۰۰۰ جمع ۳۰۰۰۰»", "calc");
-        addVoiceCard("🛒 فهرست خرید", "بگو: «به فهرست خرید شیر اضافه کن»", "shopping");
-        addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
-        addVoiceCard("⏰ یادآوری‌های من", "بگو: «یادآوری قسط فردا ساعت ۹ صبح» یا «یادآوری قبض روز ۲۰ هر ماه ساعت ۱۰»", "reminder");
-        addVoiceCard("🚗 ماشین خانه", "بگو: «تعویض روغن در کیلومتر ۸۵ هزار؛ سرویس بعدی ۹۰ هزار کیلومتر»", "vehicle");
-        addVoiceCard("🏥 سلامت", "بگو: «هزینه ۳۰۰ هزار تومان دکتر» یا «دارو ۱۵۰ هزار تومان خریدم»", "health");
-        content.addView(cards);
-        TextView remindersTitle = text("⏰ یادآوری‌های فعال", 19, dark, true);
-        content.addView(remindersTitle, lp(-1,-2,0,12,0,6));
-        remindersView = text("", 14, Color.DKGRAY, false); remindersView.setPadding(dp(12),dp(10),dp(12),dp(10)); remindersView.setBackground(round(Color.WHITE,14));
-        content.addView(remindersView, lp(-1,-2,0,0,0,12));
-        TextView inventoryTitle = text("🧺 موجودی خانه و خریدهای ثبت‌شده", 19, dark, true);
-        content.addView(inventoryTitle, lp(-1,-2,0,8,0,6));
-        inventoryView = text("", 14, Color.DKGRAY, false); inventoryView.setPadding(dp(12),dp(10),dp(12),dp(10)); inventoryView.setBackground(round(Color.WHITE,14));
-        content.addView(inventoryView, lp(-1,-2,0,0,0,12));
-        TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
-        content.addView(recentTitle, lp(-1,-2,0,12,0,6));
-        recent = text("", 14, Color.DKGRAY, false); recent.setPadding(dp(12),dp(10),dp(12),dp(10)); recent.setBackground(round(Color.WHITE,14));
-        content.addView(recent, lp(-1,-2,0,0,0,18));
+        wakeButton = button(prefs.getBoolean("wake_enabled", false)
+            ? "🔕 خاموش کردن شنیدن نام OBA"
+            : "🎧 فعال‌سازی شنیدن نام OBA در پس‌زمینه", Color.rgb(124, 83, 210), Color.WHITE, 15);
+        wakeButton.setMinHeight(dp(54));
+        wakeButton.setOnClickListener(v -> toggleWakeService());
+        content.addView(wakeButton, lp(-1, -2, 0, 2, 0, 8));
+
+        status = text("یک بخش را انتخاب کن؛ سپس ثبت دستی یا ثبت صوتی را بزن.", 14, dark, false);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(dp(8), dp(8), dp(8), dp(8));
+        content.addView(status, lp(-1, -2, 0, 0, 0, 8));
+
         scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
-        TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
-        root.addView(foot, lp(-1,-2,0,8,0,0));
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        TextView foot = text("OBA • اطلاعات ثبت‌شده روی همین گوشی نگهداری می‌شود", 11, Color.GRAY, false);
+        foot.setGravity(Gravity.CENTER);
+        root.addView(foot, lp(-1, -2, 0, 6, 0, 0));
         setContentView(root);
         refresh();
     }
-
 
     private void showCalculatorDialog() {
         LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(dp(14),dp(8),dp(14),dp(8));
@@ -488,65 +484,74 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
-        LinearLayout choices = new LinearLayout(this);
-        choices.setOrientation(LinearLayout.VERTICAL);
-        choices.setPadding(dp(16), dp(8), dp(16), dp(8));
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout chooserContent = new LinearLayout(this);
-        chooserContent.setOrientation(LinearLayout.VERTICAL);
-        chooserContent.setPadding(dp(12),dp(6),dp(12),dp(6));
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(16), dp(8), dp(16), dp(4));
         long sectionLimit = prefs.getLong("budget_" + categorySlug(category), 0L);
         long sectionSpent = categorySpent(category);
-        String sectionSummary = "هزینهٔ ثبت‌شده: " + fmt(sectionSpent) + " تومان"
-            + (sectionLimit > 0 ? "\nسقف مجاز: " + fmt(sectionLimit) + " تومان | مانده: " + fmt(sectionLimit-sectionSpent) + " تومان"
+        String summary = "هزینهٔ ثبت‌شده: " + fmt(sectionSpent) + " تومان"
+            + (sectionLimit > 0 ? "\nسقف هزینه: " + fmt(sectionLimit) + " تومان • مانده: " + fmt(sectionLimit - sectionSpent) + " تومان"
                 : "\nبرای این بخش هنوز سقف هزینه تعیین نشده است.");
-        chooserContent.addView(text(sectionSummary,14,dark,true),lp(-1,-2,0,4,0,8));
-        Button setSectionBudget = button("🔔 تنظیم سقف هزینه برای " + category,Color.rgb(255,235,238),Color.rgb(150,25,35),14);
-        setSectionBudget.setOnClickListener(v -> consumeFeatureUse("budget", () -> showSingleCategoryBudgetForm(category)));
-        chooserContent.addView(setSectionBudget,lp(-1,-2,0,2,0,8));
-        chooserContent.addView(choices);
-        scroll.addView(chooserContent);
+        panel.addView(text(summary, 14, dark, true), lp(-1, -2, 0, 0, 0, 10));
+
+        Button manual = button("✍️ ثبت دستی", Color.rgb(230, 240, 255), dark, 18);
+        manual.setMinHeight(dp(58));
+        panel.addView(manual, lp(-1, -2, 0, 3, 0, 8));
+        Button voice = button("🎙 ثبت صوتی", Color.rgb(225, 250, 239), dark, 18);
+        voice.setMinHeight(dp(58));
+        panel.addView(voice, lp(-1, -2, 0, 3, 0, 8));
+        Button setBudget = button("🎯 تنظیم سقف هزینهٔ این بخش", Color.rgb(255, 235, 238), Color.rgb(150, 25, 35), 14);
+        setBudget.setOnClickListener(v -> consumeFeatureUse("budget", () -> showSingleCategoryBudgetForm(category)));
+        panel.addView(setBudget, lp(-1, -2, 0, 3, 0, 0));
+
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("زیرگروه «" + category + "»")
+            .setTitle("بخش " + category)
+            .setView(panel)
+            .setNegativeButton("بازگشت", null)
+            .create();
+        manual.setOnClickListener(v -> {
+            dialog.dismiss();
+            showCategoryManualGroups(category, groups);
+        });
+        voice.setOnClickListener(v -> {
+            dialog.dismiss();
+            pendingCategoryVoice = category;
+            pendingMode = "auto";
+            status.setText("برای ثبت در بخش " + category + " بگو مبلغ و شرح هزینه؛ مثلاً «هزینه ۸۰ هزار تومان برای خرید».");
+            startVoice("auto");
+        });
+        dialog.show();
+    }
+
+    private void showCategoryManualGroups(String category, String[] groups) {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("ثبت دستی — " + category)
             .setView(scroll)
             .setNegativeButton("بازگشت", null)
             .create();
         for (String group : groups) {
-            Button choice = button("✍️ ثبت دستی: " + group, Color.WHITE, dark, 16);
-            choice.setMinHeight(dp(54));
-            choice.setOnClickListener(v -> {
+            Button item = button(group, Color.WHITE, dark, 16);
+            item.setMinHeight(dp(50));
+            item.setOnClickListener(v -> {
                 dialog.dismiss();
                 showCategoryExpenseForm(category, group);
             });
-            choices.addView(choice, lp(-1, -2, 0, 3, 0, 5));
+            list.addView(item, lp(-1, -2, 0, 3, 0, 4));
         }
-        Button voiceChoice = button("🎙 ثبت با صدا در بخش «" + category + "»", Color.rgb(225,238,255), dark, 16);
-        voiceChoice.setMinHeight(dp(56));
-        voiceChoice.setOnClickListener(v -> {
-            dialog.dismiss();
-            pendingCategoryVoice = category;
-            status.setText("برای ثبت در بخش " + category + " بگو: هزینه، مبلغ و شرح آن؛ مثلاً «هزینه ۸۰ هزار تومان برای نان».");
-            startVoice("auto");
-        });
-        choices.addView(voiceChoice, lp(-1,-2,0,8,0,5));
         if ("مغازه".equals(category)) {
-            Button incomeChoice = button("＋ ثبت فروش / درآمد مغازه", Color.rgb(220, 247, 232), Color.rgb(20, 100, 55), 16);
-            incomeChoice.setMinHeight(dp(58));
-            incomeChoice.setOnClickListener(v -> {
+            Button income = button("＋ ثبت فروش / درآمد مغازه", Color.rgb(220, 247, 232), Color.rgb(20, 100, 55), 16);
+            income.setMinHeight(dp(52));
+            income.setOnClickListener(v -> {
                 dialog.dismiss();
                 showCategoryIncomeForm();
             });
-            choices.addView(incomeChoice, lp(-1, -2, 0, 8, 0, 5));
-            Button voiceIncome = button("🎙 ثبت فروش مغازه با صدا", Color.rgb(225,238,255), dark, 16);
-            voiceIncome.setMinHeight(dp(54));
-            voiceIncome.setOnClickListener(v -> {
-                dialog.dismiss();
-                pendingShopIncome = true;
-                pendingCategoryVoice = "";
-                status.setText("برای ثبت فروش بگو: «درآمد مغازه ۵۰۰ هزار تومان فروش کالا».");
-                startVoice("auto");
-            });
-            choices.addView(voiceIncome, lp(-1,-2,0,2,0,5));
+            list.addView(income, lp(-1, -2, 0, 5, 0, 4));
         }
         dialog.show();
     }
