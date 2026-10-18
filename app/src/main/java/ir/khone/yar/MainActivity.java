@@ -433,9 +433,76 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean tryRegisterCategorizedExpense(String raw, String normalized) {
+        String category = null;
+        String subgroup = null;
+        String[][] known = {
+            {"خانه", "مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه"},
+            {"ماشین", "سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه‌های ماشین"},
+            {"مغازه", "خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه‌های مغازه"},
+            {"مدرسه", "شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"},
+            {"سلامت", "دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"},
+            {"سایر", "خرید متفرقه", "هدیه", "سفر", "سایر"}
+        };
+        String[][] aliases = {
+            {"خانه", "مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه های خانه"},
+            {"ماشین", "سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه های ماشین"},
+            {"مغازه", "خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه های مغازه"},
+            {"مدرسه", "شهریه", "کتاب و لوازم التحریر", "رفت و آمد", "لباس فرم", "فعالیت ها", "سایر هزینه های مدرسه"},
+            {"سلامت", "دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان پزشکی", "سایر هزینه های سلامت"},
+            {"سایر", "خرید متفرقه", "هدیه", "سفر", "سایر"}
+        };
+        String[][] aliasesByCategory = {
+            {"خانه","مواد غذایی","لوازم خانه","قبض و خدمات","اجاره و تعمیرات","نظافت","سایر هزینه های خانه"},
+            {"ماشین","سوخت","روغن و فیلتر","تسمه تایم و تعمیرات","بیمه","لاستیک","پارکینگ و عوارض","سایر هزینه های ماشین"},
+            {"مغازه","خرید کالا","اجاره مغازه","قبض و خدمات","حقوق","تعمیرات","سایر هزینه های مغازه"},
+            {"مدرسه","شهریه","کتاب و لوازم التحریر","رفت و آمد","لباس فرم","فعالیت ها","سایر هزینه های مدرسه"},
+            {"سلامت","دکتر","دارو","آزمایش","بیمه درمانی","دندان پزشکی","سایر هزینه های سلامت"},
+            {"سایر","خرید متفرقه","هدیه","سفر","سایر"}
+        };
+        int catIndex = -1, subIndex = -1;
+        for (int i=0; i<known.length; i++) {
+            String cat = normalize(known[i][0]);
+            if (normalized.contains(cat)) { catIndex=i; break; }
+        }
+        if (catIndex < 0) return false;
+        for (int j=1; j<known[catIndex].length; j++) {
+            String candidate = normalize(known[catIndex][j]);
+            if (normalized.contains(candidate)) { subIndex=j; break; }
+        }
+        if (subIndex < 0) {
+            for (int j=1; j<aliasesByCategory[catIndex].length; j++) {
+                String candidate = normalize(aliasesByCategory[catIndex][j]);
+                if (!candidate.isEmpty() && normalized.contains(candidate)) { subIndex=j; break; }
+            }
+        }
+        if (subIndex < 0) return false;
+        long amount = parseAmount(normalized);
+        if (amount <= 0) return false;
+        String title = raw;
+        String[] remove = {"اوبا","اوبآ","خانه","ماشین","مغازه","مدرسه","سلامت","سایر",
+            known[catIndex][subIndex], "تومان","تومن","هزار","میلیون","هزینه","خرج","خرید کردم","خریدم","خریداری کردم","به مبلغ","به قیمت"};
+        for (String word : remove) if (word != null && !word.isEmpty()) title = title.replace(word, " ");
+        title = title.replaceAll("[0-9۰-۹,،]+", " ").replaceAll("\\s+", " ").trim();
+        if (title.isEmpty()) title = "هزینه " + known[catIndex][subIndex];
+        expenseTotal += amount;
+        prefs.edit().putLong("expense", expenseTotal).apply();
+        addEntry("هزینه • " + known[catIndex][0] + " • " + known[catIndex][subIndex], title, amount);
+        String message = "ثبت شد؛ " + known[catIndex][0] + "، " + known[catIndex][subIndex] + "، " + fmt(amount) + " تومان، " + title;
+        status.setText(message);
+        say(message);
+        refresh();
+        return true;
+    }
+
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
+
+        // Accept a complete spoken expense command, including category and subgroup,
+        // in one utterance: "خانه، لوازم خانه، پنج میلیون، خرید ماشین ظرف‌شویی".
+        if (tryRegisterCategorizedExpense(raw, s)) return;
+
         String mode = pendingMode;
         if (mode.equals("auto")) {
             if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
