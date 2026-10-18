@@ -926,13 +926,25 @@ public class MainActivity extends Activity {
         b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         b.setGravity(Gravity.CENTER);
         b.setPadding(dp(12), dp(8), dp(12), dp(8));
+        // Outer colored rim follows the button silhouette; the inset face creates a double-border 3D look.
+        GradientDrawable rim = new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(151, 184, 255), Color.rgb(50, 86, 214), Color.rgb(20, 34, 104)}
+        );
+        rim.setCornerRadius(dp(20));
+        rim.setStroke(dp(1), Color.rgb(178, 204, 255));
+
         GradientDrawable face = new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{Color.rgb(83, 117, 239), Color.rgb(43, 63, 166), Color.rgb(24, 35, 104)}
         );
-        face.setCornerRadius(dp(18));
+        face.setCornerRadius(dp(16));
         face.setStroke(dp(1), Color.rgb(112, 143, 255));
-        b.setBackground(face);
+
+        android.graphics.drawable.LayerDrawable layered =
+            new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{rim, face});
+        layered.setLayerInset(1, dp(3), dp(3), dp(3), dp(3));
+        b.setBackground(layered);
         b.setElevation(dp(5));
         b.setStateListAnimator(null);
         b.setMinHeight(dp(48));
