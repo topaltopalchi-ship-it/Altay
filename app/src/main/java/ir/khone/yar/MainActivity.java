@@ -11,6 +11,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -34,6 +36,9 @@ import java.util.Calendar;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.InputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import org.json.JSONObject;
 import org.json.JSONException;
 
@@ -49,6 +54,7 @@ public class MainActivity extends Activity {
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
+    private static final int HOME_DOC_CAMERA = 73, HOME_DOC_GALLERY = 74;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
 
@@ -120,6 +126,77 @@ public class MainActivity extends Activity {
     }
 
 
+
+    private void showHomeDocuments() {
+        String[] options = new String[]{"📷 عکس گرفتن از مدرک", "🖼 انتخاب تصویر از گالری", "📂 مشاهده مدارک ذخیره‌شده"};
+        new AlertDialog.Builder(this).setTitle("اسکن مدارک خانه")
+            .setItems(options, (dialog, which) -> {
+                if (which == 0) {
+                    try {
+                        Intent camera = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+                        if (camera.resolveActivity(getPackageManager()) != null) startActivityForResult(camera, HOME_DOC_CAMERA);
+                        else Toast.makeText(this, "دوربین در دسترس نیست.", Toast.LENGTH_LONG).show();
+                    } catch (Exception e) { Toast.makeText(this, "باز کردن دوربین ممکن نشد.", Toast.LENGTH_LONG).show(); }
+                } else if (which == 1) {
+                    Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    pick.addCategory(Intent.CATEGORY_OPENABLE);
+                    pick.setType("image/*");
+                    startActivityForResult(pick, HOME_DOC_GALLERY);
+                } else showSavedHomeDocuments();
+            }).setNegativeButton("بستن", null).show();
+    }
+
+    private void saveHomeDocument(Bitmap bitmap, String defaultName) {
+        try {
+            File folder = new File(getFilesDir(), "home_documents");
+            if (!folder.exists() && !folder.mkdirs()) throw new java.io.IOException("Cannot create folder");
+            String fileName = "home_doc_" + System.currentTimeMillis() + ".jpg";
+            File file = new File(folder, fileName);
+            try (FileOutputStream out = new FileOutputStream(file)) { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, out); }
+            EditText nameInput = new EditText(this);
+            nameInput.setText(defaultName);
+            nameInput.setHint("مثلاً کارت ملی، شناسنامه، سند خانه");
+            new AlertDialog.Builder(this).setTitle("نام مدرک")
+                .setMessage("تصویر در حافظهٔ خصوصی برنامه ذخیره می‌شود.")
+                .setView(nameInput).setNegativeButton("لغو", (d,w) -> appendHomeDocument(fileName, defaultName))
+                .setPositiveButton("ذخیره", (d,w) -> {
+                    String name = nameInput.getText().toString().trim();
+                    appendHomeDocument(fileName, name.isEmpty() ? defaultName : name);
+                }).show();
+        } catch (Exception e) { Toast.makeText(this, "ذخیره تصویر مدرک انجام نشد.", Toast.LENGTH_LONG).show(); }
+    }
+
+    private void appendHomeDocument(String fileName, String name) {
+        String saved = prefs.getString("home_documents_v1", "");
+        String row = fileName + "|" + name.replace("|", " ").replace("\n", " ");
+        prefs.edit().putString("home_documents_v1", saved.isEmpty() ? row : saved + "\n" + row).apply();
+        Toast.makeText(this, "مدرک در آرشیو مدارک خانه ذخیره شد.", Toast.LENGTH_LONG).show();
+    }
+
+    private void showSavedHomeDocuments() {
+        String saved = prefs.getString("home_documents_v1", "");
+        if (saved.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("مدارک خانه").setMessage("هنوز مدرکی ذخیره نشده است.").setPositiveButton("باشه", null).show();
+            return;
+        }
+        String[] rows = saved.split("\n");
+        String[] labels = new String[rows.length];
+        for (int i=0;i<rows.length;i++) {
+            String[] p = rows[i].split("\\|",2);
+            labels[i] = p.length > 1 ? p[1] : p[0];
+        }
+        new AlertDialog.Builder(this).setTitle("مدارک ذخیره‌شده").setItems(labels, (d,which) -> {
+            String[] p = rows[which].split("\\|",2);
+            File imageFile = new File(new File(getFilesDir(),"home_documents"), p[0]);
+            if (!imageFile.isFile()) { Toast.makeText(this, "فایل تصویر پیدا نشد.", Toast.LENGTH_LONG).show(); return; }
+            android.widget.ImageView preview = new android.widget.ImageView(this);
+            preview.setImageBitmap(BitmapFactory.decodeFile(imageFile.getAbsolutePath()));
+            preview.setAdjustViewBounds(true);
+            ScrollView scroll = new ScrollView(this); scroll.addView(preview);
+            new AlertDialog.Builder(this).setTitle(labels[which]).setView(scroll).setPositiveButton("بستن", null).show();
+        }).setNegativeButton("بستن", null).show();
+    }
+
     private void createBackup() {
         try {
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -139,6 +216,23 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        if (requestCode == HOME_DOC_CAMERA) {
+            if (resultCode == RESULT_OK && data != null && data.getExtras() != null) {
+                Object image = data.getExtras().get("data");
+                if (image instanceof Bitmap) saveHomeDocument((Bitmap) image, "مدرک خانه");
+            }
+            return;
+        }
+        if (requestCode == HOME_DOC_GALLERY) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                try (InputStream in = getContentResolver().openInputStream(data.getData())) {
+                    Bitmap bitmap = BitmapFactory.decodeStream(in);
+                    if (bitmap != null) saveHomeDocument(bitmap, "مدرک خانه");
+                    else Toast.makeText(this, "خواندن تصویر ممکن نشد.", Toast.LENGTH_LONG).show();
+                } catch (Exception e) { Toast.makeText(this, "باز کردن تصویر ممکن نشد.", Toast.LENGTH_LONG).show(); }
+            }
+            return;
+        }
         if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
         try {
             if (requestCode == BACKUP_CREATE) {
@@ -212,7 +306,7 @@ public class MainActivity extends Activity {
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
         }
-        if ("entries".equals(key) || "vehicleRecords".equals(key)) {
+        if ("entries".equals(key) || "vehicleRecords".equals(key) || "home_documents_v1".equals(key)) {
             return value instanceof String && ((String) value).length() <= 20000;
         }
         if (key.matches("reminder_[0-9]{1,10}")) {
@@ -235,9 +329,14 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
+        if ("خانه".equals(category)) {
+            groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "📄 اسکن مدارک خانه", "سایر هزینه‌های خانه"};
+        }
         new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> showEntryMethodDialog(category, groups[which]))
-            .setNegativeButton("انصراف", null).show();
+            .setItems(groups, (dialog, which) -> {
+                if ("خانه".equals(category) && "📄 اسکن مدارک خانه".equals(groups[which])) showHomeDocuments();
+                else showEntryMethodDialog(category, groups[which]);
+            }).setNegativeButton("انصراف", null).show();
     }
 
     private void showEntryMethodDialog(String category, String subgroup) {
