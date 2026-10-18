@@ -128,7 +128,9 @@ public class MainActivity extends Activity {
         audioBtn.setOnClickListener(v -> showAudioArchive());
         Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 12);
         backupBtn.setOnClickListener(v -> showBackupOptions());
-        for (Button b : new Button[]{archiveBtn, docsBtn, audioBtn, backupBtn}) {
+        Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 12);
+        chartBtn.setOnClickListener(v -> showExpenseCharts());
+        for (Button b : new Button[]{archiveBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(42), 1);
             bp.setMargins(dp(2), dp(2), dp(2), dp(2));
             toolsRow.addView(b, bp);
@@ -143,6 +145,115 @@ public class MainActivity extends Activity {
 
 
 
+
+    private static final int[] CHART_COLORS = new int[]{Color.rgb(52,152,219), Color.rgb(46,204,113), Color.rgb(243,156,18), Color.rgb(155,89,182), Color.rgb(231,76,60), Color.rgb(26,188,156), Color.rgb(241,196,15)};
+
+    private void showExpenseCharts() {
+        java.util.LinkedHashMap<String, Long> categories = new java.util.LinkedHashMap<>();
+        String[] names = new String[]{"خانه", "مدرسه", "ماشین", "مغازه", "سلامت", "سایر"};
+        for (String name : names) {
+            long value = prefs.getLong("oba_chart_cat_" + name, 0L);
+            if (value > 0) categories.put(name, value);
+        }
+        if (categories.isEmpty()) {
+            // Older records predate chart totals; use visible saved entries as a best-effort starting point.
+            for (String row : entries) {
+                String[] parts = row.split("\\\\s*•\\\\s*");
+                if (parts.length < 3) continue;
+                String category = parts[0].trim();
+                if (!java.util.Arrays.asList(names).contains(category)) continue;
+                long amount = parseChartAmount(parts[parts.length - 1]);
+                if (amount > 0) categories.put(category, categories.containsKey(category) ? categories.get(category) + amount : amount);
+            }
+        }
+        if (categories.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("نمودار هزینه‌ها")
+                .setMessage("هنوز هزینهٔ دسته‌بندی‌شده‌ای برای نمایش نمودار ثبت نشده است. از دکمه‌های دسته‌بندی خانه، مدرسه یا ماشین هزینه ثبت کن.")
+                .setPositiveButton("باشه", null).show();
+            return;
+        }
+        showPieDialog("سهم هر بخش از کل هزینه‌ها", categories, null);
+    }
+
+    private long parseChartAmount(String value) {
+        String digits = value.replaceAll("[^0-9۰-۹٠-٩]", "").replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3').replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7').replace('۸','8').replace('۹','9').replace('٠','0').replace('١','1').replace('٢','2').replace('٣','3').replace('٤','4').replace('٥','5').replace('٦','6').replace('٧','7').replace('٨','8').replace('٩','9');
+        try { return Long.parseLong(digits); } catch (Exception e) { return 0; }
+    }
+
+    private void showPieDialog(String title, java.util.LinkedHashMap<String, Long> values, String parentCategory) {
+        LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(dp(12), dp(8), dp(12), dp(4));
+        long total = 0; for (Long v : values.values()) total += v;
+        TextView totalText = text("مجموع: " + fmt(total) + " تومان", 15, dark, true); totalText.setGravity(Gravity.CENTER);
+        panel.addView(totalText, lp(-1, -2, 0, 0, 0, 4));
+        PieChartView chart = new PieChartView(values, total, name -> {
+            if (parentCategory != null) return;
+            java.util.LinkedHashMap<String, Long> subs = new java.util.LinkedHashMap<>();
+            String[] known = subgroupNames(name);
+            for (String subgroup : known) {
+                long amount = prefs.getLong("oba_chart_sub_" + name + "_" + subgroup, 0L);
+                if (amount > 0) subs.put(subgroup, amount);
+            }
+            if (!subs.isEmpty()) showPieDialog("جزئیات «" + name + "»", subs, name);
+            else Toast.makeText(this, "برای این بخش هنوز جزئیات زیرگروه ثبت‌شده‌ای نیست.", Toast.LENGTH_SHORT).show();
+        });
+        panel.addView(chart, new LinearLayout.LayoutParams(-1, dp(250)));
+        for (java.util.Map.Entry<String, Long> e : values.entrySet()) {
+            double pct = total == 0 ? 0 : e.getValue() * 100.0 / total;
+            TextView legend = text("●  " + e.getKey() + "   " + String.format(Locale.getDefault(), "%.1f%%", pct) + "   •   " + fmt(e.getValue()) + " تومان", 14, dark, false);
+            legend.setTextColor(CHART_COLORS[Math.abs(e.getKey().hashCode()) % CHART_COLORS.length]);
+            panel.addView(legend, lp(-1, -2, 0, 2, 0, 2));
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(title).setView(panel)
+            .setNegativeButton(parentCategory == null ? "بستن" : "بازگشت به نمودار اصلی", (d, w) -> { if (parentCategory != null) showExpenseCharts(); }).create();
+        dialog.show();
+    }
+
+    private String[] subgroupNames(String category) {
+        if ("خانه".equals(category)) return new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه"};
+        if ("ماشین".equals(category)) return new String[]{"سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه‌های ماشین"};
+        if ("مدرسه".equals(category)) return new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
+        if ("مغازه".equals(category)) return new String[]{"خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه‌های مغازه"};
+        if ("سلامت".equals(category)) return new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
+        return new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
+    }
+
+    private class PieChartView extends View {
+        private final java.util.ArrayList<String> labels = new java.util.ArrayList<>();
+        private final java.util.ArrayList<Long> amounts = new java.util.ArrayList<>();
+        private final long total;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final java.util.function.Consumer<String> onSlice;
+        private final android.graphics.RectF oval = new android.graphics.RectF();
+        private float radius, cx, cy;
+        PieChartView(java.util.LinkedHashMap<String, Long> data, long sum, java.util.function.Consumer<String> click) {
+            super(MainActivity.this); total = sum; onSlice = click;
+            for (java.util.Map.Entry<String, Long> e : data.entrySet()) { labels.add(e.getKey()); amounts.add(e.getValue()); }
+        }
+        @Override protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas); if (total <= 0 || amounts.isEmpty()) return;
+            radius = Math.min(getWidth() * 0.38f, getHeight() * 0.42f); cx = getWidth() / 2f; cy = getHeight() / 2f;
+            oval.set(cx-radius, cy-radius, cx+radius, cy+radius);
+            float start = -90f;
+            for (int i=0; i<amounts.size(); i++) {
+                float sweep = (float)(amounts.get(i) * 360.0 / total);
+                paint.setColor(CHART_COLORS[i % CHART_COLORS.length]); paint.setStyle(Paint.Style.FILL);
+                canvas.drawArc(oval, start, sweep, true, paint);
+                if (sweep >= 18) {
+                    double mid = Math.toRadians(start + sweep/2f); float tx = cx + (float)Math.cos(mid)*radius*0.62f; float ty = cy + (float)Math.sin(mid)*radius*0.62f;
+                    paint.setColor(Color.WHITE); paint.setTextSize(dp(12)); paint.setTypeface(Typeface.DEFAULT_BOLD); paint.setTextAlign(Paint.Align.CENTER);
+                    canvas.drawText(String.format(Locale.getDefault(), "%.0f%%", amounts.get(i)*100.0/total), tx, ty, paint);
+                }
+                start += sweep;
+            }
+        }
+        @Override public boolean onTouchEvent(android.view.MotionEvent event) {
+            if (event.getAction() != android.view.MotionEvent.ACTION_UP || radius <= 0) return true;
+            float dx=event.getX()-cx, dy=event.getY()-cy; if (Math.sqrt(dx*dx+dy*dy)>radius) return true;
+            double angle = Math.toDegrees(Math.atan2(dy,dx)) + 90; if (angle < 0) angle += 360;
+            double cursor=0; for (int i=0;i<amounts.size();i++) { cursor += amounts.get(i)*360.0/total; if (angle <= cursor) { onSlice.accept(labels.get(i)); break; } }
+            return true;
+        }
+    }
 
     private void showBackupOptions() {
         new AlertDialog.Builder(this).setTitle("پشتیبان‌گیری")
@@ -1094,6 +1205,11 @@ public class MainActivity extends Activity {
     }
     private boolean contains(String s, String... words) { for(String w:words) if(s.contains(w)) return true; return false; }
     private void addEntry(String type, String title, long amount) {
+        if (amount > 0 && java.util.Arrays.asList("خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر").contains(type)) {
+            prefs.edit().putLong("oba_chart_cat_" + type, prefs.getLong("oba_chart_cat_" + type, 0L) + amount).apply();
+            String subgroup = title.split(" — ", 2)[0].trim();
+            if (!subgroup.isEmpty()) prefs.edit().putLong("oba_chart_sub_" + type + "_" + subgroup, prefs.getLong("oba_chart_sub_" + type + "_" + subgroup, 0L) + amount).apply();
+        }
         String row = type + " • " + title + (amount>0 ? " • " + fmt(amount) + " تومان" : "");
         entries.add(0,row); while(entries.size()>12) entries.remove(entries.size()-1);
         StringBuilder b=new StringBuilder(); for(String e:entries)b.append(e).append("\n");
