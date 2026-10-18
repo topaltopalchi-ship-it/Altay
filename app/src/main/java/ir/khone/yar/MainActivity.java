@@ -812,8 +812,13 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
-            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با آرامش جزئیات هزینه، مبلغ و توضیحات را کامل بگو؛ برای پایان صحبت مکث کن");
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            // Ask the speech service to wait longer before deciding the user has finished.
+            // Actual limits depend on the speech-recognition app installed on the device.
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 6000L);
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000L);
             recognizer.startListening(intent);
         } catch (Exception e) {
             status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
