@@ -960,7 +960,7 @@ public class MainActivity extends Activity {
                         status.setText("دانلود مدل ناموفق بود: " + message);
                         new AlertDialog.Builder(MainActivity.this)
                             .setTitle("دانلود ناموفق بود")
-                            .setMessage(message + "\\nمی‌توانی بعداً دوباره تلاش کنی.")
+                            .setMessage(message + "\nمی‌توانی بعداً دوباره تلاش کنی.")
                             .setPositiveButton("باشه", null)
                             .show();
                     }
