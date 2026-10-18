@@ -519,8 +519,6 @@ public class MainActivity extends Activity {
             }).show();
     }
 
-    }
-
     private void showExpenseArchive() {
         String all = prefs.getString("entries", "");
         if (all.trim().isEmpty()) {
