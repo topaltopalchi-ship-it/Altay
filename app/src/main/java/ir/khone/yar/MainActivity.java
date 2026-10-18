@@ -45,7 +45,7 @@ import org.json.JSONException;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
-    private TextView status, totals, recent, remindersView, inventoryView;
+    private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
     private Button wakeButton;
@@ -113,10 +113,6 @@ public class MainActivity extends Activity {
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
-
-        totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
-        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
-        content.addView(totals, lp(-1,-2,0,0,0,12));
 
         // Compact access to the archive and existing utilities, without changing the category layout.
         LinearLayout toolsRow = new LinearLayout(this);
@@ -1516,7 +1512,6 @@ public class MainActivity extends Activity {
         if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
     }
     private void refresh() {
-        if(totals!=null) { long budget=prefs.getLong("home_budget",0); totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده حساب: "+fmt(incomeTotal-expenseTotal)+" تومان" + (budget>0 ? "\n🎯 مانده بودجه خانه: "+fmt(budget-expenseTotal)+" تومان" : "\n🎯 بودجه را صوتی تعیین کن")); }
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
         if(inventoryView!=null) refreshInventory();
