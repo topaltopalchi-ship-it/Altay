@@ -384,7 +384,141 @@ public class MainActivity extends Activity {
             }).setNegativeButton("بستن", null).show();
     }
 
+    // Convert Gregorian dates to the Jalali (Solar Hijri) calendar for Persian display.
+    private int[] gregorianToJalali(int gy, int gm, int gd) {
+        int[] gdm = {0,31,((gy%4==0 && gy%100!=0)||gy%400==0)?29:28,31,30,31,30,31,31,30,31,30,31};
+        int jy = (gy <= 1600) ? 0 : 979;
+        gy -= (gy <= 1600) ? 621 : 1600;
+        int days = 365 * gy + (gy / 4) - (gy / 100) + (gy / 400);
+        for (int i = 0; i < gm; i++) days += gdm[i];
+        days += gd - 1;
+        int jdn = days - 79;
+        int jnp = jdn / 12053;
+        jdn %= 12053;
+        jy += 33 * jnp + 4 * (jdn / 1461);
+        jdn %= 1461;
+        if (jdn >= 366) {
+            jy += (jdn - 1) / 365;
+            jdn = (jdn - 1) % 365;
+        }
+        int jm, jd;
+        if (jdn < 186) { jm = 1 + jdn / 31; jd = 1 + jdn % 31; }
+        else { jm = 7 + (jdn - 186) / 30; jd = 1 + (jdn - 186) % 30; }
+        return new int[]{jy, jm, jd};
+    }
+
+    private int jalaliMonthLength(int jy, int jm) {
+        if (jm <= 6) return 31;
+        if (jm <= 11) return 30;
+        // Leap-year check in the 33-year Jalali cycle, adequate for calendar navigation.
+        int r = jy % 33;
+        return (r == 1 || r == 5 || r == 9 || r == 13 || r == 17 || r == 22 || r == 26 || r == 30) ? 30 : 29;
+    }
+
+    private String jalaliDateText(int gy, int gm, int gd) {
+        int[] j = gregorianToJalali(gy, gm, gd);
+        String[] months = {"فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"};
+        return j[2] + " " + months[j[1]-1] + " " + j[0];
+    }
+
     private void showExpenseCalendar() {
+        Calendar today = Calendar.getInstance();
+        int[] jToday = gregorianToJalali(today.get(Calendar.YEAR), today.get(Calendar.MONTH)+1, today.get(Calendar.DAY_OF_MONTH));
+        String[] months = {"فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"};
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18), dp(12), dp(18), dp(12));
+        TextView prompt = new TextView(this);
+        prompt.setText("تاریخ شمسی را انتخاب کن");
+        prompt.setTextSize(16);
+        prompt.setGravity(Gravity.CENTER);
+        panel.addView(prompt, lp(-1, -2, 0, 0, 0, 10));
+        android.widget.Spinner monthSpinner = new android.widget.Spinner(this);
+        android.widget.ArrayAdapter<String> monthAdapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, months);
+        monthSpinner.setAdapter(monthAdapter);
+        monthSpinner.setSelection(jToday[1]-1);
+        panel.addView(monthSpinner, lp(-1, -2, 0, 0, 0, 8));
+        android.widget.EditText yearInput = new android.widget.EditText(this);
+        yearInput.setSingleLine(true);
+        yearInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        yearInput.setHint("سال شمسی، مثل " + jToday[0]);
+        yearInput.setText(String.valueOf(jToday[0]));
+        panel.addView(yearInput, lp(-1, -2, 0, 0, 0, 8));
+        android.widget.Spinner daySpinner = new android.widget.Spinner(this);
+        panel.addView(daySpinner, lp(-1, -2, 0, 0, 0, 8));
+        Runnable refreshDays = () -> {
+            int year;
+            try { year = Integer.parseInt(yearInput.getText().toString().trim()); } catch (Exception e) { year = jToday[0]; }
+            int month = monthSpinner.getSelectedItemPosition() + 1;
+            int count = jalaliMonthLength(year, month);
+            String[] days = new String[count];
+            for (int i=0; i<count; i++) days[i] = String.valueOf(i+1);
+            android.widget.ArrayAdapter<String> dayAdapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, days);
+            daySpinner.setAdapter(dayAdapter);
+            if (year == jToday[0] && month == jToday[1]) daySpinner.setSelection(Math.min(jToday[2]-1, count-1));
+        };
+        monthSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) { refreshDays.run(); }
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+        yearInput.setOnFocusChangeListener((v, hasFocus) -> { if (!hasFocus) refreshDays.run(); });
+        refreshDays.run();
+        new AlertDialog.Builder(this).setTitle("تقویم شمسی مخارج")
+            .setView(panel)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("نمایش مخارج", (dialog, which) -> {
+                int jy;
+                try { jy = Integer.parseInt(yearInput.getText().toString().trim()); } catch (Exception e) { jy = jToday[0]; }
+                int jm = monthSpinner.getSelectedItemPosition()+1;
+                int jd = daySpinner.getSelectedItemPosition()+1;
+                // Convert Jalali selection to a Gregorian day by searching nearby dates.
+                Calendar probe = Calendar.getInstance();
+                probe.set(jy+621, Math.max(0, jm-1), jd, 0, 0, 0);
+                probe.set(Calendar.MILLISECOND, 0);
+                Calendar found = null;
+                for (int offset=-220; offset<=220; offset++) {
+                    Calendar candidate = (Calendar) probe.clone();
+                    candidate.add(Calendar.DAY_OF_MONTH, offset);
+                    int[] j = gregorianToJalali(candidate.get(Calendar.YEAR), candidate.get(Calendar.MONTH)+1, candidate.get(Calendar.DAY_OF_MONTH));
+                    if (j[0]==jy && j[1]==jm && j[2]==jd) { found = candidate; break; }
+                }
+                if (found == null) { Toast.makeText(this, "تاریخ شمسی معتبر نیست", Toast.LENGTH_SHORT).show(); return; }
+                Calendar selected = (Calendar) found.clone();
+                selected.set(Calendar.HOUR_OF_DAY, 0); selected.set(Calendar.MINUTE, 0); selected.set(Calendar.SECOND, 0); selected.set(Calendar.MILLISECOND, 0);
+                long start = selected.getTimeInMillis();
+                selected.add(Calendar.DAY_OF_MONTH, 1);
+                long end = selected.getTimeInMillis();
+                String history = prefs.getString("oba_expense_history", "");
+                java.util.LinkedHashMap<String, Long> totalsByCategory = new java.util.LinkedHashMap<>();
+                java.util.LinkedHashMap<String, java.util.List<String>> detailsByCategory = new java.util.LinkedHashMap<>();
+                String[] categories = {"خانه", "مدرسه", "ماشین", "سلامت", "سایر"};
+                for (String category : categories) { totalsByCategory.put(category, 0L); detailsByCategory.put(category, new java.util.ArrayList<>()); }
+                long dayTotal = 0L;
+                if (!history.trim().isEmpty()) for (String row : history.split("\\n")) {
+                    String[] parts = row.split("\\t", -1);
+                    if (parts.length < 5) continue;
+                    try {
+                        long timestamp = Long.parseLong(parts[0]);
+                        if (timestamp < start || timestamp >= end) continue;
+                        String category = parts[1].trim();
+                        if (!totalsByCategory.containsKey(category)) category = "سایر";
+                        long amount = Long.parseLong(parts[4]);
+                        totalsByCategory.put(category, totalsByCategory.get(category) + amount); dayTotal += amount;
+                        String subgroup = parts[2].trim(), item = parts[3].trim();
+                        detailsByCategory.get(category).add((subgroup.isEmpty() ? "" : subgroup + " — ") + item + " : " + fmt(amount) + " تومان");
+                    } catch (Exception ignored) {}
+                }
+                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\\n\\n");
+                for (String category : categories) {
+                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
+                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\\n");
+                    report.append("\\n");
+                }
+                if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
+                new AlertDialog.Builder(this).setTitle("مخارج " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
+            }).show();
+    }
+
         Calendar today = Calendar.getInstance();
         new android.app.DatePickerDialog(this, (picker, year, month, day) -> {
             Calendar selected = Calendar.getInstance();
