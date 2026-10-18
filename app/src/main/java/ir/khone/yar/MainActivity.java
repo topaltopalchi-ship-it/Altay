@@ -48,6 +48,9 @@ public class MainActivity extends Activity {
     private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private android.content.Intent voiceIntent;
+    private final android.os.Handler voiceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean voiceResultHandled = false;
     private OfflineVoskSpeechEngine offlineEngine;
     private Button wakeButton;
     private TextToSpeech tts;
@@ -1026,6 +1029,7 @@ public class MainActivity extends Activity {
         try {
             if (recognizer != null) { recognizer.destroy(); recognizer = null; }
             recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            voiceResultHandled = false;
             recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
                 public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
                 public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
@@ -1033,12 +1037,22 @@ public class MainActivity extends Activity {
                 public void onBufferReceived(byte[] b) {}
                 public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
                 public void onError(int e) {
+                    if (!voiceResultHandled && (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
+                        status.setText("هنوز گوش می‌دهم؛ صحبتت را کامل بگو…");
+                        voiceHandler.postDelayed(() -> {
+                            if (!isFinishing() && recognizer != null && !voiceResultHandled && voiceIntent != null) {
+                                try { recognizer.startListening(voiceIntent); } catch (Exception ignored) {}
+                            }
+                        }, 450);
+                        return;
+                    }
                     String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
                         e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
                         "تشخیص صدا انجام نشد. دوباره تلاش کن.";
                     status.setText(msg); say(msg);
                 }
                 public void onResults(Bundle b) {
+                    voiceResultHandled = true;
                     ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if (result != null && !result.isEmpty()) handleVoice(result.get(0));
                 }
@@ -1046,6 +1060,7 @@ public class MainActivity extends Activity {
                 public void onEvent(int a, Bundle b) {}
             });
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            voiceIntent = intent;
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
@@ -1053,8 +1068,8 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             // Ask the speech service to wait longer before deciding the user has finished.
             // Actual limits depend on the speech-recognition app installed on the device.
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 6000L);
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 15000L);
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
             intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000L);
             recognizer.startListening(intent);
         } catch (Exception e) {
@@ -1666,6 +1681,8 @@ public class MainActivity extends Activity {
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
+        voiceHandler.removeCallbacksAndMessages(null);
+        voiceIntent = null;
         if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
         if(recognizer!=null) recognizer.destroy();
         if(tts!=null) tts.shutdown();
