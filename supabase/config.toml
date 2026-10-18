@@ -1,0 +1,7 @@
+# The login and registration functions perform their own input validation.
+# They must be reachable before a user has an access token.
+[functions.login-username]
+verify_jwt = false
+
+[functions.register-username]
+verify_jwt = false

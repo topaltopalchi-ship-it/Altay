@@ -110,7 +110,7 @@ public class VoiceWakeService extends Service {
                     if (wake && tts != null) {
                         speaking = true;
                         updateNotification("نام OBA شنیده شد؛ پاسخ می‌دهد");
-                        tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
+                        tts.speak("بویور", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
                     }

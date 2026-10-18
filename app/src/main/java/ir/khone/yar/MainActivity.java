@@ -34,6 +34,8 @@ import java.util.Calendar;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import org.json.JSONObject;
 import org.json.JSONException;
 
@@ -44,6 +46,7 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private Button wakeButton;
     private TextToSpeech tts;
+    private volatile boolean ttsReady = false;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
@@ -51,6 +54,11 @@ public class MainActivity extends Activity {
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
+    private boolean usageGateApproved = false;
+    private String pendingCategoryVoice = "";
+    private boolean pendingShopIncome = false;
+    private static final String OBA_SUPABASE_URL = "https://sxyaujvliummbvzznejq.supabase.co";
+    private static final String OBA_SUPABASE_KEY = "sb_publishable_AQdI9Ehm-lf7p1Rs7bu4BA_m60TTlen";
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -58,7 +66,7 @@ public class MainActivity extends Activity {
         incomeTotal = prefs.getLong("income", 0);
         expenseTotal = prefs.getLong("expense", 0);
         loadEntries();
-        tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
+        tts = new TextToSpeech(this, result -> { if (tts != null && result == TextToSpeech.SUCCESS) { int languageResult = tts.setLanguage(new Locale("fa", "IR")); if (languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.getDefault()); tts.setSpeechRate(0.88f); ttsReady = true; } });
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
@@ -66,86 +74,130 @@ public class MainActivity extends Activity {
     }
 
     private void buildUi() {
-        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(cream);
-        root.setPadding(dp(18), dp(18), dp(18), dp(12));
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        TextView brand = text("🏠 OBA", 29, dark, true); brand.setGravity(Gravity.CENTER);
-        content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
-        TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
-        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(cream);
+        root.setPadding(dp(16), dp(12), dp(16), dp(10));
 
-        TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 20, dark, true);
-        content.addView(categoryTitle, lp(-1,-2,0,4,0,8));
-        TextView categoryHint = text("یک دسته را انتخاب کن تا زیرگروه و فرم ثبت هزینه باز شود.", 14, Color.DKGRAY, false);
-        content.addView(categoryHint, lp(-1,-2,0,0,0,8));
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+
+        TextView brand = text("🏠 OBA", 30, dark, true);
+        brand.setGravity(Gravity.CENTER);
+        content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
+        TextView subtitle = text("مدیریت سادهٔ هزینه‌ها", 15, Color.DKGRAY, false);
+        subtitle.setGravity(Gravity.CENTER);
+        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 14));
+
+        TextView categoryTitle = text("دسته‌بندی‌ها", 20, dark, true);
+        content.addView(categoryTitle, lp(-1, -2, 0, 4, 0, 8));
         String[][] categoryButtons = {
-            {"🏠 خانه", "خانه"}, {"🚗 ماشین", "ماشین"}, {"🏪 مغازه", "مغازه"},
-            {"🏫 مدرسه", "مدرسه"}, {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
+            {"🏠 خانه", "خانه"}, {"🏫 مدرسه", "مدرسه"},
+            {"🏪 مغازه", "مغازه"}, {"🚗 ماشین", "ماشین"},
+            {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
         };
-        for (String[] item : categoryButtons) {
-            Button categoryButton = button(item[0], Color.WHITE, dark, 17);
-            categoryButton.setMinHeight(dp(54));
-            categoryButton.setOnClickListener(v -> showCategorySubgroups(item[1]));
-            content.addView(categoryButton, lp(-1,-2,0,2,0,5));
+        for (int i = 0; i < categoryButtons.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = i; j < Math.min(i + 2, categoryButtons.length); j++) {
+                final String category = categoryButtons[j][1];
+                Button categoryButton = button(categoryButtons[j][0], Color.WHITE, dark, 17);
+                categoryButton.setMinHeight(dp(62));
+                categoryButton.setOnClickListener(v -> showCategorySubgroups(category));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(62), 1);
+                p.setMargins(dp(4), dp(3), dp(4), dp(3));
+                row.addView(categoryButton, p);
+            }
+            content.addView(row, lp(-1, -2, 0, 0, 0, 2));
         }
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
-        speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
-        content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
+        totals = text("", 17, dark, true);
+        totals.setGravity(Gravity.CENTER);
+        totals.setPadding(dp(14), dp(16), dp(14), dp(16));
+        totals.setBackground(round(Color.rgb(225, 250, 239), 22));
+        content.addView(totals, lp(-1, -2, 0, 14, 0, 12));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
-        wakeButton.setMinHeight(dp(58));
+        LinearLayout alertPanel = new LinearLayout(this);
+        alertPanel.setOrientation(LinearLayout.VERTICAL);
+        alertPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        alertPanel.setBackground(round(Color.rgb(255, 235, 238), 18));
+        alertPanel.addView(text("🔔 هشدارها و آلارم‌ها", 18, Color.rgb(150, 25, 35), true));
+        alertPanel.addView(text("سقف هزینه، بودجهٔ بخش‌ها و یادآوری سرویس یا کارهای مهم را مدیریت کن.", 13, dark, false),
+            lp(-1, -2, 0, 5, 0, 8));
+        Button budgetAlert = button("🎯 تنظیم سقف هزینه / بودجه", Color.WHITE, dark, 15);
+        budgetAlert.setOnClickListener(v -> consumeFeatureUse("budget", () -> showBudgetLimitForm()));
+        alertPanel.addView(budgetAlert, lp(-1, -2, 0, 2, 0, 4));
+        Button maintenanceAlert = button("🛠 تنظیم زمان یادآوری یا سرویس", Color.WHITE, dark, 15);
+        maintenanceAlert.setOnClickListener(v -> consumeFeatureUse("reminder", () -> showManualMaintenanceReminder()));
+        alertPanel.addView(maintenanceAlert, lp(-1, -2, 0, 2, 0, 0));
+        content.addView(alertPanel, lp(-1, -2, 0, 2, 0, 12));
+
+        LinearLayout backupPanel = new LinearLayout(this);
+        backupPanel.setOrientation(LinearLayout.VERTICAL);
+        backupPanel.setPadding(dp(14), dp(12), dp(14), dp(12));
+        backupPanel.setBackground(round(Color.rgb(255, 243, 224), 20));
+        backupPanel.addView(text("🛡️ پشتیبان‌گیری اطلاعات", 17, Color.rgb(124, 70, 0), true));
+        backupPanel.addView(text("برای بازیابی اطلاعات در صورت حذف برنامه یا تعویض گوشی، نسخهٔ پشتیبان بگیر.", 13, dark, false),
+            lp(-1, -2, 0, 5, 0, 8));
+        Button saveBackup = button("📥 ذخیره نسخهٔ پشتیبان", Color.rgb(255, 143, 0), Color.WHITE, 16);
+        saveBackup.setOnClickListener(v -> createBackup());
+        backupPanel.addView(saveBackup, lp(-1, -2, 0, 2, 0, 4));
+        Button restoreBackup = button("📤 بازیابی نسخهٔ پشتیبان", Color.rgb(0, 137, 123), Color.WHITE, 16);
+        restoreBackup.setOnClickListener(v -> chooseBackup());
+        backupPanel.addView(restoreBackup, lp(-1, -2, 0, 2, 0, 0));
+        content.addView(backupPanel, lp(-1, -2, 0, 2, 0, 12));
+
+        wakeButton = button(prefs.getBoolean("wake_enabled", false)
+            ? "🔕 خاموش کردن شنیدن نام OBA"
+            : "🎧 فعال‌سازی شنیدن نام OBA در پس‌زمینه", Color.rgb(124, 83, 210), Color.WHITE, 15);
+        wakeButton.setMinHeight(dp(54));
         wakeButton.setOnClickListener(v -> toggleWakeService());
-        content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
-        status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
-        status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
-        content.addView(status, lp(-1,-2,0,0,0,12));
+        content.addView(wakeButton, lp(-1, -2, 0, 2, 0, 8));
 
-        totals = text("", 17, dark, true); totals.setGravity(Gravity.CENTER);
-        totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
-        content.addView(totals, lp(-1,-2,0,0,0,12));
+        status = text("یک بخش را انتخاب کن؛ سپس ثبت دستی یا ثبت صوتی را بزن.", 14, dark, false);
+        status.setGravity(Gravity.CENTER);
+        status.setPadding(dp(8), dp(8), dp(8), dp(8));
+        content.addView(status, lp(-1, -2, 0, 0, 0, 8));
 
-        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
-        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
-        TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
-        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(255,143,0),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
-        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
-        content.addView(backupPanel,lp(-1,-2,0,8,0,14));
-
-        TextView label = text("دسترسی سریع صوتی", 19, dark, true);
-        content.addView(label, lp(-1,-2,0,6,0,8));
-        cards = new LinearLayout(this); cards.setOrientation(LinearLayout.VERTICAL);
-        addVoiceCard("🧾 ثبت مخارج", "بگو: «خرج ۱۲۰ هزار تومان برای خرید»", "expense");
-        addVoiceCard("💰 ثبت درآمد", "بگو: «درآمد ۵ میلیون تومان حقوق»", "income");
-        addVoiceCard("🧮 ماشین‌حساب صوتی", "بگو: «ماشین حساب ۲۰۰۰۰ جمع ۳۰۰۰۰»", "calc");
-        addVoiceCard("🛒 فهرست خرید", "بگو: «به فهرست خرید شیر اضافه کن»", "shopping");
-        addVoiceCard("✅ کارهای خانه", "بگو: «کار خانه تمیز کردن آشپزخانه»", "task");
-        addVoiceCard("⏰ یادآوری‌های من", "بگو: «یادآوری قسط فردا ساعت ۹ صبح» یا «یادآوری قبض روز ۲۰ هر ماه ساعت ۱۰»", "reminder");
-        addVoiceCard("🚗 ماشین خانه", "بگو: «تعویض روغن در کیلومتر ۸۵ هزار؛ سرویس بعدی ۹۰ هزار کیلومتر»", "vehicle");
-        addVoiceCard("🏥 سلامت", "بگو: «هزینه ۳۰۰ هزار تومان دکتر» یا «دارو ۱۵۰ هزار تومان خریدم»", "health");
-        content.addView(cards);
-        TextView remindersTitle = text("⏰ یادآوری‌های فعال", 19, dark, true);
-        content.addView(remindersTitle, lp(-1,-2,0,12,0,6));
-        remindersView = text("", 14, Color.DKGRAY, false); remindersView.setPadding(dp(12),dp(10),dp(12),dp(10)); remindersView.setBackground(round(Color.WHITE,14));
-        content.addView(remindersView, lp(-1,-2,0,0,0,12));
-        TextView inventoryTitle = text("🧺 موجودی خانه و خریدهای ثبت‌شده", 19, dark, true);
-        content.addView(inventoryTitle, lp(-1,-2,0,8,0,6));
-        inventoryView = text("", 14, Color.DKGRAY, false); inventoryView.setPadding(dp(12),dp(10),dp(12),dp(10)); inventoryView.setBackground(round(Color.WHITE,14));
-        content.addView(inventoryView, lp(-1,-2,0,0,0,12));
-        TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
-        content.addView(recentTitle, lp(-1,-2,0,12,0,6));
-        recent = text("", 14, Color.DKGRAY, false); recent.setPadding(dp(12),dp(10),dp(12),dp(10)); recent.setBackground(round(Color.WHITE,14));
-        content.addView(recent, lp(-1,-2,0,0,0,18));
         scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
-        TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
-        root.addView(foot, lp(-1,-2,0,8,0,0));
+        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        TextView foot = text("OBA • اطلاعات ثبت‌شده روی همین گوشی نگهداری می‌شود", 11, Color.GRAY, false);
+        foot.setGravity(Gravity.CENTER);
+        root.addView(foot, lp(-1, -2, 0, 6, 0, 0));
         setContentView(root);
         refresh();
     }
 
-
+    private void showCalculatorDialog() {
+        LinearLayout panel = new LinearLayout(this); panel.setOrientation(LinearLayout.VERTICAL); panel.setPadding(dp(14),dp(8),dp(14),dp(8));
+        TextView display = text("۰",28,dark,true); display.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL); display.setPadding(dp(12),dp(12),dp(12),dp(12)); display.setMinHeight(dp(64)); display.setBackground(round(Color.rgb(244,248,255),12));
+        panel.addView(display,lp(-1,-2,0,0,0,10));
+        String[][] keys = {{"C","⌫","÷","×"},{"7","8","9","−"},{"4","5","6","+"},{"1","2","3","("},{"0",".",")","="}};
+        final String[] expression = {""};
+        LinearLayout grid = new LinearLayout(this); grid.setOrientation(LinearLayout.VERTICAL);
+        for (String[] row : keys) {
+            LinearLayout line = new LinearLayout(this); line.setOrientation(LinearLayout.HORIZONTAL);
+            for (String key : row) {
+                Button b = button(key,"=".equals(key)?Color.rgb(0,157,112):Color.WHITE,"=".equals(key)?Color.WHITE:dark,21); b.setMinHeight(dp(54));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0,dp(56),1); p.setMargins(dp(3),dp(3),dp(3),dp(3)); line.addView(b,p);
+                b.setOnClickListener(v -> {
+                    if ("C".equals(key)) expression[0]="";
+                    else if ("⌫".equals(key)) { if(!expression[0].isEmpty()) expression[0]=expression[0].substring(0,expression[0].length()-1); }
+                    else if ("=".equals(key)) {
+                        try { double result=VoiceCalculator.evaluate(expression[0]); String resultText=result==Math.rint(result)?fmt((long)result):String.format(Locale.US,"%.4f",result); display.setText(resultText); expression[0]=Double.toString(result); status.setText("نتیجهٔ ماشین‌حساب: "+resultText); say("نتیجه "+resultText); }
+                        catch(Exception ex) { status.setText("عبارت ریاضی را بررسی کن."); say("عبارت را بررسی کن"); } return;
+                    } else { expression[0]+=key.equals("×")?"*":key.equals("÷")?"/":key.equals("−")?"-":key; }
+                    display.setText(expression[0].isEmpty()?"۰":expression[0].replace("*","×").replace("/","÷").replace("-","−"));
+                });
+            }
+            grid.addView(line,new LinearLayout.LayoutParams(-1,-2));
+        }
+        panel.addView(grid,lp(-1,-2,0,0,0,8));
+        Button voice=button("🎙 محاسبه با صدا",Color.rgb(220,247,238),dark,18); voice.setMinHeight(dp(58)); panel.addView(voice,lp(-1,-2,0,6,0,4));
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("ماشین‌حساب اوبا").setView(panel).setNegativeButton("بستن",null).create();
+        voice.setOnClickListener(v->{dialog.dismiss();startVoice("calc");}); dialog.show();
+    }
     private void createBackup() {
         try {
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -218,7 +270,8 @@ public class MainActivity extends Activity {
                             while(keys.hasNext()) {
                                 String key=keys.next(); Object value=values.get(key);
                                 if(value instanceof String) editor.putString(key,(String)value);
-                                else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if (isBudgetOrExpenseCounter(key) || "income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) editor.putLong(key,((Number)value).longValue());
+                                else if (isBudgetAlertFlag(key) && value instanceof Boolean) editor.putBoolean(key,((Boolean)value).booleanValue());
                                 else if (key.startsWith("stock_")) editor.putInt(key,((Number)value).intValue());
                             }
                             editor.apply();
@@ -231,13 +284,23 @@ public class MainActivity extends Activity {
         } catch(Exception e) { Toast.makeText(this,"خطا در فایل پشتیبان؛ دوباره تلاش کن.",Toast.LENGTH_LONG).show(); }
     }
 
+    private boolean isBudgetOrExpenseCounter(String key) {
+        return key != null && (key.matches("budget_(home|vehicle|shop|school|health|other)")
+            || key.matches("category_expense_(home|vehicle|shop|school|health|other)"));
+    }
+
+    private boolean isBudgetAlertFlag(String key) {
+        return key != null && key.matches("budget_alerted_(home|vehicle|shop|school|health|other)");
+    }
+
     private boolean isValidBackupPreference(String key, Object value) {
         if (key == null || value == null) return false;
-        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key)) {
+        if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key) || isBudgetOrExpenseCounter(key)) {
             if (!(value instanceof Number)) return false;
             double number = ((Number) value).doubleValue();
             return Double.isFinite(number) && number >= 0 && number <= Long.MAX_VALUE && number == Math.rint(number);
         }
+        if (isBudgetAlertFlag(key)) return value instanceof Boolean;
         if ("entries".equals(key) || "vehicleRecords".equals(key)) {
             return value instanceof String && ((String) value).length() <= 20000;
         }
@@ -253,6 +316,166 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    private String categorySlug(String category) {
+        if ("خانه".equals(category)) return "home";
+        if ("ماشین".equals(category)) return "vehicle";
+        if ("مغازه".equals(category)) return "shop";
+        if ("مدرسه".equals(category)) return "school";
+        if ("سلامت".equals(category)) return "health";
+        return "other";
+    }
+
+    private long categorySpent(String category) { return prefs.getLong("category_expense_" + categorySlug(category), 0L); }
+
+    private void addCategorySpend(String category, long amount) {
+        if (category == null || category.isEmpty() || amount <= 0) return;
+        String key = "category_expense_" + categorySlug(category);
+        long current = prefs.getLong(key, 0L);
+        if (amount <= Long.MAX_VALUE - current) prefs.edit().putLong(key, current + amount).apply();
+        checkBudgetAlert();
+    }
+
+    private void showBudgetLimitForm() {
+        String[] categories = new String[]{"خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر"};
+        android.widget.Spinner categoryPicker = new android.widget.Spinner(this);
+        categoryPicker.setAdapter(new android.widget.ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, categories));
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("سقف هزینه به تومان");
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),0);
+        form.addView(text("بخش موردنظر",14,dark,false));
+        form.addView(categoryPicker,lp(-1,-2,0,4,0,8));
+        form.addView(input,lp(-1,-2,0,2,0,4));
+        Runnable loadLimit = () -> {
+            String category = categories[categoryPicker.getSelectedItemPosition()];
+            long current = prefs.getLong("budget_" + categorySlug(category), 0L);
+            input.setText(current > 0 ? String.valueOf(current) : "");
+        };
+        categoryPicker.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) { loadLimit.run(); }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+        new AlertDialog.Builder(this).setTitle("تنظیم سقف هزینهٔ هر بخش")
+            .setMessage("برای هر بخش سقف جداگانه تعیین کن؛ با عبور هزینهٔ همان بخش از سقف، اوبا هشدار می‌دهد.")
+            .setView(form).setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیره سقف", (d,w) -> {
+                String category = categories[categoryPicker.getSelectedItemPosition()];
+                String raw = normalize(input.getText().toString()).replace("٬","").replace(",","");
+                try {
+                    long limit = Long.parseLong(raw);
+                    if (limit <= 0) throw new NumberFormatException();
+                    prefs.edit().putLong("budget_" + categorySlug(category), limit)
+                        .putBoolean("budget_alerted_" + categorySlug(category), false).apply();
+                    String msg = "سقف هزینهٔ بخش " + category + " روی " + fmt(limit) + " تومان تنظیم شد.";
+                    status.setText(msg); say(msg); checkBudgetAlert();
+                } catch (Exception e) {
+                    Toast.makeText(this, "یک مبلغ معتبر و بزرگ‌تر از صفر وارد کن.", Toast.LENGTH_LONG).show();
+                }
+            }).show();
+    }
+
+    private void showSingleCategoryBudgetForm(String category) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("سقف هزینه به تومان");
+        long current = prefs.getLong("budget_" + categorySlug(category), 0L);
+        if (current > 0) input.setText(String.valueOf(current));
+        new AlertDialog.Builder(this).setTitle("سقف هزینهٔ " + category)
+            .setMessage("هزینهٔ ثبت‌شدهٔ این بخش: " + fmt(categorySpent(category)) + " تومان")
+            .setView(input).setNegativeButton("لغو", null)
+            .setPositiveButton("ذخیره سقف", (d,w) -> {
+                String raw = normalize(input.getText().toString()).replace("٬","").replace(",","");
+                try {
+                    long limit = Long.parseLong(raw);
+                    if (limit <= 0) throw new NumberFormatException();
+                    String slug = categorySlug(category);
+                    prefs.edit().putLong("budget_" + slug, limit).putBoolean("budget_alerted_" + slug, false).apply();
+                    String msg = "سقف هزینهٔ " + category + " روی " + fmt(limit) + " تومان تنظیم شد.";
+                    status.setText(msg); say(msg); checkBudgetAlert(); refresh();
+                } catch (Exception e) {
+                    Toast.makeText(this, "یک مبلغ معتبر و بزرگ‌تر از صفر وارد کن.", Toast.LENGTH_LONG).show();
+                }
+            }).show();
+    }
+
+    private void showManualMaintenanceReminder() {
+        EditText titleInput = new EditText(this);
+        titleInput.setSingleLine(true);
+        titleInput.setHint("مثلاً تعویض روغن، سرویس ماشین یا تعویض فیلتر");
+        new AlertDialog.Builder(this).setTitle("آلارم سرویس یا تعویض")
+            .setMessage("عنوان هشدار را وارد کن؛ سپس تاریخ و ساعت را انتخاب می‌کنی.")
+            .setView(titleInput).setNegativeButton("لغو", null)
+            .setPositiveButton("انتخاب تاریخ", (d,w) -> {
+                String title = titleInput.getText().toString().trim();
+                if (title.isEmpty()) title = "زمان سرویس یا تعویض رسیده است";
+                final String reminderTitle = title;
+                Calendar now = Calendar.getInstance();
+                new android.app.DatePickerDialog(this, (picker, year, month, day) -> {
+                    Calendar due = Calendar.getInstance();
+                    due.set(Calendar.YEAR, year); due.set(Calendar.MONTH, month); due.set(Calendar.DAY_OF_MONTH, day);
+                    new android.app.TimePickerDialog(this, (timePicker, hour, minute) -> {
+                        due.set(Calendar.HOUR_OF_DAY, hour); due.set(Calendar.MINUTE, minute);
+                        due.set(Calendar.SECOND, 0); due.set(Calendar.MILLISECOND, 0);
+                        if (due.getTimeInMillis() <= System.currentTimeMillis()) {
+                            Toast.makeText(this, "تاریخ و ساعت باید در آینده باشد.", Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        int id = (int)(System.currentTimeMillis() & 0x7fffffff);
+                        String saved = due.getTimeInMillis() + "\nonce\n" + reminderTitle + "\n-1";
+                        prefs.edit().putString("reminder_" + id, saved).apply();
+                        ReminderReceiver.schedule(this, id, due.getTimeInMillis(), reminderTitle, false);
+                        addEntry("هشدار", reminderTitle, 0);
+                        refresh();
+                        String msg = "آلارم «" + reminderTitle + "» برای " +
+                            new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(due.getTime()) + " تنظیم شد.";
+                        status.setText(msg); say(msg);
+                        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
+                        }
+                    }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show();
+                }, now.get(Calendar.YEAR), now.get(Calendar.MONTH), now.get(Calendar.DAY_OF_MONTH)).show();
+            }).show();
+    }
+
+    private void triggerBudgetAlert(String category, long limit) {
+        String slug = categorySlug(category), key = "budget_alerted_" + slug;
+        if (prefs.getBoolean(key, false)) return;
+        prefs.edit().putBoolean(key, true).apply();
+        String msg = "هشدار اوبا! هزینهٔ بخش " + category + " از سقف مجاز " + fmt(limit) + " تومان عبور کرده است.";
+        status.setText(msg); say(msg); Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+        try {
+            android.app.NotificationManager manager = (android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+            if (manager != null) {
+                String channelId = "oba_budget_alerts";
+                if (Build.VERSION.SDK_INT >= 26) {
+                    android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId,"هشدار سقف هزینه",android.app.NotificationManager.IMPORTANCE_HIGH);
+                    channel.enableVibration(true); manager.createNotificationChannel(channel);
+                }
+                android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                    ? new android.app.Notification.Builder(this,channelId)
+                    : new android.app.Notification.Builder(this).setPriority(android.app.Notification.PRIORITY_HIGH);
+                builder.setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("هشدار اوبا: " + category)
+                    .setContentText("هزینه از سقف " + fmt(limit) + " تومان عبور کرده است.")
+                    .setAutoCancel(true).setDefaults(android.app.Notification.DEFAULT_SOUND | android.app.Notification.DEFAULT_VIBRATE);
+                manager.notify(8701 + Math.abs(slug.hashCode() % 1000),builder.build());
+            }
+        } catch (SecurityException ignored) {}
+    }
+
+    private void checkBudgetAlert() {
+        String[] categories = new String[]{"خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر"};
+        for (String category : categories) {
+            String slug = categorySlug(category);
+            long limit = prefs.getLong("budget_" + slug, 0L), spent = categorySpent(category);
+            if (limit > 0 && spent > limit) triggerBudgetAlert(category, limit);
+            else prefs.edit().putBoolean("budget_alerted_" + slug, false).apply();
+        }
+    }
+
     private void showCategorySubgroups(String category) {
         String[] groups;
         if ("خانه".equals(category)) groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه"};
@@ -261,8 +484,121 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
-        new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(groups, (dialog, which) -> showCategoryExpenseForm(category, groups[which])).setNegativeButton("انصراف", null).show();
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(16), dp(8), dp(16), dp(4));
+        long sectionLimit = prefs.getLong("budget_" + categorySlug(category), 0L);
+        long sectionSpent = categorySpent(category);
+        String summary = "هزینهٔ ثبت‌شده: " + fmt(sectionSpent) + " تومان"
+            + (sectionLimit > 0 ? "\nسقف هزینه: " + fmt(sectionLimit) + " تومان • مانده: " + fmt(sectionLimit - sectionSpent) + " تومان"
+                : "\nبرای این بخش هنوز سقف هزینه تعیین نشده است.");
+        panel.addView(text(summary, 14, dark, true), lp(-1, -2, 0, 0, 0, 10));
+
+        Button manual = button("✍️ ثبت دستی", Color.rgb(230, 240, 255), dark, 18);
+        manual.setMinHeight(dp(58));
+        panel.addView(manual, lp(-1, -2, 0, 3, 0, 8));
+        Button voice = button("🎙 ثبت صوتی", Color.rgb(225, 250, 239), dark, 18);
+        voice.setMinHeight(dp(58));
+        panel.addView(voice, lp(-1, -2, 0, 3, 0, 8));
+        Button setBudget = button("🎯 تنظیم سقف هزینهٔ این بخش", Color.rgb(255, 235, 238), Color.rgb(150, 25, 35), 14);
+        setBudget.setOnClickListener(v -> consumeFeatureUse("budget", () -> showSingleCategoryBudgetForm(category)));
+        panel.addView(setBudget, lp(-1, -2, 0, 3, 0, 0));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("بخش " + category)
+            .setView(panel)
+            .setNegativeButton("بازگشت", null)
+            .create();
+        manual.setOnClickListener(v -> {
+            dialog.dismiss();
+            showCategoryManualGroups(category, groups);
+        });
+        voice.setOnClickListener(v -> {
+            dialog.dismiss();
+            pendingCategoryVoice = category;
+            pendingMode = "auto";
+            status.setText("برای ثبت در بخش " + category + " بگو مبلغ و شرح هزینه؛ مثلاً «هزینه ۸۰ هزار تومان برای خرید».");
+            startVoice("auto");
+        });
+        dialog.show();
+    }
+
+    private void showCategoryManualGroups(String category, String[] groups) {
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(list);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("ثبت دستی — " + category)
+            .setView(scroll)
+            .setNegativeButton("بازگشت", null)
+            .create();
+        for (String group : groups) {
+            Button item = button(group, Color.WHITE, dark, 16);
+            item.setMinHeight(dp(50));
+            item.setOnClickListener(v -> {
+                dialog.dismiss();
+                showCategoryExpenseForm(category, group);
+            });
+            list.addView(item, lp(-1, -2, 0, 3, 0, 4));
+        }
+        if ("مغازه".equals(category)) {
+            Button income = button("＋ ثبت فروش / درآمد مغازه", Color.rgb(220, 247, 232), Color.rgb(20, 100, 55), 16);
+            income.setMinHeight(dp(52));
+            income.setOnClickListener(v -> {
+                dialog.dismiss();
+                showCategoryIncomeForm();
+            });
+            list.addView(income, lp(-1, -2, 0, 5, 0, 4));
+        }
+        dialog.show();
+    }
+
+    private void showCategoryIncomeForm() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText amountInput = new EditText(this);
+        amountInput.setHint("مبلغ فروش به تومان");
+        amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        form.addView(amountInput, lp(-1, -2, 0, 0, 0, 8));
+        EditText descriptionInput = new EditText(this);
+        descriptionInput.setHint("شرح فروش (اختیاری)");
+        descriptionInput.setSingleLine(true);
+        form.addView(descriptionInput, lp(-1, -2, 0, 0, 0, 4));
+        new AlertDialog.Builder(this).setTitle("ثبت درآمد مغازه")
+            .setView(form).setNegativeButton("لغو", null)
+            .setPositiveButton("ثبت درآمد", (dialog, which) -> {
+                String rawAmount = amountInput.getText().toString().trim()
+                    .replace("۰","0").replace("۱","1").replace("۲","2").replace("۳","3")
+                    .replace("۴","4").replace("۵","5").replace("۶","6").replace("۷","7")
+                    .replace("۸","8").replace("۹","9").replace("٬","").replace(",","");
+                long amount;
+                try { amount = Long.parseLong(rawAmount); }
+                catch (Exception e) { Toast.makeText(this, "مبلغ معتبر وارد کن.", Toast.LENGTH_LONG).show(); return; }
+                if (amount <= 0 || amount > Long.MAX_VALUE - incomeTotal) {
+                    Toast.makeText(this, "مبلغ درآمد معتبر نیست.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String description = descriptionInput.getText().toString().trim();
+                String title = description.isEmpty() ? "فروش مغازه" : "فروش مغازه — " + description;
+                consumeFeatureUse("shop_income", () -> {
+                    if (amount > Long.MAX_VALUE - incomeTotal) {
+                        Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    incomeTotal += amount;
+                    prefs.edit().putLong("income", incomeTotal).apply();
+                    addEntry("درآمد مغازه", title, amount);
+                    refresh();
+                    String confirmation = "درآمد مغازه به مبلغ " + fmt(amount) + " تومان ثبت شد.";
+                    status.setText(confirmation);
+                    say("بیلدیم");
+                    Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+                });
+            }).show();
     }
 
     private void showCategoryExpenseForm(String category, String subgroup) {
@@ -290,15 +626,22 @@ public class MainActivity extends Activity {
                 if (amount <= 0) { Toast.makeText(this, "مبلغ باید بیشتر از صفر باشد.", Toast.LENGTH_LONG).show(); return; }
                 if (amount > Long.MAX_VALUE - expenseTotal) { Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show(); return; }
                 String description = descriptionInput.getText().toString().trim();
-                expenseTotal += amount;
-                prefs.edit().putLong("expense", expenseTotal).apply();
                 String entryTitle = subgroup + (description.isEmpty() ? "" : " — " + description);
-                addEntry(category, entryTitle, amount);
-                refresh();
-                String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد.";
-                status.setText(confirmation);
-                say(confirmation);
-                Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+                consumeFeatureUse(categoryFeatureKey(category), () -> {
+                    if (amount > Long.MAX_VALUE - expenseTotal) {
+                        Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    expenseTotal += amount;
+                    prefs.edit().putLong("expense", expenseTotal).apply();
+                    addCategorySpend(category, amount);
+                    addEntry(category, entryTitle, amount);
+                    refresh();
+                    String confirmation = "هزینه " + fmt(amount) + " تومان در «" + category + " / " + subgroup + "» ثبت شد. بیلدیم.";
+                    status.setText(confirmation);
+                    say(confirmation);
+                    Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+                });
             }).show();
     }
 
@@ -306,40 +649,213 @@ public class MainActivity extends Activity {
         LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14),dp(12),dp(14),dp(12));
         card.setBackground(round(Color.WHITE,16));
         TextView t = text(title,18,dark,true); card.addView(t);
-        TextView d = text(desc,13,Color.DKGRAY,false); card.addView(d, lp(-1,-2,0,4,0,0));
-        card.setOnClickListener(v -> startVoice(mode));
+        TextView d = text(desc,13,Color.DKGRAY,false); card.addView(d, lp(-1,-2,0,4,0,8));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button manual = button("✍️ ثبت دستی",Color.rgb(230,240,255),dark,14);
+        Button voice = button("🎙 ثبت صوتی",Color.rgb(225,250,239),dark,14);
+        manual.setOnClickListener(v -> showManualFeatureForm(title, mode));
+        voice.setOnClickListener(v -> startVoice(mode));
+        actions.addView(manual,new LinearLayout.LayoutParams(0,dp(44),1));
+        actions.addView(voice,new LinearLayout.LayoutParams(0,dp(44),1));
+        card.addView(actions);
         LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
     }
 
+    private void showManualFeatureForm(String featureTitle, String mode) {
+        if ("reminder".equals(mode)) {
+            consumeFeatureUse("reminder", () -> showManualMaintenanceReminder());
+            return;
+        }
+        if ("budget".equals(mode)) {
+            consumeFeatureUse("budget", () -> showBudgetLimitForm());
+            return;
+        }
+        EditText description = new EditText(this);
+        description.setSingleLine(true);
+        description.setHint("شرح یا عنوان");
+        EditText amountInput = new EditText(this);
+        amountInput.setSingleLine(true);
+        amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        amountInput.setHint("مبلغ به تومان (در صورت نیاز)");
+        if ("calc".equals(mode)) {
+            description.setHint("عبارت محاسبه؛ مثلاً ۲۰۰۰۰ + ۳۰۰۰۰");
+            amountInput.setVisibility(View.GONE);
+        }
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16),dp(8),dp(16),dp(4));
+        android.widget.Spinner categoryPicker = null;
+        if ("expense".equals(mode)) {
+            String[] expenseCategories = new String[]{"خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر"};
+            categoryPicker = new android.widget.Spinner(this);
+            categoryPicker.setAdapter(new android.widget.ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, expenseCategories));
+            form.addView(text("دستهٔ هزینه",14,dark,false));
+            form.addView(categoryPicker,lp(-1,-2,0,2,0,6));
+        }
+        final android.widget.Spinner selectedCategoryPicker = categoryPicker;
+        form.addView(description,lp(-1,-2,0,2,0,6));
+        form.addView(amountInput,lp(-1,-2,0,2,0,4));
+        new AlertDialog.Builder(this).setTitle("ثبت دستی — " + featureTitle)
+            .setView(form).setNegativeButton("لغو",null)
+            .setPositiveButton("ثبت", (dialog,which) -> {
+                String title = description.getText().toString().trim();
+                String rawAmount = normalize(amountInput.getText().toString()).replace("٬","").replace(",","");
+                long amount = 0L;
+                try { if (!rawAmount.isEmpty()) amount = Long.parseLong(rawAmount); }
+                catch (Exception e) { Toast.makeText(this,"مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                if ("calc".equals(mode)) {
+                    if (title.isEmpty()) { Toast.makeText(this,"عبارت محاسبه را وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                    consumeFeatureUse("calc", () -> {
+                        try {
+                            String answer = "نتیجه محاسبه: " + new DecimalFormat("#,##0.####").format(VoiceCalculator.evaluate(normalize(title)));
+                            status.setText(answer); say(answer);
+                        } catch (Exception e) { status.setText("عبارت محاسبه معتبر نیست."); say("عبارت محاسبه معتبر نیست"); }
+                    });
+                    return;
+                }
+                if (title.isEmpty()) { Toast.makeText(this,"شرح را وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                if (amount < 0) { Toast.makeText(this,"مبلغ معتبر نیست.",Toast.LENGTH_LONG).show(); return; }
+                final long finalAmount = amount;
+                String quotaKey = mode;
+                if (!java.util.Arrays.asList("expense","income","shopping","task","vehicle","health").contains(mode)) quotaKey = "expense";
+                final String key = quotaKey;
+                consumeFeatureUse(key, () -> {
+                    if ("income".equals(mode)) {
+                        if (finalAmount <= 0 || finalAmount > Long.MAX_VALUE-incomeTotal) { Toast.makeText(this,"برای درآمد مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                        incomeTotal += finalAmount; prefs.edit().putLong("income",incomeTotal).apply();
+                        addEntry("درآمد",title,finalAmount);
+                    } else if ("expense".equals(mode) || "health".equals(mode) || "vehicle".equals(mode) || ("shopping".equals(mode) && finalAmount > 0)) {
+                        if (finalAmount <= 0 || finalAmount > Long.MAX_VALUE-expenseTotal) { Toast.makeText(this,"برای هزینه مبلغ معتبر وارد کن.",Toast.LENGTH_LONG).show(); return; }
+                        String category;
+                        if ("health".equals(mode)) category = "سلامت";
+                        else if ("vehicle".equals(mode)) category = "ماشین";
+                        else if ("shopping".equals(mode)) category = "سایر";
+                        else if (selectedCategoryPicker != null) category = (String) selectedCategoryPicker.getSelectedItem();
+                        else category = "خانه";
+                        expenseTotal += finalAmount; prefs.edit().putLong("expense",expenseTotal).apply();
+                        addCategorySpend(category,finalAmount); addEntry(category,title,finalAmount);
+                    } else {
+                        addEntry("shopping".equals(mode) ? "فهرست خرید" : "task".equals(mode) ? "کار خانه" : featureTitle,title,0);
+                    }
+                    refresh();
+                    String msg = "ثبت شد: " + title;
+                    status.setText(msg); say("بیلدیم");
+                });
+            }).show();
+    }
+
+    private int voiceRetryCount = 0;
+    private boolean usingOnDeviceRecognition = false;
+
     private void startVoice(String mode) {
         pendingMode = mode;
+        voiceRetryCount = 0;
+        usingOnDeviceRecognition = false;
+        startVoiceInternal(mode, false);
+    }
+
+    private void startVoiceInternal(String mode, boolean preferOnDevice) {
+        pendingMode = mode;
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
-            say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
+            String message = "سرویس تشخیص گفتار اندروید در دسترس نیست. سرویس گفتار Google را به‌روز کن و دوباره تلاش کن.";
+            status.setText(message);
+            say(message);
+            showVoiceRetryDialog(message);
+            return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
         }
         try {
-            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            if (recognizer != null) {
+                recognizer.destroy();
+                recognizer = null;
+            }
+            if (preferOnDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                    && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
+                usingOnDeviceRecognition = true;
+            } else {
+                recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+                usingOnDeviceRecognition = false;
+            }
             recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
-                public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
+                public void onReadyForSpeech(Bundle b) { status.setText(usingOnDeviceRecognition ? "🎙 گوش می‌دهم… (حالت روی دستگاه)" : "🎙 گوش می‌دهم… حالا صحبت کن"); }
                 public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
                 public void onRmsChanged(float r) {}
                 public void onBufferReceived(byte[] b) {}
                 public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
                 public void onError(int e) {
-                    String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
-                        e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
-                        "تشخیص صدا انجام نشد. دوباره تلاش کن.";
-                    status.setText(msg); say(msg);
+                    boolean serverError = e == SpeechRecognizer.ERROR_NETWORK
+                        || e == SpeechRecognizer.ERROR_NETWORK_TIMEOUT
+                        || e == SpeechRecognizer.ERROR_SERVER
+                        || e == SpeechRecognizer.ERROR_SERVER_DISCONNECTED;
+                    if (serverError && voiceRetryCount == 0) {
+                        voiceRetryCount = 1;
+                        status.setText("سرویس گفتار پاسخ نداد؛ یک بار دوباره تلاش می‌کنم…");
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                            () -> startVoiceInternal(pendingMode, false), 450L);
+                        return;
+                    }
+                    if (serverError && voiceRetryCount == 1 && !usingOnDeviceRecognition
+                            && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                            && SpeechRecognizer.isOnDeviceRecognitionAvailable(MainActivity.this)) {
+                        voiceRetryCount = 2;
+                        status.setText("اتصال سرویس گفتار مشکل دارد؛ حالت روی دستگاه را امتحان می‌کنم…");
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                            () -> startVoiceInternal(pendingMode, true), 350L);
+                        return;
+                    }
+
+                    // Silence or an unclear phrase is normal during voice follow-ups.
+                    // Retry quietly once; never show the disruptive Android-style error dialog.
+                    if (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        if (voiceRetryCount < 1) {
+                            voiceRetryCount++;
+                            status.setText("🎙 گوش می‌دهم…");
+                            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                                () -> startVoiceInternal(pendingMode, false), 350L);
+                        } else {
+                            voiceRetryCount = 0;
+                            status.setText("هر وقت آماده‌ای، دوباره صحبت کن.");
+                        }
+                        return;
+                    }
+
+                    String msg;
+                    if (serverError) {
+                        msg = "سرویس گفتار پس از تلاش مجدد هم پاسخ نداد. اینترنت و به‌روز بودن Speech Services by Google را بررسی کن.";
+                    } else if (e == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED
+                            || e == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+                        msg = "زبان فارسی برای سرویس تشخیص گفتار آماده نیست. در تنظیمات برنامهٔ Google یا Speech Services زبان فارسی را فعال یا دانلود کن.";
+                    } else if (e == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        msg = "اجازهٔ میکروفون داده نشده است؛ از تنظیمات گوشی دسترسی میکروفون را فعال کن.";
+                    } else if (e == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                        msg = "میکروفون مشغول است. چند لحظه صبر کن و دوباره تلاش کن.";
+                    } else if (e == SpeechRecognizer.ERROR_TOO_MANY_REQUESTS) {
+                        msg = "درخواست‌های صوتی زیاد شده است. چند ثانیه صبر کن و دوباره بزن.";
+                    } else if (e == SpeechRecognizer.ERROR_CLIENT || e == SpeechRecognizer.ERROR_AUDIO) {
+                        msg = "شروع دریافت صدا با مشکل روبه‌رو شد. دوباره تلاش کن و مطمئن شو برنامهٔ دیگری از میکروفون استفاده نمی‌کند.";
+                    } else {
+                        msg = "تشخیص گفتار انجام نشد. سرویس گفتار Google و زبان فارسی را بررسی کن و دوباره تلاش کن.";
+                    }
+                    // Keep the selected category/income context until retry or explicit cancellation.
+                    status.setText(msg);
+                    say(msg);
+                    showVoiceRetryDialog(msg);
                 }
                 public void onResults(Bundle b) {
+                    voiceRetryCount = 0;
                     ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if (result != null && !result.isEmpty()) handleVoice(result.get(0));
+                    else showVoiceRetryDialog("متن گفتار دریافت نشد؛ دوباره امتحان کن.");
                 }
-                public void onPartialResults(Bundle b) {}
+                public void onPartialResults(Bundle b) {
+                    ArrayList<String> partial = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (partial != null && !partial.isEmpty()) status.setText("شنیدم: " + partial.get(0));
+                }
                 public void onEvent(int a, Bundle b) {}
             });
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -348,10 +864,34 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L);
             recognizer.startListening(intent);
         } catch (Exception e) {
-            status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
+            String msg = "شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.";
+            status.setText(msg);
+            showVoiceRetryDialog(msg);
         }
+    }
+
+    private void showVoiceRetryDialog(String message) {
+        if (isFinishing() || isDestroyed()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("مشکل در دریافت صدا")
+            .setMessage(message)
+            .setPositiveButton("تلاش دوباره", (dialog, which) -> {
+                voiceRetryCount = 0;
+                startVoiceInternal(pendingMode, false);
+            })
+            .setNegativeButton("لغو", (dialog, which) -> {
+                pendingCategoryVoice = "";
+                pendingShopIncome = false;
+                usageGateApproved = false;
+                status.setText("فرمان صوتی لغو شد. می‌توانی دوباره از دکمهٔ صوتی شروع کنی.");
+            })
+            .show();
     }
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
@@ -394,12 +934,234 @@ public class MainActivity extends Activity {
         }
     }
 
+private String featureKeyForVoice(String raw) {
+        String s = normalize(raw);
+        if (pendingShopIncome) return "shop_income";
+        if (!pendingCategoryVoice.isEmpty()) return categoryFeatureKey(pendingCategoryVoice);
+        if (pendingMode != null && !pendingMode.equals("auto")) {
+            if (pendingMode.startsWith("stock_")) return "inventory";
+            // Map UI modes to the exact allowlisted quota keys used by Supabase.
+            if ("vehicle".equals(pendingMode)) return "vehicle_expense";
+            if ("health".equals(pendingMode)) return "health_expense";
+            if ("expense".equals(pendingMode)) return "expense";
+            return pendingMode;
+        }
+        // Keep classification aligned with handleVoice() and never bill an
+        // unrecognized phrase as an expense by default.
+        if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) return "budget";
+        if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) return "inventory";
+        if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) return "summary";
+        if (contains(s,"سلامت","دکتر","پزشک","دارو","درمان","آزمایش","بیمارستان")) return "health";
+        if (contains(s,"ماشین","خودرو","تعویض روغن","روغن موتور","کیلومتر","لنت ترمز","باتری ماشین","سرویس خودرو")) return "vehicle";
+        if (contains(s,"یادآوری","یادم بنداز","یادآور")) return "reminder";
+        if (contains(s,"درآمد","حقوق","فروختم","دریافت کردم")) return "income";
+        if (contains(s,"ماشین حساب","حساب کن","جمع","ضرب","منهای","تقسیم")) return "calc";
+        if (contains(s,"خریدم","خرید کردم","خریداری کردم","خرید به قیمت","خرید به مبلغ","خرید","فهرست")) return "shopping";
+        if (contains(s,"کار خانه","وظیفه","تمیزکاری")) return "task";
+        if (contains(s,"هزینه","خرج","پرداخت کردم","قیمت خرید")) return "expense";
+        return null;
+    }
+
+    private void consumeFeatureUseBeforeVoice(String raw) {
+        String featureKey = featureKeyForVoice(raw);
+        if (featureKey == null) {
+            String message = "متوجه نوع درخواست نشدم؛ لطفاً فرمان را واضح‌تر بگو.";
+            status.setText(message); say(message); return;
+        }
+        String normalized = normalize(raw);
+        if ((featureKey.equals("expense") || featureKey.equals("income") || featureKey.equals("health")) && parseAmount(normalized) <= 0) {
+            String message = "مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان».";
+            status.setText(message); say(message); return;
+        }
+        consumeFeatureUse(featureKey, () -> {
+            usageGateApproved = true;
+            handleVoice(raw);
+        });
+    }
+
+    private void consumeFeatureUse(String featureKey, Runnable onAllowed) {
+        SharedPreferences authPrefs = getSharedPreferences("oba_auth", MODE_PRIVATE);
+        if (authPrefs.getBoolean("guest_local", false)) {
+            String localKey = "local_usage_" + featureKey;
+            int used = authPrefs.getInt(localKey, 0);
+            if (used >= 10) {
+                status.setText("۱۰ استفادهٔ رایگان این قابلیت تمام شده است.");
+                new AlertDialog.Builder(this).setTitle("پایان سهمیهٔ رایگان")
+                    .setMessage("در حالت مهمان، ۱۰ استفادهٔ رایگان این قابلیت تمام شده است. برای ادامه وارد حساب کاربری شو.")
+                    .setPositiveButton("متوجه شدم", null).show();
+                return;
+            }
+            authPrefs.edit().putInt(localKey, used + 1).apply();
+            status.setText("حالت مهمان؛ " + (9 - used) + " استفادهٔ رایگان دیگر باقی مانده است.");
+            onAllowed.run();
+            return;
+        }
+        String token = authPrefs.getString("access_token", "");
+        if (token.isEmpty()) {
+            status.setText("برای استفاده از این قابلیت، ابتدا وارد حساب اوبا شو.");
+            say("ابتدا وارد حساب اوبا شو");
+            return;
+        }
+        status.setText("در حال بررسی سهمیهٔ استفاده...");
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String effectiveToken = refreshSessionIfNeeded(token);
+                URL url = new URL(OBA_SUPABASE_URL + "/rest/v1/rpc/oba_consume_feature_use");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(12000);
+                connection.setReadTimeout(12000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+                connection.setRequestProperty("Authorization", "Bearer " + effectiveToken);
+                JSONObject body = new JSONObject();
+                body.put("p_feature_key", featureKey);
+                try (OutputStream out = connection.getOutputStream()) {
+                    out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int code = connection.getResponseCode();
+                java.io.InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
+                StringBuilder response = new StringBuilder();
+                if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) response.append(line);
+                }
+                if (code < 200 || code >= 300) throw new Exception("بررسی سهمیه انجام نشد (HTTP " + code + "). ورود و اینترنت را بررسی کن.");
+                org.json.JSONArray rows = new org.json.JSONArray(response.toString());
+                if (rows.length() == 0) throw new Exception("پاسخ سهمیه از سرور معتبر نیست.");
+                JSONObject row = rows.getJSONObject(0);
+                boolean allowed = row.optBoolean("allowed", false);
+                int remaining = row.optInt("remaining", 0);
+                runOnUiThread(() -> {
+                    if (!allowed) {
+                        status.setText("۱۰ استفادهٔ رایگان این قابلیت تمام شده است. برای ادامه، اشتراک لازم است.");
+                        new AlertDialog.Builder(this).setTitle("پایان سهمیهٔ رایگان")
+                            .setMessage("۱۰ استفادهٔ رایگان این قابلیت مصرف شده است. برای ادامه باید اشتراک تهیه کنی.")
+                            .setPositiveButton("متوجه شدم", null).show();
+                        return;
+                    }
+                    status.setText("استفادهٔ مجاز است؛ " + remaining + " بار رایگان باقی مانده.");
+                    onAllowed.run();
+                });
+            } catch (Exception e) {
+                String message = e.getMessage() == null ? "بررسی سهمیه ممکن نشد. اتصال اینترنت و ورود به حساب را بررسی کن." : e.getMessage();
+                runOnUiThread(() -> { status.setText(message); say(message); });
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }).start();
+    }
+
+    private String categoryFeatureKey(String category) {
+        if ("خانه".equals(category)) return "home_expense";
+        if ("ماشین".equals(category)) return "vehicle_expense";
+        if ("مغازه".equals(category)) return "shop_expense";
+        if ("مدرسه".equals(category)) return "school_expense";
+        if ("سلامت".equals(category)) return "health_expense";
+        return "other_expense";
+    }
+
+private String refreshSessionIfNeeded(String currentToken) throws Exception {
+        SharedPreferences auth = getSharedPreferences("oba_auth", MODE_PRIVATE);
+        if (auth.getLong("expires_at", 0L) > System.currentTimeMillis() + 120000L) return currentToken;
+        String refreshToken = auth.getString("refresh_token", "");
+        if (refreshToken.isEmpty()) throw new Exception("نشست ورود منقضی شده است؛ دوباره وارد اوبا شو.");
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(OBA_SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token").openConnection();
+            c.setRequestMethod("POST");
+            c.setConnectTimeout(12000);
+            c.setReadTimeout(12000);
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setRequestProperty("apikey", OBA_SUPABASE_KEY);
+            JSONObject request = new JSONObject();
+            request.put("refresh_token", refreshToken);
+            try (OutputStream out = c.getOutputStream()) {
+                out.write(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            int code = c.getResponseCode();
+            java.io.InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+            StringBuilder raw = new StringBuilder();
+            if (stream != null) try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) raw.append(line);
+            }
+            if (code < 200 || code >= 300) throw new Exception("تمدید ورود انجام نشد؛ دوباره وارد اوبا شو.");
+            JSONObject session = new JSONObject(raw.toString());
+            String access = session.optString("access_token", "");
+            String rotatedRefresh = session.optString("refresh_token", "");
+            if (access.isEmpty() || rotatedRefresh.isEmpty()) throw new Exception("پاسخ تمدید ورود معتبر نیست؛ دوباره وارد اوبا شو.");
+            long seconds = session.optLong("expires_in", 3600L);
+            auth.edit().putString("access_token", access).putString("refresh_token", rotatedRefresh)
+                .putLong("expires_at", System.currentTimeMillis() + seconds * 1000L).apply();
+            return access;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    private String inferExpenseCategory(String spoken) {
+        if (contains(spoken, "ماشین", "خودرو", "بنزین", "روغن موتور", "تعمیرگاه", "لاستیک")) return "ماشین";
+        if (contains(spoken, "مغازه", "فروشگاه", "جنس", "کالا", "فروش")) return "مغازه";
+        if (contains(spoken, "مدرسه", "دانش آموز", "دانش‌آموز", "کتاب درسی", "شهریه")) return "مدرسه";
+        if (contains(spoken, "دکتر", "پزشک", "دارو", "درمان", "آزمایش", "بیمارستان", "سلامت")) return "سلامت";
+        if (contains(spoken, "سایر", "متفرقه")) return "سایر";
+        return "خانه";
+    }
+
     private void handleVoice(String raw) {
+        String spoken = normalize(raw);
+        if ("wake".equals(pendingMode)) {
+            if (contains(spoken, "اوبا", "اُبا", "وبا")) {
+                status.setText("بویور؛ نام بخش را بگو.");
+                sayThenListenForNavigation("بویور");
+            } else {
+                status.setText("نام اوبا تشخیص داده نشد. دوباره روی میانبر صوتی بزن و بگو «اوبا».");
+                say("لطفاً بگو اوبا");
+            }
+            return;
+        }
+        if ("navigate".equals(pendingMode)) {
+            if (contains(spoken, "خانه", "خونه")) showCategorySubgroups("خانه");
+            else if (contains(spoken, "ماشین", "خودرو")) showCategorySubgroups("ماشین");
+            else if (contains(spoken, "مغازه", "فروشگاه", "کسب و کار")) showCategorySubgroups("مغازه");
+            else if (contains(spoken, "مدرسه", "مکتب")) showCategorySubgroups("مدرسه");
+            else if (contains(spoken, "سلامت", "دکتر", "درمان")) showCategorySubgroups("سلامت");
+            else if (contains(spoken, "سایر", "متفرقه")) showCategorySubgroups("سایر");
+            else {
+                String retryMessage = "بخش را متوجه نشدم؛ خانه، ماشین، مغازه، مدرسه، سلامت یا سایر را بگو.";
+                status.setText(retryMessage);
+                sayThenListenForNavigation(retryMessage);
+            }
+            return;
+        }
+        if ("auto".equals(pendingMode)) {
+            String categoryCommand = resolveCategoryCommand(spoken);
+            if (categoryCommand != null) {
+                pendingCategoryVoice = categoryCommand;
+                pendingShopIncome = false;
+                showCategorySubgroups(categoryCommand);
+                String prompt = "بخش " + categoryCommand + " باز شد. حالا مبلغ و شرح هزینه را بگو؛ مثلاً هشتاد هزار تومان برای خرید لوازم.";
+                status.setText(prompt);
+                sayThenListenForCommand(prompt, "auto");
+                return;
+            }
+        }
+        if (!usageGateApproved) {
+            consumeFeatureUseBeforeVoice(raw);
+            return;
+        }
+        usageGateApproved = false;
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
         String mode = pendingMode;
         if (mode.equals("auto")) {
-            if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
+            if (pendingShopIncome) mode = "income";
+            else if (!pendingCategoryVoice.isEmpty()) mode = "expense";
+            else if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
             else if (contains(s,"مانده","خلاصه حساب","گزارش مالی","جمع هزینه","جمع درآمد")) {
                 String summary="درآمد کل "+fmt(incomeTotal)+" تومان. هزینه کل "+fmt(expenseTotal)+" تومان. مانده "+fmt(incomeTotal-expenseTotal)+" تومان.";
@@ -417,10 +1179,28 @@ public class MainActivity extends Activity {
         }
         if (mode.equals("expense") || mode.equals("income")) {
             long amount = parseAmount(s);
-            if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return; }
+            if (amount <= 0) {
+                pendingCategoryVoice = "";
+                pendingShopIncome = false;
+                status.setText("مبلغ را هم بگو؛ مثلاً «هزینه پنجاه هزار تومان برای نان»"); say("لطفاً مبلغ را هم بگو"); return;
+            }
             String title = cleanDescription(s, mode);
-            if (mode.equals("income")) { incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply(); addEntry("درآمد", title, amount); say("درآمد به مبلغ " + fmt(amount) + " تومان ثبت شد"); }
-            else { expenseTotal += amount; prefs.edit().putLong("expense",expenseTotal).apply(); addEntry("هزینه", title, amount); say("هزینه " + fmt(amount) + " تومان ثبت شد"); }
+            if (mode.equals("income")) {
+                if (amount > Long.MAX_VALUE - incomeTotal) {
+                    pendingShopIncome = false;
+                    status.setText("مبلغ درآمد بیش از حد مجاز است."); say("مبلغ درآمد معتبر نیست"); return;
+                }
+                incomeTotal += amount; prefs.edit().putLong("income",incomeTotal).apply();
+                addEntry(pendingShopIncome ? "درآمد مغازه" : "درآمد", title, amount);
+                say("بیلدیم");
+                pendingShopIncome = false;
+            } else {
+                String category = pendingCategoryVoice;
+                pendingCategoryVoice = "";
+                if (category.isEmpty()) category = inferExpenseCategory(s);
+                showVoiceExpenseConfirmation(category, title, amount);
+                return;
+            }
             refresh(); return;
         }
         if (mode.equals("calc")) {
@@ -452,9 +1232,10 @@ public class MainActivity extends Activity {
             if (title.isEmpty()) title = "هزینه سلامت";
             expenseTotal += amount;
             prefs.edit().putLong("expense", expenseTotal).apply();
+            addCategorySpend("سلامت", amount);
             addEntry("سلامت", title, amount);
             String message = "هزینه سلامت به مبلغ " + fmt(amount) + " تومان ثبت شد.";
-            status.setText(message); say(message); refresh(); return;
+            status.setText(message); say("بیلدیم"); refresh(); return;
         }
         if (mode.equals("vehicle")) { handleVehicleVoice(raw, s); return; }
         if (mode.equals("shopping")) { handlePurchaseVoice(raw, s); return; }
@@ -475,10 +1256,16 @@ public class MainActivity extends Activity {
             status.setText("مبلغ بودجه را بگو؛ مثلاً «بودجه ماهانه خانه پنج میلیون تومان»");
             say("مبلغ بودجه را بگو"); return;
         }
-        prefs.edit().putLong("home_budget", amount).apply();
-        long remaining = amount - expenseTotal;
-        String msg = "بودجه خانه روی " + fmt(amount) + " تومان تنظیم شد. مانده بودجه با احتساب ثبت‌های فعلی " + fmt(remaining) + " تومان است.";
-        status.setText(msg); say(msg); refresh();
+        String category = contains(s, "ماشین", "خودرو") ? "ماشین"
+            : contains(s, "مغازه", "فروشگاه") ? "مغازه"
+            : contains(s, "مدرسه") ? "مدرسه"
+            : contains(s, "سلامت", "درمان") ? "سلامت"
+            : contains(s, "سایر", "متفرقه") ? "سایر" : "خانه";
+        String slug = categorySlug(category);
+        prefs.edit().putLong("budget_" + slug, amount).putBoolean("budget_alerted_" + slug, false).apply();
+        long remaining = amount - categorySpent(category);
+        String msg = "سقف هزینهٔ بخش " + category + " روی " + fmt(amount) + " تومان تنظیم شد. ماندهٔ سقف " + fmt(remaining) + " تومان است.";
+        status.setText(msg); say(msg); checkBudgetAlert(); refresh();
     }
 
     private void handleStockUse(String raw) {
@@ -509,13 +1296,14 @@ public class MainActivity extends Activity {
         if (item.isEmpty()) item = "خرید خانه";
         expenseTotal += amount;
         prefs.edit().putLong("expense", expenseTotal).apply();
+        addCategorySpend("خانه", amount);
         String key = "stock_" + item;
         int qty = prefs.getInt(key, 0);
         prefs.edit().putInt(key, qty + 1).apply();
         addEntry("خرید: " + item, raw, amount);
-        long budget = prefs.getLong("home_budget", 0);
+        long budget = prefs.getLong("budget_home", prefs.getLong("home_budget", 0));
         String msg = item + " به مبلغ " + fmt(amount) + " تومان ثبت شد؛ یک قلم به موجودی اضافه شد و هزینه از حساب خانه کم شد.";
-        if (budget > 0) msg += " مانده بودجه " + fmt(budget - expenseTotal) + " تومان است.";
+        if (budget > 0) msg += " مانده بودجه خانه " + fmt(budget - categorySpent("خانه")) + " تومان است.";
         status.setText(msg); say(msg); refresh();
     }
 
@@ -527,7 +1315,7 @@ public class MainActivity extends Activity {
             try {
                 int qty = prefs.getInt(key, 0);
                 if (qty <= 0) continue;
-                if (out.length() > 0) out.append("\\n");
+                if (out.length() > 0) out.append("\n");
                 out.append("• ").append(key.substring(6)).append(" — ").append(qty).append(" قلم");
             } catch (Exception ignored) {}
         }
@@ -665,6 +1453,47 @@ public class MainActivity extends Activity {
     private void handleVehicleVoice(String raw, String s) {
         boolean oil = contains(s, "روغن", "تعویض روغن");
         boolean service = oil || contains(s, "سرویس", "تعمیر", "لنت", "باتری", "لاستیک", "فیلتر", "شمع", "تسمه");
+        if (!service && contains(s, "کیلومتر فعلی", "کارکرد خودرو", "کارکرد ماشین", "کیلومتر ماشین")) {
+            String mileageText = s.replace("فعلی", " ").replace("خودرو", " ").replace("ماشین", " ");
+            long currentOdometer = extractMileage(mileageText);
+            if (currentOdometer <= 0) {
+                status.setText("کیلومتر فعلی را واضح بگو؛ مثلاً «کیلومتر فعلی ماشین ۱۲۰۰۰۰ کیلومتر».");
+                say("عدد کیلومتر فعلی ماشین را بگو");
+                return;
+            }
+            prefs.edit().putLong("vehicle_current_km", currentOdometer).apply();
+            long target = prefs.getLong("vehicle_next_km", 0L);
+            if (target > 0 && currentOdometer >= target && !prefs.getBoolean("vehicle_service_alerted", false)) {
+                prefs.edit().putBoolean("vehicle_service_alerted", true).apply();
+                String alert = "یادآوری اوبا: زمان سرویس بعدی خودرو رسیده است. کیلومتر فعلی " + fmt(currentOdometer) + " و موعد سرویس " + fmt(target) + " کیلومتر است.";
+                status.setText(alert); say(alert); Toast.makeText(this, alert, Toast.LENGTH_LONG).show();
+                try {
+                    android.app.NotificationManager manager = (android.app.NotificationManager)getSystemService(NOTIFICATION_SERVICE);
+                    if (manager != null) {
+                        String channelId = "oba_vehicle_service";
+                        if (Build.VERSION.SDK_INT >= 26) {
+                            android.app.NotificationChannel channel = new android.app.NotificationChannel(channelId, "یادآوری سرویس خودرو", android.app.NotificationManager.IMPORTANCE_HIGH);
+                            channel.enableVibration(true); manager.createNotificationChannel(channel);
+                        }
+                        android.app.Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                            ? new android.app.Notification.Builder(this, channelId)
+                            : new android.app.Notification.Builder(this).setPriority(android.app.Notification.PRIORITY_HIGH);
+                        builder.setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("یادآوری سرویس خودرو")
+                            .setContentText("کیلومتر فعلی به موعد سرویس رسیده است.").setAutoCancel(true)
+                            .setDefaults(android.app.Notification.DEFAULT_SOUND | android.app.Notification.DEFAULT_VIBRATE);
+                        manager.notify(9817, builder.build());
+                    }
+                } catch (SecurityException ignored) {}
+            } else {
+                String message = target > 0
+                    ? "کیلومتر فعلی " + fmt(currentOdometer) + " ثبت شد؛ موعد سرویس در " + fmt(target) + " کیلومتر است."
+                    : "کیلومتر فعلی " + fmt(currentOdometer) + " ثبت شد. برای فعال شدن هشدار، سرویس بعدی را هم با کیلومتر آن ثبت کن.";
+                status.setText(message); say(message);
+            }
+            addEntry("کارکرد خودرو", "کیلومتر فعلی " + fmt(currentOdometer), 0);
+            refresh();
+            return;
+        }
         if (!service) {
             status.setText("برای ثبت خودرو بگو چه سرویسی انجام شد؛ مثلاً تعویض روغن در کیلومتر ۸۵ هزار.");
             say("نام سرویس خودرو را بگو");
@@ -673,6 +1502,11 @@ public class MainActivity extends Activity {
 
         long currentKm = extractMileage(s);
         long nextKm = extractNextMileage(s);
+        if (nextKm > 0) {
+            prefs.edit().putLong("vehicle_next_km", nextKm)
+                .putString("vehicle_next_service", kindForVehicle(oil))
+                .putBoolean("vehicle_service_alerted", false).apply();
+        }
         String date = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(new Date());
         String kind = oil ? "تعویض روغن" : "سرویس/تعمیر خودرو";
         StringBuilder detail = new StringBuilder(kind).append(" • ").append(date);
@@ -702,6 +1536,10 @@ public class MainActivity extends Activity {
             status.setText("ثبت شد: " + kind + " در کیلومتر " + fmt(currentKm) + "؛ سرویس بعدی در " + fmt(nextKm) + " کیلومتر.");
             say("ثبت شد. " + kind + " در کیلومتر " + fmt(currentKm) + " و سرویس بعدی در کیلومتر " + fmt(nextKm));
         }
+    }
+
+    private String kindForVehicle(boolean oil) {
+        return oil ? "تعویض روغن" : "سرویس خودرو";
     }
 
     private long extractMileage(String s) {
@@ -797,13 +1635,102 @@ public class MainActivity extends Activity {
         if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
     }
     private void refresh() {
-        if(totals!=null) { long budget=prefs.getLong("home_budget",0); totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده حساب: "+fmt(incomeTotal-expenseTotal)+" تومان" + (budget>0 ? "\n🎯 مانده بودجه خانه: "+fmt(budget-expenseTotal)+" تومان" : "\n🎯 بودجه را صوتی تعیین کن")); }
+        checkBudgetAlert();
+        if(totals!=null) { long budget=prefs.getLong("budget_home", prefs.getLong("home_budget",0)); totals.setText("💰 درآمد: "+fmt(incomeTotal)+" تومان\n🧾 هزینه: "+fmt(expenseTotal)+" تومان\n📊 مانده حساب: "+fmt(incomeTotal-expenseTotal)+" تومان" + (budget>0 ? "\n🎯 مانده بودجه خانه: "+fmt(budget-categorySpent("خانه"))+" تومان" : "\n🎯 برای هر بخش سقف بودجه تعیین کن")); }
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
-    private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
+    private String resolveCategoryCommand(String spoken) {
+        String command = spoken == null ? "" : spoken.trim().replace(" ", "").replace("‌", "");
+        if (command.equals("خانه") || command.equals("خونه") || command.equals("بخشخانه")) return "خانه";
+        if (command.equals("ماشین") || command.equals("خودرو") || command.equals("بخشماشین")) return "ماشین";
+        if (command.equals("مغازه") || command.equals("فروشگاه") || command.equals("بخش‌مغازه")) return "مغازه";
+        if (command.equals("مدرسه") || command.equals("مکتب") || command.equals("بخشمدرسه")) return "مدرسه";
+        if (command.equals("سلامت") || command.equals("بخشسلامت")) return "سلامت";
+        if (command.equals("سایر") || command.equals("متفرقه") || command.equals("بخشسایر")) return "سایر";
+        return null;
+    }
+
+    private void sayThenListenForCommand(String message, String mode) {
+        if (tts == null || !ttsReady) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> startVoice(mode), 250L);
+            return;
+        }
+        final String utteranceId = "oba_followup_" + System.currentTimeMillis();
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String id) {}
+            @Override public void onDone(String id) {
+                if (utteranceId.equals(id)) runOnUiThread(() -> startVoice(mode));
+            }
+            @Override public void onError(String id) {
+                if (utteranceId.equals(id)) runOnUiThread(() -> startVoice(mode));
+            }
+        });
+        if (tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, utteranceId) == TextToSpeech.ERROR) {
+            startVoice(mode);
+        }
+    }
+
+    private void showVoiceExpenseConfirmation(String category, String title, long amount) {
+        if (amount <= 0 || amount > Long.MAX_VALUE - expenseTotal) {
+            String message = "مبلغ هزینه معتبر نیست؛ لطفاً دوباره تلاش کن.";
+            status.setText(message);
+            say(message);
+            return;
+        }
+        String message = "این هزینه ثبت شود؟\\nبخش: " + category + "\\nشرح: " + title + "\\nمبلغ: " + fmt(amount) + " تومان";
+        status.setText("در انتظار تأیید ثبت هزینه در بخش " + category + "…");
+        say("هزینه " + fmt(amount) + " تومان برای " + title + " در بخش " + category + ". برای ثبت تأیید کن.");
+        new AlertDialog.Builder(this)
+            .setTitle("تأیید ثبت هزینه")
+            .setMessage(message)
+            .setPositiveButton("بله، ثبت کن", (dialog, which) -> {
+                if (amount > Long.MAX_VALUE - expenseTotal) {
+                    status.setText("مبلغ بیش از حد مجاز است.");
+                    say("مبلغ بیش از حد مجاز است");
+                    return;
+                }
+                expenseTotal += amount;
+                prefs.edit().putLong("expense", expenseTotal).apply();
+                addCategorySpend(category, amount);
+                addEntry(category, title, amount);
+                refresh();
+                String confirmation = "هزینه " + fmt(amount) + " تومان در بخش " + category + " ثبت شد.";
+                status.setText(confirmation);
+                say(confirmation);
+            })
+            .setNegativeButton("لغو", (dialog, which) -> {
+                status.setText("ثبت هزینه لغو شد؛ اطلاعات مالی تغییر نکرد.");
+                say("ثبت هزینه لغو شد");
+            })
+            .show();
+    }
+
+    private void sayThenListenForNavigation(String message) {
+        if (tts == null || !ttsReady) {
+            status.setText("بله، در خدمتم؛ حالا نام بخش را بگو.");
+            startVoice("navigate");
+            return;
+        }
+        tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) {}
+            @Override public void onDone(String utteranceId) {
+                if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> startVoice("navigate"));
+            }
+            @Override public void onError(String utteranceId) {
+                if ("oba_wake_ack".equals(utteranceId)) runOnUiThread(() -> {
+                    status.setText("بله، در خدمتم؛ نام بخش را بگو.");
+                    startVoice("navigate");
+                });
+            }
+        });
+        int result = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "oba_wake_ack");
+        if (result == TextToSpeech.ERROR) startVoice("navigate");
+    }
+
+    private void say(String s) { if (tts != null && ttsReady) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "oba_tts_" + System.currentTimeMillis()); }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
         if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;
