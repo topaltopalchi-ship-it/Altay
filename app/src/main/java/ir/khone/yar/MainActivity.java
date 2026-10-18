@@ -659,7 +659,7 @@ public class MainActivity extends Activity {
                 .setPositiveButton("باشه", null).show();
             return;
         }
-        String[] rows = all.split("\\n");
+        String[] rows = all.split("\n");
         StringBuilder report = new StringBuilder();
         SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault());
         for (String row : rows) {
@@ -674,8 +674,8 @@ public class MainActivity extends Activity {
                 report.append("📅 ").append(dateFormat.format(new Date(timestamp))).append("\n")
                     .append("دسته: ").append(category);
                 if (!subgroup.isEmpty()) report.append(" / ").append(subgroup);
-                report.append("\\nشرح: ").append(item)
-                    .append("\\nمبلغ: ").append(fmt(amount)).append(" تومان\\n\\n");
+                report.append("\nشرح: ").append(item)
+                    .append("\nمبلغ: ").append(fmt(amount)).append(" تومان\n\n");
             } catch (Exception ignored) {}
         }
         if (report.length() == 0) report.append("سابقه قابل‌نمایشی پیدا نشد.");
