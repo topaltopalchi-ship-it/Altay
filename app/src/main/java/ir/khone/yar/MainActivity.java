@@ -68,34 +68,39 @@ public class MainActivity extends Activity {
     private void buildUi() {
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(cream);
         root.setPadding(dp(12), dp(10), dp(12), dp(8));
-        ScrollView scroll = new ScrollView(this);
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         TextView brand = text("🏠 OBA", 27, dark, true); brand.setGravity(Gravity.CENTER);
         content.addView(brand, lp(-1, -2, 0, 4, 0, 1));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 8));
 
-        TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 20, dark, true);
-        content.addView(categoryTitle, lp(-1,-2,0,4,0,8));
-        TextView categoryHint = text("یک دسته را انتخاب کن تا زیرگروه و فرم ثبت هزینه باز شود.", 14, Color.DKGRAY, false);
-        content.addView(categoryHint, lp(-1,-2,0,0,0,8));
+        TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 18, dark, true);
+        content.addView(categoryTitle, lp(-1,-2,0,2,0,4));
         String[][] categoryButtons = {
             {"🏠 خانه", "خانه"}, {"🚗 ماشین", "ماشین"}, {"🏪 مغازه", "مغازه"},
             {"🏫 مدرسه", "مدرسه"}, {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
         };
-        for (String[] item : categoryButtons) {
-            Button categoryButton = button(item[0], Color.WHITE, dark, 16);
-            categoryButton.setMinHeight(dp(44));
-            categoryButton.setOnClickListener(v -> showCategorySubgroups(item[1]));
-            content.addView(categoryButton, lp(-1,-2,0,1,0,2));
+        for (int i = 0; i < categoryButtons.length; i += 2) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = i; j < Math.min(i + 2, categoryButtons.length); j++) {
+                final String category = categoryButtons[j][1];
+                Button categoryButton = button(categoryButtons[j][0], Color.WHITE, dark, 15);
+                categoryButton.setMinHeight(dp(42));
+                categoryButton.setOnClickListener(v -> showCategorySubgroups(category));
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(44), 1);
+                p.setMargins(dp(3), dp(2), dp(3), dp(2));
+                row.addView(categoryButton, p);
+            }
+            content.addView(row, lp(-1,-2,0,0,0,0));
         }
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
-        speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
+        speak.setMinHeight(dp(52)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
-        wakeButton.setMinHeight(dp(58));
+        wakeButton.setMinHeight(dp(44));
         wakeButton.setOnClickListener(v -> toggleWakeService());
         content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
@@ -106,27 +111,8 @@ public class MainActivity extends Activity {
         totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
-        LinearLayout backupPanel = new LinearLayout(this); backupPanel.setOrientation(LinearLayout.VERTICAL); backupPanel.setPadding(dp(14),dp(12),dp(14),dp(12)); backupPanel.setBackground(round(Color.rgb(255,243,224),20));
-        TextView backupTitle = text("🛡️ پشتیبان اطلاعات روی گوشی",17,Color.rgb(124,70,0),true); backupPanel.addView(backupTitle);
-        TextView backupDesc = text("یک فایل پشتیبان در حافظه گوشی ذخیره کن تا اگر برنامه حذف شد، بتوانی اطلاعات را برگردانی.",13,dark,false); backupPanel.addView(backupDesc,lp(-1,-2,0,5,0,8));
-        Button saveBackup = button("📥 ذخیره نسخه پشتیبان",Color.rgb(255,143,0),Color.WHITE,16); saveBackup.setOnClickListener(v -> createBackup()); backupPanel.addView(saveBackup,lp(-1,-2,0,2,0,4));
-        Button restoreBackup = button("📤 بازیابی نسخه پشتیبان",Color.rgb(0,137,123),Color.WHITE,16); restoreBackup.setOnClickListener(v -> chooseBackup()); backupPanel.addView(restoreBackup,lp(-1,-2,0,2,0,0));
-        content.addView(backupPanel,lp(-1,-2,0,8,0,14));
-
-        TextView remindersTitle = text("⏰ یادآوری‌های فعال", 19, dark, true);
-        content.addView(remindersTitle, lp(-1,-2,0,12,0,6));
-        remindersView = text("", 14, Color.DKGRAY, false); remindersView.setPadding(dp(12),dp(10),dp(12),dp(10)); remindersView.setBackground(round(Color.WHITE,14));
-        content.addView(remindersView, lp(-1,-2,0,0,0,12));
-        TextView inventoryTitle = text("🧺 موجودی خانه و خریدهای ثبت‌شده", 19, dark, true);
-        content.addView(inventoryTitle, lp(-1,-2,0,8,0,6));
-        inventoryView = text("", 14, Color.DKGRAY, false); inventoryView.setPadding(dp(12),dp(10),dp(12),dp(10)); inventoryView.setBackground(round(Color.WHITE,14));
-        content.addView(inventoryView, lp(-1,-2,0,0,0,12));
-        TextView recentTitle = text("آخرین ثبت‌ها", 19, dark, true);
-        content.addView(recentTitle, lp(-1,-2,0,12,0,6));
-        recent = text("", 14, Color.DKGRAY, false); recent.setPadding(dp(12),dp(10),dp(12),dp(10)); recent.setBackground(round(Color.WHITE,14));
-        content.addView(recent, lp(-1,-2,0,0,0,18));
-        scroll.addView(content);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1,0,1));
+        // Secondary information and backup tools are kept out of the single-screen home.
+        root.addView(content, new LinearLayout.LayoutParams(-1,0,1));
         TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
         root.addView(foot, lp(-1,-2,0,8,0,0));
         setContentView(root);
