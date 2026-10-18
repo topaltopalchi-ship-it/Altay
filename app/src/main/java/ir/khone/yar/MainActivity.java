@@ -121,19 +121,22 @@ public class MainActivity extends Activity {
         // Compact access to the archive and existing utilities, without changing the category layout.
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button archiveBtn = button("📚 آرشیو", Color.WHITE, dark, 12);
+        Button archiveBtn = button("📚 آرشیو", Color.WHITE, dark, 10);
         archiveBtn.setOnClickListener(v -> showExpenseArchive());
-        Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 12);
+        Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 10);
         docsBtn.setOnClickListener(v -> showHomeDocuments());
-        Button audioBtn = button("🎧 صداها", Color.WHITE, dark, 12);
+        Button audioBtn = button("🎧 صداها", Color.WHITE, dark, 10);
         audioBtn.setOnClickListener(v -> showAudioArchive());
-        Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 12);
+        Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 10);
         backupBtn.setOnClickListener(v -> showBackupOptions());
-        Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 12);
+        Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 10);
         chartBtn.setOnClickListener(v -> showExpenseCharts());
         for (Button b : new Button[]{archiveBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
-            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(42), 1);
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
             bp.setMargins(dp(2), dp(2), dp(2), dp(2));
+            b.setMinHeight(dp(54));
+            b.setPadding(dp(2), dp(2), dp(2), dp(2));
+            b.setMaxLines(2);
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
