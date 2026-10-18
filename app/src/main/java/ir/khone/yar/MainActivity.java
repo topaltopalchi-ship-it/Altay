@@ -671,7 +671,7 @@ public class MainActivity extends Activity {
                 String subgroup = parts[2];
                 String item = parts[3];
                 long amount = Long.parseLong(parts[4]);
-                report.append("📅 ").append(dateFormat.format(new Date(timestamp))).append("\\n")
+                report.append("📅 ").append(dateFormat.format(new Date(timestamp))).append("\n")
                     .append("دسته: ").append(category);
                 if (!subgroup.isEmpty()) report.append(" / ").append(subgroup);
                 report.append("\\nشرح: ").append(item)
