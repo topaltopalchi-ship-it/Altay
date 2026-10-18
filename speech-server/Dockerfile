@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8080
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl unzip \
+RUN apt-get update && apt-get install -y --no-install-recommends curl unzip libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
