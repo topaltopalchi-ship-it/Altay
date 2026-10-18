@@ -470,6 +470,9 @@ public class MainActivity extends Activity {
             String candidate = normalize(known[catIndex][j]);
             if (normalized.contains(candidate)) { subIndex=j; break; }
         }
+        if (subIndex < 0 && catIndex == 0 && (normalized.contains("لوازم خانگی") || normalized.contains("وسایل خانه"))) {
+            subIndex = 2; // Common spoken names for the "لوازم خانه" subgroup.
+        }
         if (subIndex < 0) {
             for (int j=1; j<aliasesByCategory[catIndex].length; j++) {
                 String candidate = normalize(aliasesByCategory[catIndex][j]);
