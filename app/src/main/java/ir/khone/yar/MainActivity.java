@@ -117,7 +117,23 @@ public class MainActivity extends Activity {
         totals.setPadding(dp(14),dp(18),dp(14),dp(18)); totals.setBackground(round(Color.rgb(225, 250, 239), 22));
         content.addView(totals, lp(-1,-2,0,0,0,12));
 
-        // Secondary information and backup tools are kept out of the single-screen home.
+        // Compact access to the archive and existing utilities, without changing the category layout.
+        LinearLayout toolsRow = new LinearLayout(this);
+        toolsRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button archiveBtn = button("📚 آرشیو", Color.WHITE, dark, 12);
+        archiveBtn.setOnClickListener(v -> showExpenseArchive());
+        Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 12);
+        docsBtn.setOnClickListener(v -> showHomeDocuments());
+        Button audioBtn = button("🎧 صداها", Color.WHITE, dark, 12);
+        audioBtn.setOnClickListener(v -> showAudioArchive());
+        Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 12);
+        backupBtn.setOnClickListener(v -> showBackupOptions());
+        for (Button b : new Button[]{archiveBtn, docsBtn, audioBtn, backupBtn}) {
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(42), 1);
+            bp.setMargins(dp(2), dp(2), dp(2), dp(2));
+            toolsRow.addView(b, bp);
+        }
+        content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
         root.addView(content, new LinearLayout.LayoutParams(-1,0,1));
         TextView foot = text("نسخهٔ اولیه • اطلاعات روی همین گوشی ذخیره می‌شود", 12, Color.GRAY, false); foot.setGravity(Gravity.CENTER);
         root.addView(foot, lp(-1,-2,0,8,0,0));
@@ -126,6 +142,114 @@ public class MainActivity extends Activity {
     }
 
 
+
+
+    private void showBackupOptions() {
+        new AlertDialog.Builder(this).setTitle("پشتیبان‌گیری")
+            .setItems(new String[]{"ساخت فایل پشتیبان", "بازیابی فایل پشتیبان"}, (d, which) -> {
+                if (which == 0) createBackup(); else chooseBackup();
+            }).setNegativeButton("بستن", null).show();
+    }
+
+    private void showExpenseArchive() {
+        String all = prefs.getString("entries", "");
+        if (all.trim().isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("آرشیو هزینه‌ها")
+                .setMessage("هنوز موردی ثبت نشده است. از دسته‌بندی‌ها هزینه ثبت کن.")
+                .setPositiveButton("باشه", null).show();
+            return;
+        }
+        String[] rows = all.split("\\n");
+        String[] display = new String[rows.length];
+        for (int i = 0; i < rows.length; i++) display[i] = rows[i];
+        new AlertDialog.Builder(this).setTitle("آرشیو ثبت‌ها")
+            .setItems(display, (d, which) -> new AlertDialog.Builder(this)
+                .setTitle("جزئیات ثبت").setMessage(display[which])
+                .setPositiveButton("باشه", null).show())
+            .setNegativeButton("بستن", null).show();
+    }
+
+    private void showAudioArchive() {
+        File folder = new File(getFilesDir(), "audio_records");
+        if (!folder.exists()) folder.mkdirs();
+        File[] files = folder.listFiles((dir, name) -> name.endsWith(".3gp"));
+        if (files == null || files.length == 0) {
+            new AlertDialog.Builder(this).setTitle("آرشیو صداها")
+                .setMessage("هنوز صدایی ضبط نشده است. برای ضبط، دکمهٔ زیر را بزن.")
+                .setPositiveButton("ضبط صدای جدید", (d, w) -> startAudioRecording())
+                .setNegativeButton("بستن", null).show();
+            return;
+        }
+        String[] labels = new String[files.length + 1];
+        labels[0] = "🎙 ضبط صدای جدید";
+        for (int i = 0; i < files.length; i++) labels[i + 1] = new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(new Date(files[i].lastModified())) + " • " + files[i].getName();
+        new AlertDialog.Builder(this).setTitle("آرشیو صداهای ذخیره‌شده")
+            .setItems(labels, (d, which) -> {
+                if (which == 0) { startAudioRecording(); return; }
+                File chosen = files[which - 1];
+                new AlertDialog.Builder(this).setTitle("پخش فایل صوتی")
+                    .setMessage(labels[which]).setPositiveButton("پخش", (dd, ww) -> playAudioFile(chosen))
+                    .setNegativeButton("حذف", (dd, ww) -> {
+                        if (chosen.delete()) Toast.makeText(this, "فایل صوتی حذف شد.", Toast.LENGTH_SHORT).show();
+                        else Toast.makeText(this, "حذف فایل ممکن نشد.", Toast.LENGTH_SHORT).show();
+                    }).setNeutralButton("بستن", null).show();
+            }).setNegativeButton("بستن", null).show();
+    }
+
+    private android.media.MediaRecorder recorder;
+    private File currentAudioFile;
+    private void startAudioRecording() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            Toast.makeText(this, "پس از اجازهٔ میکروفون، دوباره آرشیو صداها را باز کن.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (recorder != null) {
+            Toast.makeText(this, "ضبط دیگری در حال اجراست.", Toast.LENGTH_SHORT).show(); return;
+        }
+        File folder = new File(getFilesDir(), "audio_records");
+        if (!folder.exists()) folder.mkdirs();
+        currentAudioFile = new File(folder, "OBA_audio_" + System.currentTimeMillis() + ".3gp");
+        try {
+            recorder = Build.VERSION.SDK_INT >= 31 ? new android.media.MediaRecorder(this) : new android.media.MediaRecorder();
+            recorder.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+            recorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.THREE_GPP);
+            recorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AMR_NB);
+            recorder.setOutputFile(currentAudioFile.getAbsolutePath());
+            recorder.prepare(); recorder.start();
+            new AlertDialog.Builder(this).setTitle("ضبط صدا")
+                .setMessage("ضبط فعال است. برای پایان ضبط، «پایان و ذخیره» را بزن.")
+                .setCancelable(false)
+                .setPositiveButton("پایان و ذخیره", (d, w) -> stopAudioRecording())
+                .setNegativeButton("لغو ضبط", (d, w) -> { stopAudioRecording(); if (currentAudioFile != null) currentAudioFile.delete(); })
+                .show();
+        } catch (Exception e) {
+            releaseRecorder();
+            Toast.makeText(this, "شروع ضبط صدا ممکن نشد؛ مجوز میکروفون را بررسی کن.", Toast.LENGTH_LONG).show();
+        }
+    }
+    private void stopAudioRecording() {
+        try {
+            if (recorder != null) { recorder.stop(); recorder.reset(); recorder.release(); recorder = null; }
+            if (currentAudioFile != null && currentAudioFile.isFile() && currentAudioFile.length() > 0)
+                Toast.makeText(this, "صدا در آرشیو خصوصی برنامه ذخیره شد.", Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            if (currentAudioFile != null) currentAudioFile.delete();
+            Toast.makeText(this, "ضبط خیلی کوتاه بود یا ذخیره صدا انجام نشد.", Toast.LENGTH_LONG).show();
+        } finally { releaseRecorder(); }
+    }
+    private void releaseRecorder() {
+        if (recorder != null) { try { recorder.reset(); } catch (Exception ignored) {} try { recorder.release(); } catch (Exception ignored) {} recorder = null; }
+    }
+    private void playAudioFile(File file) {
+        try {
+            android.media.MediaPlayer player = new android.media.MediaPlayer();
+            player.setDataSource(file.getAbsolutePath());
+            player.setOnCompletionListener(p -> p.release());
+            player.setOnErrorListener((p, what, extra) -> { p.release(); Toast.makeText(this, "پخش فایل ممکن نشد.", Toast.LENGTH_SHORT).show(); return true; });
+            player.prepare(); player.start();
+        } catch (Exception e) { Toast.makeText(this, "پخش فایل صوتی ممکن نشد.", Toast.LENGTH_LONG).show(); }
+    }
 
     private void showHomeDocuments() {
         String[] options = new String[]{"📷 عکس گرفتن از مدرک", "🖼 انتخاب تصویر از گالری", "📂 مشاهده مدارک ذخیره‌شده"};
