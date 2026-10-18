@@ -67,13 +67,13 @@ public class MainActivity extends Activity {
 
     private void buildUi() {
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(cream);
-        root.setPadding(dp(18), dp(18), dp(18), dp(12));
+        root.setPadding(dp(12), dp(10), dp(12), dp(8));
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        TextView brand = text("🏠 OBA", 29, dark, true); brand.setGravity(Gravity.CENTER);
-        content.addView(brand, lp(-1, -2, 0, 8, 0, 2));
+        TextView brand = text("🏠 OBA", 27, dark, true); brand.setGravity(Gravity.CENTER);
+        content.addView(brand, lp(-1, -2, 0, 4, 0, 1));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
-        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 18));
+        content.addView(subtitle, lp(-1, -2, 0, 0, 0, 8));
 
         TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 20, dark, true);
         content.addView(categoryTitle, lp(-1,-2,0,4,0,8));
@@ -84,10 +84,10 @@ public class MainActivity extends Activity {
             {"🏫 مدرسه", "مدرسه"}, {"🏥 سلامت", "سلامت"}, {"📦 سایر", "سایر"}
         };
         for (String[] item : categoryButtons) {
-            Button categoryButton = button(item[0], Color.WHITE, dark, 17);
-            categoryButton.setMinHeight(dp(54));
+            Button categoryButton = button(item[0], Color.WHITE, dark, 16);
+            categoryButton.setMinHeight(dp(44));
             categoryButton.setOnClickListener(v -> showCategorySubgroups(item[1]));
-            content.addView(categoryButton, lp(-1,-2,0,2,0,5));
+            content.addView(categoryButton, lp(-1,-2,0,1,0,2));
         }
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
@@ -809,10 +809,34 @@ public class MainActivity extends Activity {
         if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;
     }
     private Button button(String s,int bg,int fg,int size) {
-        Button b=new Button(this); b.setText(s); b.setTextSize(size); b.setTextColor(fg); b.setAllCaps(false); b.setBackground(round(bg,20)); return b;
+        Button b=new Button(this);
+        b.setText(s);
+        b.setTextSize(size);
+        b.setTextColor(Color.WHITE);
+        b.setAllCaps(false);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(12), dp(8), dp(12), dp(8));
+        GradientDrawable face = new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(83, 117, 239), Color.rgb(43, 63, 166), Color.rgb(24, 35, 104)}
+        );
+        face.setCornerRadius(dp(18));
+        face.setStroke(dp(1), Color.rgb(112, 143, 255));
+        b.setBackground(face);
+        b.setElevation(dp(5));
+        b.setStateListAnimator(null);
+        b.setMinHeight(dp(48));
+        return b;
     }
     private GradientDrawable round(int color,int radius) {
-        GradientDrawable d=new GradientDrawable(); d.setColor(color); d.setCornerRadius(dp(radius)); return d;
+        GradientDrawable d=new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{Color.rgb(58, 83, 190), color == Color.WHITE ? Color.rgb(31, 45, 126) : color}
+        );
+        d.setCornerRadius(dp(radius));
+        d.setStroke(dp(1), Color.rgb(91, 121, 230));
+        return d;
     }
     private LinearLayout.LayoutParams lp(int w,int h,int l,int t,int r,int b) {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(w<0?w:dp(w),h<0?h:dp(h)); p.setMargins(dp(l),dp(t),dp(r),dp(b)); return p;
