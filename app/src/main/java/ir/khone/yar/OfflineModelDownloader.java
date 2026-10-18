@@ -75,7 +75,7 @@ public final class OfflineModelDownloader {
                     throw new IllegalStateException("دریافت مدل ناموفق بود (HTTP " + status + ").");
                 }
 
-                long total = connection.getContentLengthLong();
+                long total = connection.getContentLength();
                 long downloaded = 0;
                 try (InputStream in = new BufferedInputStream(connection.getInputStream());
                      FileOutputStream out = new FileOutputStream(stagingZip)) {
