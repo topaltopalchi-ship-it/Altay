@@ -846,9 +846,9 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با فارسی صحبت کن");
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 800L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L);
-            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 700L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L);
+            intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
             recognizer.startListening(intent);
         } catch (Exception e) {
             String msg = "شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.";
