@@ -136,6 +136,10 @@ public class MainActivity extends Activity {
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
+        Button expenseHistoryBtn = button("🧾 سوابق هزینه‌ها (با تاریخ)", Color.rgb(224, 240, 255), dark, 15);
+        expenseHistoryBtn.setMinHeight(dp(46));
+        expenseHistoryBtn.setOnClickListener(v -> showDatedExpenseHistory());
+        content.addView(expenseHistoryBtn, lp(-1, -2, 0, 2, 0, 2));
         Button inventoryBtn = button("📦 موجودی", Color.rgb(224, 240, 255), dark, 16);
         inventoryBtn.setMinHeight(dp(48));
         inventoryBtn.setOnClickListener(v -> showInventoryScreen());
@@ -647,6 +651,42 @@ public class MainActivity extends Activity {
         }, today.get(Calendar.YEAR), today.get(Calendar.MONTH), today.get(Calendar.DAY_OF_MONTH)).show();
     }
 
+    private void showDatedExpenseHistory() {
+        String all = prefs.getString("oba_expense_history", "");
+        if (all.trim().isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("🧾 سوابق هزینه‌ها")
+                .setMessage("هنوز هزینه‌ای ثبت نشده است. هزینه‌های ثبت‌شده با صدا یا به‌صورت دستی در این بخش همراه تاریخ نمایش داده می‌شوند.")
+                .setPositiveButton("باشه", null).show();
+            return;
+        }
+        String[] rows = all.split("\\n");
+        StringBuilder report = new StringBuilder();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault());
+        for (String row : rows) {
+            String[] parts = row.split("\\t", -1);
+            if (parts.length < 5) continue;
+            try {
+                long timestamp = Long.parseLong(parts[0]);
+                String category = parts[1];
+                String subgroup = parts[2];
+                String item = parts[3];
+                long amount = Long.parseLong(parts[4]);
+                report.append("📅 ").append(dateFormat.format(new Date(timestamp))).append("\\n")
+                    .append("دسته: ").append(category);
+                if (!subgroup.isEmpty()) report.append(" / ").append(subgroup);
+                report.append("\\nشرح: ").append(item)
+                    .append("\\nمبلغ: ").append(fmt(amount)).append(" تومان\\n\\n");
+            } catch (Exception ignored) {}
+        }
+        if (report.length() == 0) report.append("سابقه قابل‌نمایشی پیدا نشد.");
+        TextView historyText = text(report.toString().trim(), 15, dark, false);
+        historyText.setPadding(dp(12), dp(12), dp(12), dp(12));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(historyText);
+        new AlertDialog.Builder(this).setTitle("🧾 سوابق هزینه‌ها با تاریخ")
+            .setView(scroll).setPositiveButton("بستن", null).show();
+    }
+
     private void showExpenseArchive() {
         String all = prefs.getString("entries", "");
         if (all.trim().isEmpty()) {
@@ -952,10 +992,13 @@ public class MainActivity extends Activity {
         if ("خانه".equals(category)) {
             groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "📄 اسکن مدارک خانه", "سایر هزینه‌های خانه"};
         }
-        final String[] subgroupOptions = groups;
+        String[] withHistory = java.util.Arrays.copyOf(groups, groups.length + 1);
+        withHistory[groups.length] = "🧾 سوابق هزینه‌ها (با تاریخ)";
+        final String[] subgroupOptions = withHistory;
         new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
             .setItems(subgroupOptions, (dialog, which) -> {
-                if ("خانه".equals(category) && "📄 اسکن مدارک خانه".equals(subgroupOptions[which])) showHomeDocuments();
+                if ("🧾 سوابق هزینه‌ها (با تاریخ)".equals(subgroupOptions[which])) showDatedExpenseHistory();
+                else if ("خانه".equals(category) && "📄 اسکن مدارک خانه".equals(subgroupOptions[which])) showHomeDocuments();
                 else showEntryMethodDialog(category, subgroupOptions[which]);
             }).setNegativeButton("انصراف", null).show();
     }
