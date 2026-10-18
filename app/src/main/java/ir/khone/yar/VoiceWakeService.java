@@ -192,7 +192,16 @@ public class VoiceWakeService extends Service {
     private void respondToWake() {
         if (stopping || speaking) return;
         speaking = true;
-        updateNotification("نام OBA شنیده شد؛ پاسخ می‌دهد");
+        updateNotification("نام OBA شنیده شد؛ در حال بازکردن برنامه");
+        // Android may restrict opening an Activity from the background while locked.
+        try {
+            Intent openApp = new Intent(this, MainActivity.class);
+            openApp.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(openApp);
+        } catch (Exception ignored) {}
+
         if (tts != null) {
             tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
         } else {
