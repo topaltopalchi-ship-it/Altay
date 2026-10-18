@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
@@ -188,36 +189,75 @@ public class MainActivity extends Activity {
             return;
         }
         StringBuilder report = new StringBuilder();
-        report.append("🧠 گزارش هزینه‌ها\\n\\n");
-        if (all > 0) report.append("مجموع هزینه‌های دسته‌بندی‌شده: ").append(fmt(all)).append(" تومان\\n\\n");
+        report.append("🧠 گزارش هزینه‌ها\n\n");
+        if (all > 0) report.append("مجموع هزینه‌های دسته‌بندی‌شده: ").append(fmt(all)).append(" تومان\n\n");
         java.util.ArrayList<java.util.Map.Entry<String, Long>> ranked = new java.util.ArrayList<>(subgroups.entrySet());
         java.util.Collections.sort(ranked, (a,b) -> Long.compare(b.getValue(), a.getValue()));
         if (!ranked.isEmpty()) {
-            report.append("بیشترین محل‌های خرج ثبت‌شده:\\n");
+            report.append("بیشترین محل‌های خرج ثبت‌شده:\n");
             int limit = Math.min(5, ranked.size());
             for (int i=0; i<limit; i++) {
                 java.util.Map.Entry<String,Long> e = ranked.get(i);
                 double pct = all > 0 ? e.getValue()*100.0/all : 0;
                 report.append("• ").append(e.getKey()).append(" — ").append(fmt(e.getValue())).append(" تومان");
                 if (all > 0) report.append(" ( ").append(String.format(Locale.getDefault(), "%.1f", pct)).append("٪ از کل )");
-                report.append("\\n");
+                report.append("\n");
             }
-            report.append("\\n");
+            report.append("\n");
         }
         java.util.ArrayList<java.util.Map.Entry<String, Long>> topItems = new java.util.ArrayList<>(items.entrySet());
         java.util.Collections.sort(topItems, (a,b) -> Long.compare(b.getValue(), a.getValue()));
         if (!topItems.isEmpty()) {
-            report.append("خریدهای دارای شرح که بیشترین مبلغ را دارند:\\n");
+            report.append("خریدهای دارای شرح که بیشترین مبلغ را دارند:\n");
             for (int i=0; i<Math.min(5, topItems.size()); i++) {
                 java.util.Map.Entry<String,Long> e=topItems.get(i);
-                report.append("• ").append(e.getKey()).append(" — ").append(fmt(e.getValue())).append(" تومان\\n");
+                report.append("• ").append(e.getKey()).append(" — ").append(fmt(e.getValue())).append(" تومان\n");
             }
-            report.append("\\n");
+            report.append("\n");
         }
-        report.append("💡 پیشنهادهای صرفه‌جویی:\\n")
-            .append("• برای نان و خوراکی‌ها، خرید روزانه را با نیاز واقعی خانواده هماهنگ کن تا دورریز کم شود.\\n")
-            .append("• برای سینما و تفریح، یک سقف ماهانه تعیین کن و پیش از خرید بلیت، هزینهٔ کل خانواده را بررسی کن.\\n")
-            .append("• هزینه‌های تکراری را هفته‌ای یک‌بار مرور کن و برای هر مورد سقف قابل‌قبول بگذار.\\n\\n")
+        // Compare the last 30 days with the previous 30 days using dated records collected from now on.
+        long now = System.currentTimeMillis();
+        long day30 = 30L * 24L * 60L * 60L * 1000L;
+        long currentStart = now - day30;
+        long previousStart = now - 2L * day30;
+        java.util.LinkedHashMap<String, Long> currentItems = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Long> previousItems = new java.util.LinkedHashMap<>();
+        String history = prefs.getString("oba_expense_history", "");
+        for (String line : history.split("\\n")) {
+            String[] fields = line.split("\\t", -1);
+            if (fields.length < 5) continue;
+            try {
+                long time = Long.parseLong(fields[0]);
+                long amount = Long.parseLong(fields[4]);
+                String item = fields[3].trim();
+                if (item.isEmpty() || amount <= 0) continue;
+                String key = item.toLowerCase(Locale.ROOT);
+                if (time >= currentStart && time <= now) currentItems.put(key, currentItems.containsKey(key) ? currentItems.get(key) + amount : amount);
+                else if (time >= previousStart && time < currentStart) previousItems.put(key, previousItems.containsKey(key) ? previousItems.get(key) + amount : amount);
+            } catch (Exception ignored) {}
+        }
+        java.util.ArrayList<String> rising = new java.util.ArrayList<>();
+        for (String item : currentItems.keySet()) {
+            long currentAmount = currentItems.get(item);
+            long previousAmount = previousItems.containsKey(item) ? previousItems.get(item) : 0L;
+            if (previousAmount > 0 && currentAmount >= previousAmount * 1.2d) {
+                double increase = (currentAmount - previousAmount) * 100.0 / previousAmount;
+                rising.add(item + " — " + fmt(currentAmount) + " تومان (افزایش " + String.format(Locale.getDefault(), "%.0f", increase) + "٪)");
+            }
+        }
+        if (!rising.isEmpty()) {
+            report.append("⚠️ مواردی که در ۳۰ روز اخیر بیشتر خرج داشته‌اند (نسبت به ۳۰ روز قبل):\n");
+            for (int i = 0; i < Math.min(5, rising.size()); i++) report.append("• ").append(rising.get(i)).append("\n");
+            report.append("\n");
+        } else if (!history.trim().isEmpty()) {
+            report.append("📅 مقایسهٔ ۳۰ روزه: هنوز موردی با افزایش قابل‌مقایسه پیدا نشد؛ برای نتیجهٔ بهتر، ثبت هزینه‌ها را ادامه بده.\n\n");
+        } else {
+            report.append("📅 مقایسهٔ زمانی از امروز شروع می‌شود؛ هزینه‌های جدید با تاریخ ذخیره می‌شوند تا در آینده افزایش خرج قابل‌شناسایی باشد.\n\n");
+        }
+        report.append("💡 پیشنهادهای صرفه‌جویی:\n")
+            .append("• برای نان و خوراکی‌ها، خرید روزانه را با نیاز واقعی خانواده هماهنگ کن تا دورریز کم شود.\n")
+            .append("• برای سینما و تفریح، یک سقف ماهانه تعیین کن و پیش از خرید بلیت، هزینهٔ کل خانواده را بررسی کن.\n")
+            .append("• هزینه‌های تکراری را هفته‌ای یک‌بار مرور کن و برای هر مورد سقف قابل‌قبول بگذار.\n\n")
             .append("توجه: این گزارش بر اساس مبالغ ثبت‌شده است؛ تا وقتی سابقهٔ زمانی کافی وجود نداشته باشد، اوبا نمی‌تواند با قطعیت بگوید خرجی نسبت به ماه قبل زیاد شده است. برای هشدار دقیق‌تر، نام خرید و مبلغ را در شرح هزینه ثبت کن.");
         new AlertDialog.Builder(this).setTitle("🧠 تحلیل هوشمند هزینه‌ها")
             .setMessage(report.toString()).setPositiveButton("باشه", null).show();
@@ -1280,6 +1320,7 @@ public class MainActivity extends Activity {
     }
     private boolean contains(String s, String... words) { for(String w:words) if(s.contains(w)) return true; return false; }
     private void addEntry(String type, String title, long amount) {
+        if (amount > 0 && !"درآمد".equals(type) && !"یادآوری".equals(type)) recordExpenseHistory(type, title, amount);
         if (amount > 0 && java.util.Arrays.asList("خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر").contains(type)) {
             prefs.edit().putLong("oba_chart_cat_" + type, prefs.getLong("oba_chart_cat_" + type, 0L) + amount).apply();
             String subgroup = title.split(" — ", 2)[0].trim();
@@ -1301,6 +1342,23 @@ public class MainActivity extends Activity {
         StringBuilder b=new StringBuilder(); for(String e:entries)b.append(e).append("\n");
         prefs.edit().putString("entries",b.toString()).apply();
     }
+    private void recordExpenseHistory(String type, String title, long amount) {
+        String[] parts = title.split(" — ", 2);
+        String subgroup = parts.length > 1 ? parts[0].trim() : "";
+        String item = (parts.length > 1 ? parts[1] : parts[0]).trim();
+        long timestamp = System.currentTimeMillis();
+        String row = timestamp + "\t" + type.replace('\t', ' ') + "\t" + subgroup.replace('\t', ' ') + "\t" + item.replace('\t', ' ') + "\t" + amount;
+        String old = prefs.getString("oba_expense_history", "");
+        String combined = row + (old.isEmpty() ? "" : "\n" + old);
+        String[] rows = combined.split("\n");
+        StringBuilder kept = new StringBuilder();
+        for (int i = 0; i < Math.min(rows.length, 1000); i++) {
+            if (i > 0) kept.append("\n");
+            kept.append(rows[i]);
+        }
+        prefs.edit().putString("oba_expense_history", kept.toString()).apply();
+    }
+
     private void loadEntries() {
         String all=prefs.getString("entries","");
         if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
