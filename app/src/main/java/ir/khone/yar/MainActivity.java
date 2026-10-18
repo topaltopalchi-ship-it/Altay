@@ -61,7 +61,13 @@ public class MainActivity extends Activity {
         tts = new TextToSpeech(this, result -> {
             if (tts != null && result == TextToSpeech.SUCCESS) {
                 int languageResult = tts.setLanguage(new Locale("fa", "IR"));
-                tts.setSpeechRate(1.05f);
+                tts.setSpeechRate(1.0f);
+                if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+                    languageResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    runOnUiThread(() -> {
+                        if (status != null) status.setText("صدای فارسی روی موتور گفتار این گوشی نصب یا پشتیبانی نمی‌شود. از دکمه «تنظیم زبان فارسی» راهنمای نصب را باز کن.");
+                    });
+                }
             }
         });
         buildUi();
@@ -88,6 +94,10 @@ public class MainActivity extends Activity {
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(236, 105, 157), Color.WHITE, 20);
         speak.setMinHeight(dp(76)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
+
+        Button languageSettings = button("🌐 تنظیم زبان فارسی برای صدا", Color.rgb(112, 54, 83), Color.WHITE, 16);
+        languageSettings.setOnClickListener(v -> showPersianVoiceSettings());
+        content.addView(languageSettings, lp(-1, -2, 0, 2, 0, 8));
 
         EditText typedCommand = new EditText(this);
         typedCommand.setSingleLine(false);
@@ -1054,6 +1064,59 @@ public class MainActivity extends Activity {
         }
         // Unknown keys and runtime-only flags are deliberately not imported.
         return false;
+    }
+
+    private void showPersianVoiceSettings() {
+        String message = "OBA برای تبدیل گفتار به متن، زبان fa-IR را درخواست می‌کند. برای خواندن متن فارسی، موتور گفتار گوشی باید واقعاً صدای فارسی داشته باشد؛ کد برنامه به‌تنهایی نمی‌تواند فایل صدای غایب را ایجاد کند. اگر فارسی در فهرست صداها نیست، ممکن است موتور فعلی آن را پشتیبانی نکند.";
+        new AlertDialog.Builder(this)
+            .setTitle("تنظیم قابلیت‌های صوتی فارسی")
+            .setMessage(message)
+            .setPositiveButton("نصب داده‌های صدای گفتار", (dialog, which) -> openTtsInstallSettings())
+            .setNeutralButton("تنظیمات ورودی صوتی", (dialog, which) -> openVoiceInputSettings())
+            .setNegativeButton("آزمایش صدای فارسی", (dialog, which) -> testPersianTts())
+            .show();
+    }
+
+    private void openTtsInstallSettings() {
+        try {
+            startActivity(new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            } catch (Exception ignored) {
+                Toast.makeText(this, "تنظیمات صدای گوشی در دسترس نیست.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void openVoiceInputSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent("android.speech.action.RECOGNIZER_SETTINGS"));
+            } catch (Exception ignored) {
+                Toast.makeText(this, "تنظیمات تشخیص گفتار در این گوشی پیدا نشد.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void testPersianTts() {
+        if (tts == null) {
+            Toast.makeText(this, "موتور گفتار هنوز آماده نیست.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int result = tts.setLanguage(new Locale("fa", "IR"));
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            new AlertDialog.Builder(this)
+                .setTitle("صدای فارسی در دسترس نیست")
+                .setMessage("موتور گفتار نصب‌شده، صدای فارسی را ارائه نمی‌کند. تنظیمات نصب داده‌های گفتار را باز کن یا باید یک موتور/سرویس دارای پشتیبانی فارسی به برنامه متصل شود.")
+                .setPositiveButton("باز کردن نصب صدا", (dialog, which) -> openTtsInstallSettings())
+                .setNegativeButton("بستن", null)
+                .show();
+            return;
+        }
+        say("سلام. این یک آزمایش صدای فارسی در برنامه اوبا است.");
     }
 
     private void addVoiceCard(String title, String desc, String mode) {
