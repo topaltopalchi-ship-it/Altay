@@ -107,10 +107,19 @@ public class VoiceWakeService extends Service {
                             }
                         }
                     }
-                    if (wake && tts != null) {
-                        speaking = true;
-                        updateNotification("نام OBA شنیده شد؛ پاسخ می‌دهد");
-                        tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
+                    if (wake) {
+                        updateNotification("نام OBA شنیده شد؛ برنامه باز می‌شود");
+                        Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
+                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        try { startActivity(launch); } catch (Exception ignored) {}
+                        if (tts != null) {
+                            speaking = true;
+                            tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
+                        } else if (!stopping) {
+                            handler.postDelayed(() -> beginListening(), 900);
+                        }
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
                     }
