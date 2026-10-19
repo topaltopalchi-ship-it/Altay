@@ -107,8 +107,15 @@ public class MainActivity extends Activity {
         }
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
-        speak.setMinHeight(dp(52)); speak.setOnClickListener(v -> startVoice("auto"));
-        speak.setOnLongClickListener(v -> { showOfflineModelConsent(); return true; });
+        speak.setMinHeight(dp(52));
+        speak.setOnClickListener(v -> {
+            if (OfflineModelDownloader.getInstalledModelDirectory(MainActivity.this) == null) {
+                showOfflineModelConsent();
+            } else {
+                prefs.edit().putString("speech_engine", "offline").apply();
+                startOfflineVoice("auto");
+            }
+        });
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
@@ -961,12 +968,12 @@ public class MainActivity extends Activity {
                         status.setText("مدل فارسی دانلود شد؛ می‌توانی حالت آفلاین را فعال کنی.");
                         new AlertDialog.Builder(MainActivity.this)
                             .setTitle("دانلود کامل شد")
-                            .setMessage("مدل فارسی روی گوشی ذخیره شد. برای استفاده از آن، حالت آفلاین را فعال کن.")
-                            .setNegativeButton("بعداً", null)
-                            .setPositiveButton("فعال‌کردن حالت آفلاین", (d, w) -> {
+                            .setMessage("مدل فارسی روی گوشی ذخیره شد و حالت آفلاین فعال شد. از این به بعد کافی است دکمهٔ صحبت را یک‌بار لمس کنی.")
+                            .setPositiveButton("شروع صحبت", (d, w) -> {
                                 prefs.edit().putString("speech_engine", "offline").apply();
-                                status.setText("حالت گفتار آفلاین فعال شد. برای فرمان بعدی دکمهٔ صحبت را بزن.");
+                                startOfflineVoice("auto");
                             })
+                            .setNegativeButton("بعداً", (d, w) -> prefs.edit().putString("speech_engine", "offline").apply())
                             .show();
                     }
                     @Override public void onError(String message) {
