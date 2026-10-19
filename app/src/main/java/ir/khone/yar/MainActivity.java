@@ -1189,6 +1189,68 @@ public class MainActivity extends Activity {
         return true;
     }
 
+
+    // Infer a category/subgroup from ordinary speech so users do not need to name
+    // the category explicitly. Keep ambiguous expenses on the existing fallback path.
+    private boolean tryAutoCategorizeExpense(String raw, String normalized) {
+        long amount = parseAmount(normalized);
+        if (amount <= 0) return false;
+        String category = null, subgroup = null;
+        String[][] rules = {
+            {"ماشین", "سوخت", "بنزین", "گازوئیل", "سوخت گیری", "پمپ بنزین"},
+            {"ماشین", "روغن و فیلتر", "روغن موتور", "فیلتر روغن"},
+            {"ماشین", "لاستیک", "لاستیک", "پنچر"},
+            {"ماشین", "بیمه", "بیمه ماشین", "بیمه خودرو"},
+            {"ماشین", "پارکینگ و عوارض", "پارکینگ", "عوارض آزادراه"},
+            {"ماشین", "تسمه تایم و تعمیرات", "تعمیر ماشین", "مکانیک", "لنت ترمز", "باتری ماشین", "تعمیر خودرو"},
+            {"سلامت", "دارو", "دارو", "داروخانه", "قرص"},
+            {"سلامت", "دکتر", "دکتر", "پزشک", "ویزیت"},
+            {"سلامت", "آزمایش", "آزمایشگاه", "آزمایش خون"},
+            {"سلامت", "دندان‌پزشکی", "دندانپزشک", "دندان پزشکی"},
+            {"مدرسه", "شهریه", "شهریه", "ثبت نام مدرسه"},
+            {"مدرسه", "کتاب و لوازم‌التحریر", "مداد", "دفتر", "لوازم التحریر", "کتاب درسی"},
+            {"خانه", "مواد غذایی", "نان", "پنیر", "شیر", "ماست", "برنج", "گوشت", "مرغ", "میوه", "سبزی", "تخم مرغ", "خواربار", "غذا"},
+            {"خانه", "قبض و خدمات", "قبض برق", "قبض آب", "قبض گاز", "اینترنت", "شارژ تلفن"},
+            {"خانه", "اجاره و تعمیرات", "اجاره خانه", "اجاره منزل", "تعمیر خانه", "لوله کش"},
+            {"خانه", "نظافت", "مواد شوینده", "شوینده", "نظافت"},
+            {"خانه", "لوازم خانه", "یخچال", "ماشین لباسشویی", "ظرفشویی", "مبل", "جاروبرقی"},
+            {"مغازه", "اجاره مغازه", "اجاره مغازه"},
+            {"مغازه", "حقوق", "حقوق کارمند", "حقوق کارکنان"},
+            {"مغازه", "خرید کالا", "خرید جنس", "خرید کالا", "جنس برای مغازه"},
+            {"سایر", "سفر", "بلیط", "هتل", "مسافرت"},
+            {"سایر", "هدیه", "کادو", "هدیه"}
+        };
+        for (String[] rule : rules) {
+            for (int i = 3; i < rule.length; i++) {
+                if (normalized.contains(normalize(rule[i]))) {
+                    category = rule[0];
+                    subgroup = rule[1];
+                    break;
+                }
+            }
+            if (category != null) break;
+        }
+        if (category == null) return false;
+        String item = raw.replaceAll("[0-9۰-۹,،٬]+", " ")
+            .replace("تومان", " ").replace("تومن", " ")
+            .replace("هزار", " ").replace("میلیون", " ")
+            .replaceAll("\\s+", " ").trim();
+        String[] noise = {"اوبا", "اوبآ", "هزینه", "خرج", "پرداخت کردم", "دادم", "خریدم",
+            "خرید کردم", "خریداری کردم", "به مبلغ", "به قیمت", "برای", "تومان", "تومن"};
+        for (String word : noise) item = item.replace(word, " ");
+        item = item.replaceAll("\\s+", " ").trim();
+        if (item.isEmpty()) item = subgroup;
+        if (expenseTotal <= Long.MAX_VALUE - amount) expenseTotal += amount;
+        else return false;
+        prefs.edit().putLong("expense", expenseTotal).apply();
+        addEntry(category, subgroup + " — " + item, amount);
+        String message = "خودکار ثبت شد: " + category + " / " + subgroup + "؛ " + fmt(amount) + " تومان";
+        status.setText(message);
+        say(message);
+        refresh();
+        return true;
+    }
+
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
@@ -1196,6 +1258,7 @@ public class MainActivity extends Activity {
         // Accept a complete spoken expense command, including category and subgroup,
         // in one utterance: "خانه، لوازم خانه، پنج میلیون، خرید ماشین ظرف‌شویی".
         if (tryRegisterCategorizedExpense(raw, s)) return;
+        if (tryAutoCategorizeExpense(raw, s)) return;
 
         String mode = pendingMode;
         if (mode.equals("auto")) {
