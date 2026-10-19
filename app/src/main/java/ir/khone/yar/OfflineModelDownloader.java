@@ -25,7 +25,7 @@ import java.util.zip.ZipInputStream;
 public final class OfflineModelDownloader {
     public static final String MODEL_DIRECTORY = "vosk-model-small-fa-0.42";
     private static final String MODEL_URL =
-            "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip";
+            "https://github.com/topaltopalchi-ship-it/Altay/releases/download/vosk-fa-model-v1/vosk-fa-clean.zip";
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
 
@@ -108,7 +108,20 @@ public final class OfflineModelDownloader {
 
                 File extractedModel = new File(stagingDir, MODEL_DIRECTORY);
                 if (!new File(extractedModel, "am").isDirectory()) {
-                    throw new IllegalStateException("ساختار مدل دریافتی معتبر نیست.");
+                    if (new File(stagingDir, "am").isDirectory()) {
+                        extractedModel.mkdirs();
+                        for (File item : stagingDir.listFiles()) {
+                            if (item.equals(extractedModel)) continue;
+                            File target = new File(extractedModel, item.getName());
+                            if (item.isDirectory()) {
+                                copyDirectory(item, target);
+                            } else {
+                                copyFile(item, target);
+                            }
+                        }
+                    } else {
+                        throw new IllegalStateException("ساختار مدل دریافتی معتبر نیست.");
+                    }
                 }
                 deleteRecursively(installedDir);
                 if (!extractedModel.renameTo(installedDir)) {
