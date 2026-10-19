@@ -959,7 +959,7 @@ public class MainActivity extends Activity {
         }
 
         File voskModel = OfflineModelDownloader.getInstalledModelDirectory(this);
-        boolean sherpaReady = offlinePersianTts != null && offlinePersianTts.isModelInstalled();
+        boolean sherpaReady = offlinePersianTts != null && offlinePersianTts.isReady();
         if (voskModel != null && sherpaReady) {
             ensureVoskModelAndStart(mode);
             return;
