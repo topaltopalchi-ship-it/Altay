@@ -424,7 +424,7 @@ public class MainActivity extends Activity {
         int[] gdm = {0,31,((gy%4==0 && gy%100!=0)||gy%400==0)?29:28,31,30,31,30,31,31,30,31,30,31};
         int jy = (gy <= 1600) ? 0 : 979;
         gy -= (gy <= 1600) ? 621 : 1600;
-        int days = 365 * gy + (gy / 4) - (gy / 100) + (gy / 400);
+        int days = 365 * gy + ((gy + 3) / 4) - ((gy + 99) / 100) + ((gy + 399) / 400);
         for (int i = 0; i < gm; i++) days += gdm[i];
         days += gd - 1;
         int jdn = days - 79;
