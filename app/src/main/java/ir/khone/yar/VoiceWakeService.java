@@ -119,14 +119,14 @@ public class VoiceWakeService extends Service {
                         speaking = true;
                         Runnable fallback = () -> {
                             if (tts != null) {
-                                tts.speak("بفرمایید", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
+                                tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
                             } else if (!stopping) {
                                 speaking = false;
                                 handler.postDelayed(() -> beginListening(), 1200);
                             }
                         };
                         if (offlineTts != null) {
-                            offlineTts.speak("بفرمایید", fallback, () -> {
+                            offlineTts.speak("جانا", fallback, () -> {
                                 if (!stopping) {
                                     speaking = false;
                                     handler.postDelayed(() -> beginListening(), 700);
