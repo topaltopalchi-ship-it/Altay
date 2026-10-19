@@ -42,7 +42,8 @@ public final class OfflineModelDownloader {
 
     public static File getInstalledModelDirectory(Context context) {
         File model = new File(context.getFilesDir(), MODEL_DIRECTORY);
-        return new File(model, "am").isDirectory()\n                && new File(model, "conf").isDirectory() ? model : null;
+        return new File(model, "am").isDirectory()
+                && new File(model, "conf").isDirectory() ? model : null;
     }
 
     /** Call only after the user explicitly approves downloading the offline model. */
