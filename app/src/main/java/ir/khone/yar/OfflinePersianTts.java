@@ -1,6 +1,6 @@
 package ir.khone.yar;
 
-import android.app.Activity;
+import android.content.Context;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
@@ -37,7 +37,7 @@ final class OfflinePersianTts {
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fa_IR-amir-medium.tar.bz2";
     private static final String MODEL_DIR_NAME = "vits-piper-fa_IR-amir-medium";
 
-    private final Activity activity;
+    private final Context activity;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final File modelRoot;
@@ -48,7 +48,8 @@ final class OfflinePersianTts {
     private volatile boolean readyToastShown;
     private MediaPlayer player;
 
-    OfflinePersianTts(Activity activity) {
+    OfflinePersianTts(Context activity) {
+        activity = activity.getApplicationContext();
         this.activity = activity;
         File base = new File(activity.getFilesDir(), "offline-persian-tts");
         modelRoot = base;
@@ -64,17 +65,28 @@ final class OfflinePersianTts {
      * @return true when offline synthesis was queued; false means caller should use fallback.
      */
     boolean speak(String text, Runnable fallback) {
-        if (text == null || text.trim().isEmpty()) return true;
+        return speak(text, fallback, null);
+    }
+
+    boolean speak(String text, Runnable fallback, Runnable onComplete) {
+        if (text == null || text.trim().isEmpty()) {
+            if (onComplete != null) mainHandler.post(onComplete);
+            return true;
+        }
         if (engine == null) {
             ensureModelDownloaded();
             if (fallback != null) fallback.run();
+            if (onComplete != null) mainHandler.post(onComplete);
             return false;
         }
         final String phrase = text.trim();
         worker.execute(() -> {
             OfflineTts current = engine;
             if (current == null) {
-                mainHandler.post(() -> { if (fallback != null) fallback.run(); });
+                mainHandler.post(() -> {
+                    if (fallback != null) fallback.run();
+                    if (onComplete != null) onComplete.run();
+                });
                 return;
             }
             File wav = new File(activity.getCacheDir(), "oba-offline-speech-" + System.nanoTime() + ".wav");
@@ -86,10 +98,11 @@ final class OfflinePersianTts {
                 GeneratedAudio audio = current.generateWithConfigAndCallback(
                         phrase, generation, samples -> 1);
                 audio.save(wav.getAbsolutePath());
-                mainHandler.post(() -> playFile(wav));
+                mainHandler.post(() -> playFile(wav, onComplete));
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     if (fallback != null) fallback.run();
+                    if (onComplete != null) mainHandler.post(onComplete);
                     Toast.makeText(activity, "صدای آفلاین در دسترس نبود؛ از صدای گوشی استفاده شد.", Toast.LENGTH_SHORT).show();
                 });
             }
@@ -159,7 +172,7 @@ final class OfflinePersianTts {
         engine = new OfflineTts(activity.getAssets(), config);
     }
 
-    private void playFile(File wav) {
+    private void playFile(File wav, Runnable onComplete) {
         try {
             if (player != null) {
                 player.release();
@@ -176,6 +189,7 @@ final class OfflinePersianTts {
                 mp.release();
                 if (player == mp) player = null;
                 wav.delete();
+                if (onComplete != null) mainHandler.post(onComplete);
                 return true;
             });
             player.prepare();

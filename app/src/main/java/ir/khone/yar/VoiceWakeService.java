@@ -26,12 +26,14 @@ public class VoiceWakeService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
+    private OfflinePersianTts offlineTts;
     private boolean stopping = false;
     private boolean speaking = false;
 
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
+        offlineTts = new OfflinePersianTts(this);
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS && tts != null) {
                 int language = tts.setLanguage(new Locale("fa", "IR"));
@@ -114,11 +116,24 @@ public class VoiceWakeService extends Service {
                             | Intent.FLAG_ACTIVITY_CLEAR_TOP
                             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                         try { startActivity(launch); } catch (Exception ignored) {}
-                        if (tts != null) {
-                            speaking = true;
-                            tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
-                        } else if (!stopping) {
-                            handler.postDelayed(() -> beginListening(), 900);
+                        speaking = true;
+                        Runnable fallback = () -> {
+                            if (tts != null) {
+                                tts.speak("بفرمایید", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
+                            } else if (!stopping) {
+                                speaking = false;
+                                handler.postDelayed(() -> beginListening(), 1200);
+                            }
+                        };
+                        if (offlineTts != null) {
+                            offlineTts.speak("بفرمایید", fallback, () -> {
+                                if (!stopping) {
+                                    speaking = false;
+                                    handler.postDelayed(() -> beginListening(), 700);
+                                }
+                            });
+                        } else {
+                            fallback.run();
                         }
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
@@ -187,6 +202,10 @@ public class VoiceWakeService extends Service {
             tts.stop();
             tts.shutdown();
             tts = null;
+        }
+        if (offlineTts != null) {
+            offlineTts.shutdown();
+            offlineTts = null;
         }
         super.onDestroy();
     }
