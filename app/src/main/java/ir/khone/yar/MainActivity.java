@@ -958,14 +958,10 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // DIAGNOSTIC TEST 1: keep Vosk as the active recognizer, but do not download
-        // or initialize Sherpa automatically. This isolates Sherpa-related memory pressure.
-        File voskModel = OfflineModelDownloader.getInstalledModelDirectory(this);
-        if (voskModel != null) {
-            startOfflineVoice(mode, voskModel);
-            return;
-        }
-        ensureVoskModelAndStart(mode);
+        // DIAGNOSTIC TEST: bypass Vosk initialization entirely.
+        // Keep Sherpa offline TTS unchanged; use Android's platform speech service
+        // for recognition to determine whether the crash is specific to Vosk.
+        startPlatformVoice(mode);
     }
 
     private void startPlatformVoice(String mode) {
