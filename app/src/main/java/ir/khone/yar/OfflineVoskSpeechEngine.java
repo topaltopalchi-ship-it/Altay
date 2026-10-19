@@ -34,10 +34,11 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         stopped = false;
         delivered = false;
         listener = callback;
-        postStatus("در حال آماده‌سازی مدل گفتار آفلاین…");
+        postStatus("مدل Vosk دانلود شده؛ در حال بارگذاری فایل‌های مدل در حافظه…");
         loader.execute(() -> {
             try {
                 if (stopped) return;
+                postStatus("در حال بازکردن مدل Vosk؛ اگر برنامه بسته شد، احتمالاً فایل مدل یا حافظه مشکل دارد…");
                 Model loaded = new Model(modelDirectory.getAbsolutePath());
                 if (stopped) {
                     loaded.close();
@@ -53,7 +54,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
                 }
                 postStatus("🎙 حالت آفلاین فعال است؛ صحبت کن و بعد مکث کن.");
                 service.startListening(this);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 postError("راه‌اندازی گفتار آفلاین ممکن نشد: " +
                         (e.getMessage() == null ? "خطای مدل یا میکروفون" : e.getMessage()));
                 stop();
