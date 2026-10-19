@@ -1,6 +1,6 @@
 package ir.khone.yar;
 
-import android.app.Activity;
+import android.content.Context;
 import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
@@ -27,6 +27,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.ArrayList;
 
 /**
  * Optional on-device Persian TTS. The model is downloaded once, then synthesis
@@ -37,7 +38,7 @@ final class OfflinePersianTts {
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fa_IR-amir-medium.tar.bz2";
     private static final String MODEL_DIR_NAME = "vits-piper-fa_IR-amir-medium";
 
-    private final Activity activity;
+    private final Context activity;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final File modelRoot;
@@ -47,8 +48,16 @@ final class OfflinePersianTts {
     private volatile boolean downloadAttempted;
     private volatile boolean readyToastShown;
     private MediaPlayer player;
+    private final ArrayList<DownloadCallback> downloadCallbacks = new ArrayList<>();
 
-    OfflinePersianTts(Activity activity) {
+    interface DownloadCallback {
+        void onProgress(long downloadedBytes, long totalBytes);
+        void onReady();
+        void onError(String message);
+    }
+
+    OfflinePersianTts(Context activity) {
+        activity = activity.getApplicationContext();
         this.activity = activity;
         File base = new File(activity.getFilesDir(), "offline-persian-tts");
         modelRoot = base;
@@ -64,9 +73,16 @@ final class OfflinePersianTts {
      * @return true when offline synthesis was queued; false means caller should use fallback.
      */
     boolean speak(String text, Runnable fallback) {
-        if (text == null || text.trim().isEmpty()) return true;
+        return speak(text, fallback, null);
+    }
+
+    boolean speak(String text, Runnable fallback, Runnable onComplete) {
+        if (text == null || text.trim().isEmpty()) {
+            if (onComplete != null) mainHandler.post(onComplete);
+            return true;
+        }
         if (engine == null) {
-            ensureModelDownloaded();
+            ensureModelDownloaded(null);
             if (fallback != null) fallback.run();
             return false;
         }
@@ -74,7 +90,10 @@ final class OfflinePersianTts {
         worker.execute(() -> {
             OfflineTts current = engine;
             if (current == null) {
-                mainHandler.post(() -> { if (fallback != null) fallback.run(); });
+                mainHandler.post(() -> {
+                    if (fallback != null) fallback.run();
+                    if (onComplete != null) onComplete.run();
+                });
                 return;
             }
             File wav = new File(activity.getCacheDir(), "oba-offline-speech-" + System.nanoTime() + ".wav");
@@ -86,7 +105,7 @@ final class OfflinePersianTts {
                 GeneratedAudio audio = current.generateWithConfigAndCallback(
                         phrase, generation, samples -> 1);
                 audio.save(wav.getAbsolutePath());
-                mainHandler.post(() -> playFile(wav));
+                mainHandler.post(() -> playFile(wav, onComplete));
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     if (fallback != null) fallback.run();
@@ -97,8 +116,13 @@ final class OfflinePersianTts {
         return true;
     }
 
-    private synchronized void ensureModelDownloaded() {
-        if (downloading || downloadAttempted || engine != null) return;
+    synchronized void ensureModelDownloaded(DownloadCallback callback) {
+        if (callback != null) downloadCallbacks.add(callback);
+        if (engine != null) {
+            notifyDownloadCallbacks(true, null);
+            return;
+        }
+        if (downloading || downloadAttempted) return;
         downloading = true;
         downloadAttempted = true;
         final boolean modelAlreadyDownloaded = hasModelFiles();
@@ -108,17 +132,22 @@ final class OfflinePersianTts {
                 Toast.LENGTH_LONG).show();
         worker.execute(() -> {
             File archive = new File(activity.getCacheDir(), "persian-tts-model.tar.bz2");
+            String stage = "آماده‌سازی دانلود";
             try {
                 if (!hasModelFiles()) {
-                    downloadFile(MODEL_ARCHIVE, archive);
+                    stage = "دریافت فایل مدل";
+                    downloadFile(MODEL_ARCHIVE, archive, (downloaded, total) -> mainHandler.post(() -> notifyDownloadProgress(downloaded, total)));
+                    stage = "بازکردن فایل فشرده مدل";
                     if (!modelRoot.exists() && !modelRoot.mkdirs()) {
                         throw new IllegalStateException("Cannot create model directory");
                     }
                     extractArchive(archive, modelRoot);
                     if (!hasModelFiles()) throw new IllegalStateException("Model files missing after extraction");
                 }
+                stage = "راه‌اندازی موتور گفتار آفلاین";
                 initializeEngine();
                 mainHandler.post(() -> {
+                    notifyDownloadCallbacks(engine != null, engine != null ? null : "مدل گفتار نصب نشد.");
                     if (engine != null && !readyToastShown) {
                         readyToastShown = true;
                         Toast.makeText(activity, "مدل فارسی آفلاین آماده است؛ از این پس گفتار روی گوشی ساخته می‌شود.", Toast.LENGTH_LONG).show();
@@ -126,13 +155,43 @@ final class OfflinePersianTts {
                 });
             } catch (Exception e) {
                 downloadAttempted = false;
-                mainHandler.post(() -> Toast.makeText(activity,
-                        "دانلود مدل گفتار ناموفق بود. اینترنت را بررسی کن و دوباره تلاش کن.", Toast.LENGTH_LONG).show());
+                final String detail = stage + " ناموفق بود: "
+                        + e.getClass().getSimpleName()
+                        + (e.getMessage() == null || e.getMessage().trim().isEmpty() ? "" : " — " + e.getMessage());
+                mainHandler.post(() -> {
+                    notifyDownloadCallbacks(false, detail);
+                    Toast.makeText(activity, detail, Toast.LENGTH_LONG).show();
+                });
             } finally {
                 downloading = false;
                 if (archive.exists()) archive.delete();
             }
         });
+    }
+
+    private void notifyDownloadProgress(long downloaded, long total) {
+        ArrayList<DownloadCallback> callbacks;
+        synchronized (this) { callbacks = new ArrayList<>(downloadCallbacks); }
+        for (DownloadCallback callback : callbacks) {
+            if (callback != null) callback.onProgress(downloaded, total);
+        }
+    }
+
+    private void notifyDownloadCallbacks(boolean ready, String message) {
+        ArrayList<DownloadCallback> callbacks;
+        synchronized (this) {
+            callbacks = new ArrayList<>(downloadCallbacks);
+            downloadCallbacks.clear();
+        }
+        for (DownloadCallback callback : callbacks) {
+            if (callback == null) continue;
+            if (ready) callback.onReady();
+            else callback.onError(message == null ? "آماده‌سازی مدل گفتار ناموفق بود." : message);
+        }
+    }
+
+    boolean isModelInstalled() {
+        return hasModelFiles();
     }
 
     private boolean hasModelFiles() {
@@ -156,10 +215,14 @@ final class OfflinePersianTts {
         OfflineTtsConfig config = new OfflineTtsConfig();
         config.setModel(model);
         config.setMaxNumSentences(1);
-        engine = new OfflineTts(config);
+        engine = new OfflineTts(activity.getAssets(), config);
     }
 
-    private void playFile(File wav) {
+    private void playFile(File wav, Runnable onComplete) {
+        final java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        Runnable finish = () -> {
+            if (completed.compareAndSet(false, true) && onComplete != null) onComplete.run();
+        };
         try {
             if (player != null) {
                 player.release();
@@ -170,26 +233,33 @@ final class OfflinePersianTts {
             player.setOnCompletionListener(mp -> {
                 mp.release();
                 if (player == mp) player = null;
+                // Always notify the caller so background wake listening can resume.
                 wav.delete();
+                finish.run();
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 mp.release();
                 if (player == mp) player = null;
                 wav.delete();
+                finish.run();
                 return true;
             });
             player.prepare();
             player.start();
         } catch (Exception e) {
             if (player != null) {
-                player.release();
+                try { player.release(); } catch (Exception ignored) {}
                 player = null;
             }
             wav.delete();
+            // Playback failure must not leave VoiceWakeService stuck in speaking=true.
+            mainHandler.post(finish);
         }
     }
 
-    private static void downloadFile(String address, File target) throws Exception {
+    private interface ProgressListener { void onProgress(long downloadedBytes, long totalBytes); }
+
+    private static void downloadFile(String address, File target, ProgressListener progressListener) throws Exception {
         File partial = new File(target.getAbsolutePath() + ".part");
         HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
         connection.setConnectTimeout(20000);
@@ -200,11 +270,21 @@ final class OfflinePersianTts {
             connection.connect();
             int code = connection.getResponseCode();
             if (code < 200 || code >= 300) throw new IllegalStateException("Model server HTTP " + code);
+            long totalBytes = connection.getContentLengthLong();
+            long downloadedBytes = 0;
+            long lastReportedBytes = 0;
             try (InputStream in = new BufferedInputStream(connection.getInputStream());
                  BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(partial))) {
                 byte[] buffer = new byte[32768];
                 int count;
-                while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                while ((count = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, count);
+                    downloadedBytes += count;
+                    if (downloadedBytes - lastReportedBytes >= 262144 || (totalBytes > 0 && downloadedBytes >= totalBytes)) {
+                        progressListener.onProgress(downloadedBytes, totalBytes);
+                        lastReportedBytes = downloadedBytes;
+                    }
+                }
             }
             if (partial.length() < 10_000_000L) throw new IllegalStateException("Model archive is unexpectedly small");
             if (target.exists()) target.delete();

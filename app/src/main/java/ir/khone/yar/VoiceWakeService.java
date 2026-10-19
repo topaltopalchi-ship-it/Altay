@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -26,12 +27,20 @@ public class VoiceWakeService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
+    private OfflinePersianTts offlineTts;
     private boolean stopping = false;
     private boolean speaking = false;
+    private PowerManager.WakeLock wakeLock;
 
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        if (powerManager != null) {
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
+            wakeLock.setReferenceCounted(false);
+        }
+        offlineTts = new OfflinePersianTts(this);
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS && tts != null) {
                 int language = tts.setLanguage(new Locale("fa", "IR"));
@@ -65,6 +74,9 @@ public class VoiceWakeService extends Service {
         }
         stopping = false;
         startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «اوبا»"));
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            try { wakeLock.acquire(); } catch (Exception ignored) {}
+        }
         handler.post(() -> beginListening());
         return START_STICKY;
     }
@@ -114,11 +126,24 @@ public class VoiceWakeService extends Service {
                             | Intent.FLAG_ACTIVITY_CLEAR_TOP
                             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                         try { startActivity(launch); } catch (Exception ignored) {}
-                        if (tts != null) {
-                            speaking = true;
-                            tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
-                        } else if (!stopping) {
-                            handler.postDelayed(() -> beginListening(), 900);
+                        speaking = true;
+                        Runnable fallback = () -> {
+                            if (tts != null) {
+                                tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
+                            } else if (!stopping) {
+                                speaking = false;
+                                handler.postDelayed(() -> beginListening(), 1200);
+                            }
+                        };
+                        if (offlineTts != null) {
+                            offlineTts.speak("جانا", fallback, () -> {
+                                if (!stopping) {
+                                    speaking = false;
+                                    handler.postDelayed(() -> beginListening(), 700);
+                                }
+                            });
+                        } else {
+                            fallback.run();
                         }
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
@@ -188,6 +213,14 @@ public class VoiceWakeService extends Service {
             tts.shutdown();
             tts = null;
         }
+        if (offlineTts != null) {
+            offlineTts.shutdown();
+            offlineTts = null;
+        }
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try { wakeLock.release(); } catch (Exception ignored) {}
+        }
+        wakeLock = null;
         super.onDestroy();
     }
 
