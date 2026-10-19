@@ -958,16 +958,98 @@ public class MainActivity extends Activity {
             return;
         }
 
-        File voskModel = OfflineModelDownloader.getInstalledModelDirectory(this);
-        boolean sherpaReady = offlinePersianTts != null && offlinePersianTts.isReady();
-        if (voskModel != null) {
-            startOfflineVoice(mode, voskModel);
-            if (!sherpaReady) prepareSherpaModel();
+        // Prefer Android's guarded speech service for the interactive button. Some devices
+        // terminate the whole process while loading the Vosk native model; the platform
+        // recognizer lets the user continue and requests offline recognition when supported.
+        startPlatformVoice(mode);
+    }
+
+    private void startPlatformVoice(String mode) {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            status.setText("تشخیص گفتار گوشی در دسترس نیست. سرویس گفتار فارسی را در تنظیمات گوشی فعال کن.");
+            Toast.makeText(this, "سرویس تشخیص گفتار در دسترس نیست.", Toast.LENGTH_LONG).show();
             return;
         }
-
-        // Start the required speech-recognition model download immediately on the voice-button tap.
-        ensureVoskModelAndStart(mode);
+        try {
+            if (recognizer != null) {
+                try { recognizer.cancel(); } catch (Exception ignored) {}
+                recognizer.destroy();
+                recognizer = null;
+            }
+            if (offlineEngine != null) {
+                offlineEngine.stop();
+                offlineEngine = null;
+            }
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
+                @Override public void onReadyForSpeech(Bundle params) {
+                    if (status != null && !isFinishing()) status.setText("🎙 اوبا گوش می‌دهد؛ صحبت کن و بعد مکث کن.");
+                }
+                @Override public void onBeginningOfSpeech() {
+                    if (status != null && !isFinishing()) status.setText("صدایت دریافت شد…");
+                }
+                @Override public void onRmsChanged(float rmsdB) {}
+                @Override public void onBufferReceived(byte[] buffer) {}
+                @Override public void onEndOfSpeech() {
+                    if (status != null && !isFinishing()) status.setText("در حال پردازش گفتار…");
+                }
+                @Override public void onError(int error) {
+                    if (isFinishing()) return;
+                    String message;
+                    switch (error) {
+                        case SpeechRecognizer.ERROR_NO_MATCH:
+                        case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                            message = "گفتاری تشخیص داده نشد؛ دوباره بزن و واضح صحبت کن.";
+                            break;
+                        case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                            message = "اجازهٔ میکروفون داده نشده است.";
+                            break;
+                        case SpeechRecognizer.ERROR_NETWORK:
+                        case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                            message = "سرویس گفتار گوشی به اینترنت نیاز دارد یا اتصال در دسترس نیست. بستهٔ فارسی آفلاین را در تنظیمات گفتار نصب کن.";
+                            break;
+                        default:
+                            message = "تشخیص گفتار شروع نشد (کد " + error + "). دوباره تلاش کن.";
+                    }
+                    if (status != null) status.setText(message);
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                }
+                @Override public void onResults(Bundle results) {
+                    if (isFinishing() || results == null) return;
+                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (matches == null || matches.isEmpty() || matches.get(0).trim().isEmpty()) {
+                        if (status != null) status.setText("گفتاری تشخیص داده نشد؛ دوباره تلاش کن.");
+                        return;
+                    }
+                    String spoken = matches.get(0).trim();
+                    if (status != null) status.setText("شنیدم: «" + spoken + "»");
+                    handleVoice(spoken);
+                }
+                @Override public void onPartialResults(Bundle partialResults) {
+                    if (status == null || isFinishing() || partialResults == null) return;
+                    ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    if (matches != null && !matches.isEmpty()) status.setText("شنیدم: " + matches.get(0));
+                }
+                @Override public void onEvent(int eventType, Bundle params) {}
+            });
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
+            intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
+            intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            recognizer.startListening(intent);
+            if (status != null) status.setText("در حال بازکردن میکروفون…");
+        } catch (Throwable e) {
+            if (status != null) status.setText("شروع میکروفون ممکن نشد؛ سرویس گفتار گوشی را بررسی کن.");
+            Toast.makeText(this, "شروع تشخیص گفتار ممکن نشد.", Toast.LENGTH_LONG).show();
+            if (recognizer != null) {
+                try { recognizer.destroy(); } catch (Exception ignored) {}
+                recognizer = null;
+            }
+        }
     }
 
     private void prepareSherpaModel() {
