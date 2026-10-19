@@ -65,7 +65,37 @@ public class MainActivity extends Activity {
         incomeTotal = prefs.getLong("income", 0);
         expenseTotal = prefs.getLong("expense", 0);
         loadEntries();
-        tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
+        tts = new TextToSpeech(this, result -> {
+            if (tts == null || result != TextToSpeech.SUCCESS) return;
+            Locale persian = new Locale("fa", "IR");
+            // Prefer a locally installed Persian voice so speech can work without a network.
+            // Android cannot provide a voice that is not installed on the device; if none is
+            // available offline, keep the system Persian default as a compatibility fallback.
+            try {
+                android.speech.tts.Voice offlinePersian = null;
+                android.speech.tts.Voice anyPersian = null;
+                for (android.speech.tts.Voice voice : tts.getVoices()) {
+                    Locale voiceLocale = voice.getLocale();
+                    if (voiceLocale == null || !"fa".equalsIgnoreCase(voiceLocale.getLanguage())) continue;
+                    if (anyPersian == null) anyPersian = voice;
+                    if (!voice.isNetworkConnectionRequired()
+                            && ("IR".equalsIgnoreCase(voiceLocale.getCountry()) || voiceLocale.getCountry().isEmpty())) {
+                        offlinePersian = voice;
+                        break;
+                    }
+                }
+                if (offlinePersian != null) {
+                    tts.setVoice(offlinePersian);
+                } else {
+                    int languageResult = tts.setLanguage(persian);
+                    if (languageResult < TextToSpeech.LANG_AVAILABLE && anyPersian != null) {
+                        tts.setVoice(anyPersian);
+                    }
+                }
+            } catch (Exception ignored) {
+                tts.setLanguage(persian);
+            }
+        });
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
