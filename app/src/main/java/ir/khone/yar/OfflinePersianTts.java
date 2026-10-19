@@ -27,6 +27,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.ArrayList;
 
 /**
  * Optional on-device Persian TTS. The model is downloaded once, then synthesis
@@ -47,6 +48,12 @@ final class OfflinePersianTts {
     private volatile boolean downloadAttempted;
     private volatile boolean readyToastShown;
     private MediaPlayer player;
+    private final ArrayList<DownloadCallback> downloadCallbacks = new ArrayList<>();
+
+    interface DownloadCallback {
+        void onReady();
+        void onError(String message);
+    }
 
     OfflinePersianTts(Context activity) {
         activity = activity.getApplicationContext();
@@ -74,7 +81,7 @@ final class OfflinePersianTts {
             return true;
         }
         if (engine == null) {
-            ensureModelDownloaded();
+            ensureModelDownloaded(null);
             if (fallback != null) fallback.run();
             return false;
         }
@@ -108,8 +115,13 @@ final class OfflinePersianTts {
         return true;
     }
 
-    private synchronized void ensureModelDownloaded() {
-        if (downloading || downloadAttempted || engine != null) return;
+    synchronized void ensureModelDownloaded(DownloadCallback callback) {
+        if (callback != null) downloadCallbacks.add(callback);
+        if (engine != null) {
+            notifyDownloadCallbacks(true, null);
+            return;
+        }
+        if (downloading || downloadAttempted) return;
         downloading = true;
         downloadAttempted = true;
         final boolean modelAlreadyDownloaded = hasModelFiles();
@@ -130,6 +142,7 @@ final class OfflinePersianTts {
                 }
                 initializeEngine();
                 mainHandler.post(() -> {
+                    notifyDownloadCallbacks(engine != null, engine != null ? null : "مدل گفتار نصب نشد.");
                     if (engine != null && !readyToastShown) {
                         readyToastShown = true;
                         Toast.makeText(activity, "مدل فارسی آفلاین آماده است؛ از این پس گفتار روی گوشی ساخته می‌شود.", Toast.LENGTH_LONG).show();
@@ -137,13 +150,32 @@ final class OfflinePersianTts {
                 });
             } catch (Exception e) {
                 downloadAttempted = false;
-                mainHandler.post(() -> Toast.makeText(activity,
-                        "دانلود مدل گفتار ناموفق بود. اینترنت را بررسی کن و دوباره تلاش کن.", Toast.LENGTH_LONG).show());
+                mainHandler.post(() -> {
+                    notifyDownloadCallbacks(false, "دانلود مدل گفتار ناموفق بود. اینترنت را بررسی کن و دوباره تلاش کن.");
+                    Toast.makeText(activity, "دانلود مدل گفتار ناموفق بود. اینترنت را بررسی کن و دوباره تلاش کن.", Toast.LENGTH_LONG).show();
+                });
             } finally {
                 downloading = false;
                 if (archive.exists()) archive.delete();
             }
         });
+    }
+
+    private void notifyDownloadCallbacks(boolean ready, String message) {
+        ArrayList<DownloadCallback> callbacks;
+        synchronized (this) {
+            callbacks = new ArrayList<>(downloadCallbacks);
+            downloadCallbacks.clear();
+        }
+        for (DownloadCallback callback : callbacks) {
+            if (callback == null) continue;
+            if (ready) callback.onReady();
+            else callback.onError(message == null ? "آماده‌سازی مدل گفتار ناموفق بود." : message);
+        }
+    }
+
+    boolean isModelInstalled() {
+        return hasModelFiles();
     }
 
     private boolean hasModelFiles() {
