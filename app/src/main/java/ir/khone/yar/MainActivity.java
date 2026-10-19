@@ -51,6 +51,8 @@ public class MainActivity extends Activity {
     private Button wakeButton;
     private TextToSpeech tts;
     private OfflinePersianTts offlinePersianTts;
+    private OfflineVoskSpeechEngine offlineEngine;
+    private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
@@ -951,49 +953,68 @@ public class MainActivity extends Activity {
 
     private void startVoice(String mode) {
         pendingMode = mode;
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
-            say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
-        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
         }
+        File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (modelDirectory != null) {
+            startOfflineVoice(mode, modelDirectory);
+            return;
+        }
+        if (downloadingVoskModel) {
+            status.setText("دانلود مدل گفتار فارسی در حال انجام است؛ کمی صبر کن…");
+            return;
+        }
+        downloadingVoskModel = true;
+        status.setText("مدل Vosk فارسی نصب نیست؛ دانلود خودکار را شروع کردم…");
+        Toast.makeText(this, "در حال دانلود مدل گفتار فارسی برای استفادهٔ آفلاین…", Toast.LENGTH_LONG).show();
+        OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
+            @Override public void onProgress(long downloadedBytes, long totalBytes) {
+                if (status == null || isFinishing()) return;
+                if (totalBytes > 0) {
+                    int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
+                    status.setText("دانلود مدل گفتار فارسی: " + percent + "%");
+                } else {
+                    status.setText("در حال دانلود مدل گفتار فارسی…");
+                }
+            }
+            @Override public void onInstalled(File installedDirectory) {
+                downloadingVoskModel = false;
+                if (isFinishing()) return;
+                status.setText("مدل Vosk آماده شد؛ میکروفون را شروع می‌کنم…");
+                startOfflineVoice(mode, installedDirectory);
+            }
+            @Override public void onError(String message) {
+                downloadingVoskModel = false;
+                if (isFinishing()) return;
+                status.setText("دانلود مدل گفتار ناموفق بود: " + message + " دوباره دکمهٔ صوتی را بزن.");
+                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود؛ دوباره تلاش کن.", Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void startOfflineVoice(String mode, File modelDirectory) {
         try {
             if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
-                public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
-                public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
-                public void onRmsChanged(float r) {}
-                public void onBufferReceived(byte[] b) {}
-                public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
-                public void onError(int e) {
-                    String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
-                        e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
-                        "تشخیص صدا انجام نشد. دوباره تلاش کن.";
-                    status.setText(msg); say(msg);
+            if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
+            offlineEngine = new OfflineVoskSpeechEngine();
+            offlineEngine.start(this, modelDirectory, new OfflineVoskSpeechEngine.Listener() {
+                @Override public void onStatus(String message) {
+                    if (status != null && !isFinishing()) status.setText(message);
                 }
-                public void onResults(Bundle b) {
-                    ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (result != null && !result.isEmpty()) handleVoice(result.get(0));
+                @Override public void onText(String text) {
+                    if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
+                    handleVoice(text);
                 }
-                public void onPartialResults(Bundle b) {}
-                public void onEvent(int a, Bundle b) {}
+                @Override public void onError(String message) {
+                    if (status != null && !isFinishing()) status.setText(message);
+                    if (!isFinishing()) Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                    if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
+                }
             });
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
-            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با آرامش جزئیات هزینه، مبلغ و توضیحات را کامل بگو؛ برای پایان صحبت مکث کن");
-            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-            // Ask the speech service to wait longer before deciding the user has finished.
-            // Actual limits depend on the speech-recognition app installed on the device.
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 6000L);
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000L);
-            recognizer.startListening(intent);
         } catch (Exception e) {
-            status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
+            status.setText("شروع گفتار آفلاین ممکن نشد؛ دوباره دکمهٔ صوتی را بزن.");
         }
     }
 
@@ -1611,6 +1632,7 @@ public class MainActivity extends Activity {
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
         if(recognizer!=null) recognizer.destroy();
+        if(offlineEngine!=null) offlineEngine.stop();
         if(offlinePersianTts!=null) offlinePersianTts.shutdown();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
