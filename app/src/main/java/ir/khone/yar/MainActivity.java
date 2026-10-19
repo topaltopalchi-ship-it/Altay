@@ -1221,7 +1221,7 @@ public class MainActivity extends Activity {
             {"سایر", "هدیه", "کادو", "هدیه"}
         };
         for (String[] rule : rules) {
-            for (int i = 3; i < rule.length; i++) {
+            for (int i = 2; i < rule.length; i++) {
                 if (normalized.contains(normalize(rule[i]))) {
                     category = rule[0];
                     subgroup = rule[1];
