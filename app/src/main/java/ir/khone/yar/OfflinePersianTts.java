@@ -53,9 +53,7 @@ final class OfflinePersianTts {
         File base = new File(activity.getFilesDir(), "offline-persian-tts");
         modelRoot = base;
         modelDir = new File(base, MODEL_DIR_NAME);
-        if (hasModelFiles()) {
-            initializeEngine();
-        }
+        // Load native inference lazily on the worker thread, never on the UI thread.
     }
 
     boolean isReady() {
@@ -79,7 +77,7 @@ final class OfflinePersianTts {
                 mainHandler.post(() -> { if (fallback != null) fallback.run(); });
                 return;
             }
-            File wav = new File(activity.getCacheDir(), "oba-offline-speech.wav");
+            File wav = new File(activity.getCacheDir(), "oba-offline-speech-" + System.nanoTime() + ".wav");
             try {
                 GenerationConfig generation = new GenerationConfig();
                 generation.setSid(0);
@@ -103,7 +101,11 @@ final class OfflinePersianTts {
         if (downloading || downloadAttempted || engine != null) return;
         downloading = true;
         downloadAttempted = true;
-        Toast.makeText(activity, "برای فعال‌شدن صدای آفلاین، مدل فارسی (حدود ۸۰ مگابایت) دانلود می‌شود.", Toast.LENGTH_LONG).show();
+        final boolean modelAlreadyDownloaded = hasModelFiles();
+        Toast.makeText(activity, modelAlreadyDownloaded
+                ? "در حال آماده‌سازی موتور گفتار آفلاین…"
+                : "برای فعال‌شدن صدای آفلاین، مدل فارسی (حدود ۸۰ مگابایت) دانلود می‌شود.",
+                Toast.LENGTH_LONG).show();
         worker.execute(() -> {
             File archive = new File(activity.getCacheDir(), "persian-tts-model.tar.bz2");
             try {
