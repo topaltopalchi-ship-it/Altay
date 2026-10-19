@@ -219,6 +219,10 @@ final class OfflinePersianTts {
     }
 
     private void playFile(File wav, Runnable onComplete) {
+        final java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        Runnable finish = () -> {
+            if (completed.compareAndSet(false, true) && onComplete != null) onComplete.run();
+        };
         try {
             if (player != null) {
                 player.release();
@@ -229,23 +233,27 @@ final class OfflinePersianTts {
             player.setOnCompletionListener(mp -> {
                 mp.release();
                 if (player == mp) player = null;
+                // Always notify the caller so background wake listening can resume.
                 wav.delete();
+                finish.run();
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 mp.release();
                 if (player == mp) player = null;
                 wav.delete();
-                if (onComplete != null) mainHandler.post(onComplete);
+                finish.run();
                 return true;
             });
             player.prepare();
             player.start();
         } catch (Exception e) {
             if (player != null) {
-                player.release();
+                try { player.release(); } catch (Exception ignored) {}
                 player = null;
             }
             wav.delete();
+            // Playback failure must not leave VoiceWakeService stuck in speaking=true.
+            mainHandler.post(finish);
         }
     }
 
