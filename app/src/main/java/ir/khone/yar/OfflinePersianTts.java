@@ -156,7 +156,7 @@ final class OfflinePersianTts {
         OfflineTtsConfig config = new OfflineTtsConfig();
         config.setModel(model);
         config.setMaxNumSentences(1);
-        engine = new OfflineTts(context.getAssets(), config);
+        engine = new OfflineTts(activity.getAssets(), config);
     }
 
     private void playFile(File wav) {
