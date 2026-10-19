@@ -957,39 +957,73 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
             return;
         }
+
+        File voskModel = OfflineModelDownloader.getInstalledModelDirectory(this);
+        boolean sherpaReady = offlinePersianTts != null && offlinePersianTts.isModelInstalled();
+        if (voskModel != null && sherpaReady) {
+            ensureVoskModelAndStart(mode);
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+            .setTitle("آماده‌سازی مکالمهٔ صوتی")
+            .setMessage("برای مکالمه صوتی با اوبا لطفا تایید دانلود بکنید")
+            .setPositiveButton("تأیید دانلود", (dialog, which) -> prepareVoiceModels(mode))
+            .setNegativeButton("فعلاً نه", null)
+            .show();
+    }
+
+    private void prepareVoiceModels(String mode) {
+        if (status != null) status.setText("در حال آماده‌سازی مدل‌های گفتار فارسی؛ اینترنت را روشن نگه دار…");
+        if (offlinePersianTts == null) offlinePersianTts = new OfflinePersianTts(this);
+        offlinePersianTts.ensureModelDownloaded(new OfflinePersianTts.DownloadCallback() {
+            @Override public void onReady() {
+                if (isFinishing()) return;
+                if (status != null) status.setText("مدل صدای Sherpa آماده شد؛ بررسی مدل تشخیص گفتار…");
+                ensureVoskModelAndStart(mode);
+            }
+            @Override public void onError(String message) {
+                if (isFinishing()) return;
+                if (status != null) status.setText("دانلود Sherpa ناموفق بود؛ تشخیص گفتار را ادامه می‌دهم و می‌توانی دوباره تلاش کنی.");
+                Toast.makeText(MainActivity.this, "مدل صدای Sherpa دانلود نشد. اینترنت را بررسی کن و دوباره دکمهٔ صوتی را بزن.", Toast.LENGTH_LONG).show();
+                ensureVoskModelAndStart(mode);
+            }
+        });
+    }
+
+    private void ensureVoskModelAndStart(String mode) {
         File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
         if (modelDirectory != null) {
             startOfflineVoice(mode, modelDirectory);
             return;
         }
         if (downloadingVoskModel) {
-            status.setText("دانلود مدل گفتار فارسی در حال انجام است؛ کمی صبر کن…");
+            if (status != null) status.setText("دانلود مدل Vosk در حال انجام است؛ کمی صبر کن…");
             return;
         }
         downloadingVoskModel = true;
-        status.setText("مدل Vosk فارسی نصب نیست؛ دانلود خودکار را شروع کردم…");
-        Toast.makeText(this, "در حال دانلود مدل گفتار فارسی برای استفادهٔ آفلاین…", Toast.LENGTH_LONG).show();
+        if (status != null) status.setText("در حال دانلود مدل تشخیص گفتار فارسی Vosk…");
         OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
             @Override public void onProgress(long downloadedBytes, long totalBytes) {
                 if (status == null || isFinishing()) return;
                 if (totalBytes > 0) {
                     int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
-                    status.setText("دانلود مدل گفتار فارسی: " + percent + "%");
+                    status.setText("دانلود مدل Vosk: " + percent + "%");
                 } else {
-                    status.setText("در حال دانلود مدل گفتار فارسی…");
+                    status.setText("در حال دانلود مدل Vosk…");
                 }
             }
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                status.setText("مدل Vosk آماده شد؛ میکروفون را شروع می‌کنم…");
+                if (status != null) status.setText("مدل‌های گفتار آماده شد؛ میکروفون را شروع می‌کنم…");
                 startOfflineVoice(mode, installedDirectory);
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                status.setText("دانلود مدل گفتار ناموفق بود: " + message + " دوباره دکمهٔ صوتی را بزن.");
-                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود؛ دوباره تلاش کن.", Toast.LENGTH_LONG).show();
+                if (status != null) status.setText("دانلود Vosk ناموفق بود: " + message + " دوباره دکمهٔ صوتی را بزن.");
+                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود؛ اینترنت را بررسی کن و دوباره تلاش کن.", Toast.LENGTH_LONG).show();
             }
         });
     }
