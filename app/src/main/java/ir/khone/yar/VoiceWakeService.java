@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -29,10 +30,16 @@ public class VoiceWakeService extends Service {
     private OfflinePersianTts offlineTts;
     private boolean stopping = false;
     private boolean speaking = false;
+    private PowerManager.WakeLock wakeLock;
 
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
+        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+        if (powerManager != null) {
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
+            wakeLock.setReferenceCounted(false);
+        }
         offlineTts = new OfflinePersianTts(this);
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS && tts != null) {
@@ -67,6 +74,9 @@ public class VoiceWakeService extends Service {
         }
         stopping = false;
         startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «اوبا»"));
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            try { wakeLock.acquire(); } catch (Exception ignored) {}
+        }
         handler.post(() -> beginListening());
         return START_STICKY;
     }
@@ -207,6 +217,10 @@ public class VoiceWakeService extends Service {
             offlineTts.shutdown();
             offlineTts = null;
         }
+        if (wakeLock != null && wakeLock.isHeld()) {
+            try { wakeLock.release(); } catch (Exception ignored) {}
+        }
+        wakeLock = null;
         super.onDestroy();
     }
 
