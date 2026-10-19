@@ -25,7 +25,7 @@ import java.util.zip.ZipInputStream;
 public final class OfflineModelDownloader {
     public static final String MODEL_DIRECTORY = "vosk-model-small-fa-0.42";
     private static final String MODEL_URL =
-            "https://github.com/topaltopalchi-ship-it/Altay/releases/download/vosk-fa-model-v1/vosk-fa-clean.zip";
+            "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip";
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
 
@@ -42,7 +42,7 @@ public final class OfflineModelDownloader {
 
     public static File getInstalledModelDirectory(Context context) {
         File model = new File(context.getFilesDir(), MODEL_DIRECTORY);
-        return new File(model, "am").isDirectory() ? model : null;
+        return new File(model, "am").isDirectory()\n                && new File(model, "conf").isDirectory() ? model : null;
     }
 
     /** Call only after the user explicitly approves downloading the offline model. */
