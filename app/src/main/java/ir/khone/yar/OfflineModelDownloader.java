@@ -19,8 +19,8 @@ import java.util.zip.ZipInputStream;
 /**
  * Downloads and installs the Persian Vosk model into app-private storage.
  *
- * IMPORTANT: callers must obtain explicit user consent before invoking
- * downloadModel(). This class intentionally does not start a download itself.
+ * The app invokes downloadModel() in response to the user's voice-button tap
+ * when no local model is installed. Downloads are stored in app-private storage.
  */
 public final class OfflineModelDownloader {
     public static final String MODEL_DIRECTORY = "vosk-model-small-fa-0.42";
