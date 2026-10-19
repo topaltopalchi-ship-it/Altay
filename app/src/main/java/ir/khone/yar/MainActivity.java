@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private Button wakeButton;
     private TextToSpeech tts;
+    private OfflinePersianTts offlinePersianTts;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
@@ -96,6 +97,7 @@ public class MainActivity extends Activity {
                 tts.setLanguage(persian);
             }
         });
+        offlinePersianTts = new OfflinePersianTts(this);
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
@@ -1547,7 +1549,16 @@ public class MainActivity extends Activity {
         if(inventoryView!=null) refreshInventory();
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
-    private void say(String s) { if(tts!=null) tts.speak(s,TextToSpeech.QUEUE_FLUSH,null,"khoneyar"); }
+    private void say(String s) {
+        if (offlinePersianTts != null) {
+            offlinePersianTts.speak(s, () -> speakWithSystemTts(s));
+        } else {
+            speakWithSystemTts(s);
+        }
+    }
+    private void speakWithSystemTts(String s) {
+        if (tts != null) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "khoneyar");
+    }
     private TextView text(String s,int size,int color,boolean bold) {
         TextView v=new TextView(this); v.setText(s); v.setTextSize(size); v.setTextColor(color); v.setGravity(Gravity.RIGHT); v.setTextDirection(View.TEXT_DIRECTION_RTL);
         if(bold) v.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return v;
@@ -1600,6 +1611,7 @@ public class MainActivity extends Activity {
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
         if(recognizer!=null) recognizer.destroy();
+        if(offlinePersianTts!=null) offlinePersianTts.shutdown();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
     }
