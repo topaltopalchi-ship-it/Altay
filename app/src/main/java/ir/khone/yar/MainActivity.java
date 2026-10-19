@@ -45,7 +45,7 @@ import org.json.JSONException;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
-    private TextView status, recent, remindersView, inventoryView;
+    private TextView status, recent, remindersView, inventoryView, homeDateView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
     private android.content.Intent voiceIntent;
@@ -82,6 +82,9 @@ public class MainActivity extends Activity {
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         TextView brand = text("🏠 OBA", 27, dark, true); brand.setGravity(Gravity.CENTER);
         content.addView(brand, lp(-1, -2, 0, 4, 0, 1));
+        homeDateView = text("", 15, dark, true); homeDateView.setGravity(Gravity.CENTER);
+        content.addView(homeDateView, lp(-1, -2, 0, 0, 0, 4));
+        updateHomeDate();
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 8));
 
@@ -1198,7 +1201,7 @@ public class MainActivity extends Activity {
         String category = null, subgroup = null;
         String[][] rules = {
             {"ماشین", "سوخت", "بنزین", "گازوئیل", "سوخت گیری", "پمپ بنزین"},
-            {"ماشین", "روغن و فیلتر", "روغن موتور", "فیلتر روغن"},
+            {"ماشین", "روغن و فیلتر", "تعویض روغن", "روغن موتور", "فیلتر روغن"},
             {"ماشین", "لاستیک", "لاستیک", "پنچر"},
             {"ماشین", "بیمه", "بیمه ماشین", "بیمه خودرو"},
             {"ماشین", "پارکینگ و عوارض", "پارکینگ", "عوارض آزادراه"},
@@ -1693,7 +1696,17 @@ public class MainActivity extends Activity {
         String all=prefs.getString("entries","");
         if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
     }
+    @Override protected void onResume() { super.onResume(); updateHomeDate(); }
+    private void updateHomeDate() {
+        if (homeDateView == null) return;
+        Calendar now = Calendar.getInstance();
+        int[] jalali = gregorianToJalali(now.get(Calendar.YEAR), now.get(Calendar.MONTH)+1, now.get(Calendar.DAY_OF_MONTH));
+        String[] months = {"فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"};
+        String[] weekdays = {"یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنجشنبه","جمعه","شنبه"};
+        homeDateView.setText(weekdays[now.get(Calendar.DAY_OF_WEEK)-1] + "، " + jalali[2] + " " + months[jalali[1]-1] + " " + jalali[0]);
+    }
     private void refresh() {
+        updateHomeDate();
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
         if(inventoryView!=null) refreshInventory();
