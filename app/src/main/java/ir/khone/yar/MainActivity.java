@@ -993,8 +993,12 @@ public class MainActivity extends Activity {
             }
             @Override public void onError(String message) {
                 if (isFinishing()) return;
-                if (status != null) status.setText("دانلود Sherpa ناموفق بود؛ تشخیص گفتار را ادامه می‌دهم و می‌توانی دوباره تلاش کنی.");
-                Toast.makeText(MainActivity.this, "مدل صدای Sherpa دانلود نشد. اینترنت را بررسی کن و دوباره دکمهٔ صوتی را بزن.", Toast.LENGTH_LONG).show();
+                String detail = (message == null || message.trim().isEmpty())
+                        ? "علت خطای آماده‌سازی صدای آفلاین مشخص نشد."
+                        : message;
+                if (status != null) status.setText("صدای آفلاین آماده نشد: " + detail
+                        + "؛ تشخیص گفتار را ادامه می‌دهم و می‌توانی دوباره تلاش کنی.");
+                Toast.makeText(MainActivity.this, detail, Toast.LENGTH_LONG).show();
                 ensureVoskModelAndStart(mode);
             }
         });
