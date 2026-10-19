@@ -958,10 +958,14 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // Prefer Android's guarded speech service for the interactive button. Some devices
-        // terminate the whole process while loading the Vosk native model; the platform
-        // recognizer lets the user continue and requests offline recognition when supported.
-        startPlatformVoice(mode);
+        // DIAGNOSTIC TEST 1: keep Vosk as the active recognizer, but do not download
+        // or initialize Sherpa automatically. This isolates Sherpa-related memory pressure.
+        File voskModel = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (voskModel != null) {
+            startOfflineVoice(mode, voskModel);
+            return;
+        }
+        ensureVoskModelAndStart(mode);
     }
 
     private void startPlatformVoice(String mode) {
@@ -1107,14 +1111,12 @@ public class MainActivity extends Activity {
                 if (isFinishing()) return;
                 if (status != null) status.setText("مدل تشخیص گفتار فارسی Vosk نصب شد؛ میکروفون را شروع می‌کنم…");
                 startOfflineVoice(mode, installedDirectory);
-                prepareSherpaModel();
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
                 if (status != null) status.setText("دانلود مدل Vosk ناموفق بود: " + message);
                 Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود: " + message, Toast.LENGTH_LONG).show();
-                prepareSherpaModel();
             }
         });
     }
