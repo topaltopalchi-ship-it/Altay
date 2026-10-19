@@ -51,6 +51,7 @@ final class OfflinePersianTts {
     private final ArrayList<DownloadCallback> downloadCallbacks = new ArrayList<>();
 
     interface DownloadCallback {
+        void onProgress(long downloadedBytes, long totalBytes);
         void onReady();
         void onError(String message);
     }
@@ -133,7 +134,7 @@ final class OfflinePersianTts {
             File archive = new File(activity.getCacheDir(), "persian-tts-model.tar.bz2");
             try {
                 if (!hasModelFiles()) {
-                    downloadFile(MODEL_ARCHIVE, archive);
+                    downloadFile(MODEL_ARCHIVE, archive, (downloaded, total) -> mainHandler.post(() -> notifyDownloadProgress(downloaded, total)));
                     if (!modelRoot.exists() && !modelRoot.mkdirs()) {
                         throw new IllegalStateException("Cannot create model directory");
                     }
@@ -159,6 +160,14 @@ final class OfflinePersianTts {
                 if (archive.exists()) archive.delete();
             }
         });
+    }
+
+    private void notifyDownloadProgress(long downloaded, long total) {
+        ArrayList<DownloadCallback> callbacks;
+        synchronized (this) { callbacks = new ArrayList<>(downloadCallbacks); }
+        for (DownloadCallback callback : callbacks) {
+            if (callback != null) callback.onProgress(downloaded, total);
+        }
     }
 
     private void notifyDownloadCallbacks(boolean ready, String message) {
@@ -233,7 +242,9 @@ final class OfflinePersianTts {
         }
     }
 
-    private static void downloadFile(String address, File target) throws Exception {
+    private interface ProgressListener { void onProgress(long downloadedBytes, long totalBytes); }
+
+    private static void downloadFile(String address, File target, ProgressListener progressListener) throws Exception {
         File partial = new File(target.getAbsolutePath() + ".part");
         HttpURLConnection connection = (HttpURLConnection) new URL(address).openConnection();
         connection.setConnectTimeout(20000);
@@ -244,11 +255,21 @@ final class OfflinePersianTts {
             connection.connect();
             int code = connection.getResponseCode();
             if (code < 200 || code >= 300) throw new IllegalStateException("Model server HTTP " + code);
+            long totalBytes = connection.getContentLengthLong();
+            long downloadedBytes = 0;
+            long lastReportedBytes = 0;
             try (InputStream in = new BufferedInputStream(connection.getInputStream());
                  BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(partial))) {
                 byte[] buffer = new byte[32768];
                 int count;
-                while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                while ((count = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, count);
+                    downloadedBytes += count;
+                    if (downloadedBytes - lastReportedBytes >= 262144 || (totalBytes > 0 && downloadedBytes >= totalBytes)) {
+                        progressListener.onProgress(downloadedBytes, totalBytes);
+                        lastReportedBytes = downloadedBytes;
+                    }
+                }
             }
             if (partial.length() < 10_000_000L) throw new IllegalStateException("Model archive is unexpectedly small");
             if (target.exists()) target.delete();
