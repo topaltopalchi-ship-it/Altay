@@ -960,22 +960,19 @@ public class MainActivity extends Activity {
 
         File voskModel = OfflineModelDownloader.getInstalledModelDirectory(this);
         boolean sherpaReady = offlinePersianTts != null && offlinePersianTts.isReady();
-        if (voskModel != null && sherpaReady) {
-            ensureVoskModelAndStart(mode);
+        if (voskModel != null) {
+            startOfflineVoice(mode, voskModel);
+            if (!sherpaReady) prepareSherpaModel();
             return;
         }
 
-        new AlertDialog.Builder(this)
-            .setTitle("آماده‌سازی مکالمهٔ صوتی")
-            .setMessage("برای مکالمه صوتی با اوبا لطفا تایید دانلود بکنید")
-            .setPositiveButton("تأیید دانلود", (dialog, which) -> prepareVoiceModels(mode))
-            .setNegativeButton("فعلاً نه", null)
-            .show();
+        // Start the required speech-recognition model download immediately on the voice-button tap.
+        ensureVoskModelAndStart(mode);
     }
 
-    private void prepareVoiceModels(String mode) {
-        if (status != null) status.setText("در حال آماده‌سازی مدل‌های گفتار فارسی؛ اینترنت را روشن نگه دار…");
+    private void prepareSherpaModel() {
         if (offlinePersianTts == null) offlinePersianTts = new OfflinePersianTts(this);
+        if (offlinePersianTts.isReady()) return;
         offlinePersianTts.ensureModelDownloaded(new OfflinePersianTts.DownloadCallback() {
             @Override public void onProgress(long downloadedBytes, long totalBytes) {
                 if (status == null || isFinishing()) return;
@@ -988,18 +985,15 @@ public class MainActivity extends Activity {
             }
             @Override public void onReady() {
                 if (isFinishing()) return;
-                if (status != null) status.setText("مدل صدای Sherpa آماده شد؛ بررسی مدل تشخیص گفتار…");
-                ensureVoskModelAndStart(mode);
+                if (status != null) status.setText("صدای فارسی Sherpa آماده است؛ تشخیص گفتار با Vosk جداگانه اجرا می‌شود.");
             }
             @Override public void onError(String message) {
                 if (isFinishing()) return;
                 String detail = (message == null || message.trim().isEmpty())
                         ? "علت خطای آماده‌سازی صدای آفلاین مشخص نشد."
                         : message;
-                if (status != null) status.setText("صدای آفلاین آماده نشد: " + detail
-                        + "؛ تشخیص گفتار را ادامه می‌دهم و می‌توانی دوباره تلاش کنی.");
+                if (status != null) status.setText("صدای آفلاین آماده نشد: " + detail);
                 Toast.makeText(MainActivity.this, detail, Toast.LENGTH_LONG).show();
-                ensureVoskModelAndStart(mode);
             }
         });
     }
@@ -1029,14 +1023,16 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                if (status != null) status.setText("مدل‌های گفتار آماده شد؛ میکروفون را شروع می‌کنم…");
+                if (status != null) status.setText("مدل تشخیص گفتار فارسی Vosk نصب شد؛ میکروفون را شروع می‌کنم…");
                 startOfflineVoice(mode, installedDirectory);
+                prepareSherpaModel();
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                if (status != null) status.setText("دانلود Vosk ناموفق بود: " + message + " دوباره دکمهٔ صوتی را بزن.");
-                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود؛ اینترنت را بررسی کن و دوباره تلاش کن.", Toast.LENGTH_LONG).show();
+                if (status != null) status.setText("دانلود مدل Vosk ناموفق بود: " + message);
+                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود: " + message, Toast.LENGTH_LONG).show();
+                prepareSherpaModel();
             }
         });
     }
