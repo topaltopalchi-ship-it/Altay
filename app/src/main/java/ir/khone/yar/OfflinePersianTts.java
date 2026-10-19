@@ -76,7 +76,6 @@ final class OfflinePersianTts {
         if (engine == null) {
             ensureModelDownloaded();
             if (fallback != null) fallback.run();
-            if (onComplete != null) mainHandler.post(onComplete);
             return false;
         }
         final String phrase = text.trim();
@@ -102,7 +101,6 @@ final class OfflinePersianTts {
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     if (fallback != null) fallback.run();
-                    if (onComplete != null) mainHandler.post(onComplete);
                     Toast.makeText(activity, "صدای آفلاین در دسترس نبود؛ از صدای گوشی استفاده شد.", Toast.LENGTH_SHORT).show();
                 });
             }
