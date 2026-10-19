@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -28,10 +29,16 @@ public class VoiceWakeService extends Service {
     private TextToSpeech tts;
     private boolean stopping = false;
     private boolean speaking = false;
+    private PowerManager.WakeLock cpuWakeLock;
 
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
+        PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+        if (power != null) {
+            cpuWakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWake");
+            cpuWakeLock.setReferenceCounted(false);
+        }
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS && tts != null) {
                 int language = tts.setLanguage(new Locale("fa", "IR"));
@@ -64,6 +71,7 @@ public class VoiceWakeService extends Service {
             return START_NOT_STICKY;
         }
         stopping = false;
+        try { if (cpuWakeLock != null && !cpuWakeLock.isHeld()) cpuWakeLock.acquire(); } catch (Exception ignored) {}
         startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «اوبا»"));
         handler.post(() -> beginListening());
         return START_STICKY;
@@ -182,6 +190,9 @@ public class VoiceWakeService extends Service {
             recognizer.cancel();
             recognizer.destroy();
             recognizer = null;
+        }
+        if (cpuWakeLock != null && cpuWakeLock.isHeld()) {
+            try { cpuWakeLock.release(); } catch (Exception ignored) {}
         }
         if (tts != null) {
             tts.stop();

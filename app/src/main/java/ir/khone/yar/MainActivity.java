@@ -45,9 +45,13 @@ import org.json.JSONException;
 
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
-    private TextView status, recent, remindersView, inventoryView;
+    private TextView status, recent, remindersView, inventoryView, homeDateView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private android.content.Intent voiceIntent;
+    private final android.os.Handler voiceHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean voiceResultHandled = false;
+    private OfflineVoskSpeechEngine offlineEngine;
     private Button wakeButton;
     private TextToSpeech tts;
     private String pendingMode = "auto";
@@ -78,6 +82,9 @@ public class MainActivity extends Activity {
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         TextView brand = text("🏠 OBA", 27, dark, true); brand.setGravity(Gravity.CENTER);
         content.addView(brand, lp(-1, -2, 0, 4, 0, 1));
+        homeDateView = text("", 15, dark, true); homeDateView.setGravity(Gravity.CENTER);
+        content.addView(homeDateView, lp(-1, -2, 0, 0, 0, 4));
+        updateHomeDate();
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 8));
 
@@ -103,7 +110,15 @@ public class MainActivity extends Activity {
         }
 
         Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
-        speak.setMinHeight(dp(52)); speak.setOnClickListener(v -> startVoice("auto"));
+        speak.setMinHeight(dp(52));
+        speak.setOnClickListener(v -> {
+            if (OfflineModelDownloader.getInstalledModelDirectory(MainActivity.this) == null) {
+                showOfflineModelConsent();
+            } else {
+                prefs.edit().putString("speech_engine", "offline").apply();
+                startOfflineVoice("auto");
+            }
+        });
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
         wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
@@ -387,10 +402,12 @@ public class MainActivity extends Activity {
 
     // Convert Gregorian dates to the Jalali (Solar Hijri) calendar for Persian display.
     private int[] gregorianToJalali(int gy, int gm, int gd) {
+        // Standard Solar Hijri conversion; the +3/+99/+399 offsets are required
+        // because the Gregorian year is shifted to the 1600-based epoch below.
         int[] gdm = {0,31,((gy%4==0 && gy%100!=0)||gy%400==0)?29:28,31,30,31,30,31,31,30,31,30,31};
         int jy = (gy <= 1600) ? 0 : 979;
         gy -= (gy <= 1600) ? 621 : 1600;
-        int days = 365 * gy + (gy / 4) - (gy / 100) + (gy / 400);
+        int days = 365 * gy + (gy + 3) / 4 - (gy + 99) / 100 + (gy + 399) / 400;
         for (int i = 0; i < gm; i++) days += gdm[i];
         days += gd - 1;
         int jdn = days - 79;
@@ -509,14 +526,14 @@ public class MainActivity extends Activity {
                         detailsByCategory.get(category).add((subgroup.isEmpty() ? "" : subgroup + " — ") + item + " : " + fmt(amount) + " تومان");
                     } catch (Exception ignored) {}
                 }
-                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\\n\\n");
+                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\n\n");
                 for (String category : categories) {
-                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
-                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\\n");
-                    report.append("\\n");
+                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\n");
+                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\n");
+                    report.append("\n");
                 }
                 if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-                new AlertDialog.Builder(this).setTitle("مخارج " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
+                new AlertDialog.Builder(this).setTitle("مخارج " + jd + " " + months[jm-1] + " " + jy).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
             }).show();
     }
 
@@ -917,8 +934,103 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
     }
 
+
+    /**
+     * Long-press the existing voice button to manage the optional offline Persian model.
+     * This adds no visible UI element and never downloads without explicit consent.
+     */
+    private void showOfflineModelConsent() {
+        File installed = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (installed != null) {
+            new AlertDialog.Builder(this)
+                .setTitle("مدل گفتار آفلاین فارسی")
+                .setMessage("مدل فارسی روی گوشی آماده است. اگر حالت آفلاین را فعال کنی، فرمان‌های صوتی از این به بعد روی گوشی پردازش می‌شوند و به اینترنت نیاز ندارند.")
+                .setNegativeButton("بستن", null)
+                .setPositiveButton("فعال‌کردن حالت آفلاین", (dialog, which) -> {
+                    prefs.edit().putString("speech_engine", "offline").apply();
+                    status.setText("حالت گفتار آفلاین فعال شد. برای فرمان بعدی دکمهٔ صحبت را بزن.");
+                    Toast.makeText(this, "حالت آفلاین فعال شد.", Toast.LENGTH_LONG).show();
+                })
+                .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("دانلود مدل گفتار آفلاین فارسی")
+            .setMessage("برای استفاده از سیستم صوتی اوبا لطفاً مدل گفتار فارسی را دانلود کنید. حجم دانلود حدود ۵۳ مگابایت است و پس از دانلود، مدل روی همین گوشی ذخیره می‌شود. بهتر است از Wi‑Fi استفاده کنید.")
+            .setNegativeButton("فعلاً نه", null)
+            .setPositiveButton("موافقم؛ دانلود کن", (dialog, which) -> {
+                status.setText("در حال دانلود مدل گفتار آفلاین فارسی…");
+                OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
+                    @Override public void onProgress(long downloadedBytes, long totalBytes) {
+                        if (totalBytes > 0) {
+                            int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
+                            status.setText("دریافت مدل گفتار آفلاین: " + percent + "%");
+                        } else {
+                            status.setText("در حال دریافت مدل گفتار آفلاین فارسی…");
+                        }
+                    }
+                    @Override public void onInstalled(File modelDirectory) {
+                        status.setText("مدل فارسی دانلود شد؛ می‌توانی حالت آفلاین را فعال کنی.");
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("دانلود کامل شد")
+                            .setMessage("مدل فارسی روی گوشی ذخیره شد و حالت آفلاین فعال شد. از این به بعد کافی است دکمهٔ صحبت را یک‌بار لمس کنی.")
+                            .setPositiveButton("شروع صحبت", (d, w) -> {
+                                prefs.edit().putString("speech_engine", "offline").apply();
+                                startOfflineVoice("auto");
+                            })
+                            .setNegativeButton("بعداً", (d, w) -> prefs.edit().putString("speech_engine", "offline").apply())
+                            .show();
+                    }
+                    @Override public void onError(String message) {
+                        status.setText("دانلود مدل ناموفق بود: " + message);
+                        new AlertDialog.Builder(MainActivity.this)
+                            .setTitle("دانلود ناموفق بود")
+                            .setMessage(message + "\nمی‌توانی بعداً دوباره تلاش کنی.")
+                            .setPositiveButton("باشه", null)
+                            .show();
+                    }
+                });
+            })
+            .show();
+    }
+
+    private void startOfflineVoice(String mode) {
+        File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (modelDirectory == null) {
+            status.setText("برای گفتار آفلاین ابتدا مدل فارسی را دانلود کن.");
+            showOfflineModelConsent();
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
+        }
+        try {
+            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
+            if (offlineEngine != null) offlineEngine.stop();
+            offlineEngine = new OfflineVoskSpeechEngine();
+            offlineEngine.start(this, modelDirectory, new OfflineVoskSpeechEngine.Listener() {
+                @Override public void onStatus(String message) {
+                    if (status != null) status.setText(message);
+                }
+                @Override public void onText(String text) {
+                    if (status != null) status.setText("شنیدم: «" + text + "»");
+                    handleVoice(text);
+                }
+                @Override public void onError(String message) {
+                    if (status != null) status.setText(message);
+                    say(message);
+                }
+            });
+        } catch (Exception e) {
+            status.setText("شروع گفتار آفلاین ممکن نشد؛ مدل را بررسی کن و دوباره تلاش کن.");
+        }
+    }
+
     private void startVoice(String mode) {
         pendingMode = mode;
+        if ("offline".equals(prefs.getString("speech_engine", "online"))) { startOfflineVoice(mode); return; }
+        if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
             say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
@@ -929,6 +1041,7 @@ public class MainActivity extends Activity {
         try {
             if (recognizer != null) { recognizer.destroy(); recognizer = null; }
             recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            voiceResultHandled = false;
             recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
                 public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
                 public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
@@ -936,12 +1049,22 @@ public class MainActivity extends Activity {
                 public void onBufferReceived(byte[] b) {}
                 public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
                 public void onError(int e) {
+                    if (!voiceResultHandled && (e == SpeechRecognizer.ERROR_NO_MATCH || e == SpeechRecognizer.ERROR_SPEECH_TIMEOUT)) {
+                        status.setText("هنوز گوش می‌دهم؛ صحبتت را کامل بگو…");
+                        voiceHandler.postDelayed(() -> {
+                            if (!isFinishing() && recognizer != null && !voiceResultHandled && voiceIntent != null) {
+                                try { recognizer.startListening(voiceIntent); } catch (Exception ignored) {}
+                            }
+                        }, 450);
+                        return;
+                    }
                     String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
                         e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
                         "تشخیص صدا انجام نشد. دوباره تلاش کن.";
                     status.setText(msg); say(msg);
                 }
                 public void onResults(Bundle b) {
+                    voiceResultHandled = true;
                     ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     if (result != null && !result.isEmpty()) handleVoice(result.get(0));
                 }
@@ -949,6 +1072,7 @@ public class MainActivity extends Activity {
                 public void onEvent(int a, Bundle b) {}
             });
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            voiceIntent = intent;
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
@@ -956,8 +1080,8 @@ public class MainActivity extends Activity {
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             // Ask the speech service to wait longer before deciding the user has finished.
             // Actual limits depend on the speech-recognition app installed on the device.
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 6000L);
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 15000L);
+            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
             intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000L);
             recognizer.startListening(intent);
         } catch (Exception e) {
@@ -1070,6 +1194,68 @@ public class MainActivity extends Activity {
         return true;
     }
 
+
+    // Infer a category/subgroup from ordinary speech so users do not need to name
+    // the category explicitly. Keep ambiguous expenses on the existing fallback path.
+    private boolean tryAutoCategorizeExpense(String raw, String normalized) {
+        long amount = parseAmount(normalized);
+        if (amount <= 0) return false;
+        String category = null, subgroup = null;
+        String[][] rules = {
+            {"ماشین", "سوخت", "بنزین", "گازوئیل", "سوخت گیری", "پمپ بنزین"},
+            {"ماشین", "روغن و فیلتر", "تعویض روغن", "روغن موتور", "فیلتر روغن"},
+            {"ماشین", "لاستیک", "لاستیک", "پنچر"},
+            {"ماشین", "بیمه", "بیمه ماشین", "بیمه خودرو"},
+            {"ماشین", "پارکینگ و عوارض", "پارکینگ", "عوارض آزادراه"},
+            {"ماشین", "تسمه تایم و تعمیرات", "تعمیر ماشین", "مکانیک", "لنت ترمز", "باتری ماشین", "تعمیر خودرو"},
+            {"سلامت", "دارو", "دارو", "داروخانه", "قرص"},
+            {"سلامت", "دکتر", "دکتر", "پزشک", "ویزیت"},
+            {"سلامت", "آزمایش", "آزمایشگاه", "آزمایش خون"},
+            {"سلامت", "دندان‌پزشکی", "دندانپزشک", "دندان پزشکی"},
+            {"مدرسه", "شهریه", "شهریه", "ثبت نام مدرسه"},
+            {"مدرسه", "کتاب و لوازم‌التحریر", "مداد", "دفتر", "لوازم التحریر", "کتاب درسی"},
+            {"خانه", "مواد غذایی", "نان", "پنیر", "شیر", "ماست", "برنج", "گوشت", "مرغ", "میوه", "سبزی", "تخم مرغ", "خواربار", "غذا"},
+            {"خانه", "قبض و خدمات", "قبض برق", "قبض آب", "قبض گاز", "اینترنت", "شارژ تلفن"},
+            {"خانه", "اجاره و تعمیرات", "اجاره خانه", "اجاره منزل", "تعمیر خانه", "لوله کش"},
+            {"خانه", "نظافت", "مواد شوینده", "شوینده", "نظافت"},
+            {"خانه", "لوازم خانه", "یخچال", "ماشین لباسشویی", "ظرفشویی", "مبل", "جاروبرقی"},
+            {"مغازه", "اجاره مغازه", "اجاره مغازه"},
+            {"مغازه", "حقوق", "حقوق کارمند", "حقوق کارکنان"},
+            {"مغازه", "خرید کالا", "خرید جنس", "خرید کالا", "جنس برای مغازه"},
+            {"سایر", "سفر", "بلیط", "هتل", "مسافرت"},
+            {"سایر", "هدیه", "کادو", "هدیه"}
+        };
+        for (String[] rule : rules) {
+            for (int i = 2; i < rule.length; i++) {
+                if (normalized.contains(normalize(rule[i]))) {
+                    category = rule[0];
+                    subgroup = rule[1];
+                    break;
+                }
+            }
+            if (category != null) break;
+        }
+        if (category == null) return false;
+        String item = raw.replaceAll("[0-9۰-۹,،٬]+", " ")
+            .replace("تومان", " ").replace("تومن", " ")
+            .replace("هزار", " ").replace("میلیون", " ")
+            .replaceAll("\\s+", " ").trim();
+        String[] noise = {"اوبا", "اوبآ", "هزینه", "خرج", "پرداخت کردم", "دادم", "خریدم",
+            "خرید کردم", "خریداری کردم", "به مبلغ", "به قیمت", "برای", "تومان", "تومن"};
+        for (String word : noise) item = item.replace(word, " ");
+        item = item.replaceAll("\\s+", " ").trim();
+        if (item.isEmpty()) item = subgroup;
+        if (expenseTotal <= Long.MAX_VALUE - amount) expenseTotal += amount;
+        else return false;
+        prefs.edit().putLong("expense", expenseTotal).apply();
+        addEntry(category, subgroup + " — " + item, amount);
+        String message = "خودکار ثبت شد: " + category + " / " + subgroup + "؛ " + fmt(amount) + " تومان";
+        status.setText(message);
+        say(message);
+        refresh();
+        return true;
+    }
+
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
@@ -1077,6 +1263,7 @@ public class MainActivity extends Activity {
         // Accept a complete spoken expense command, including category and subgroup,
         // in one utterance: "خانه، لوازم خانه، پنج میلیون، خرید ماشین ظرف‌شویی".
         if (tryRegisterCategorizedExpense(raw, s)) return;
+        if (tryAutoCategorizeExpense(raw, s)) return;
 
         String mode = pendingMode;
         if (mode.equals("auto")) {
@@ -1511,7 +1698,17 @@ public class MainActivity extends Activity {
         String all=prefs.getString("entries","");
         if(!all.isEmpty()) for(String line:all.split("\n")) if(!line.trim().isEmpty()) entries.add(line);
     }
+    @Override protected void onResume() { super.onResume(); updateHomeDate(); }
+    private void updateHomeDate() {
+        if (homeDateView == null) return;
+        Calendar now = Calendar.getInstance();
+        int[] jalali = gregorianToJalali(now.get(Calendar.YEAR), now.get(Calendar.MONTH)+1, now.get(Calendar.DAY_OF_MONTH));
+        String[] months = {"فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"};
+        String[] weekdays = {"یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنجشنبه","جمعه","شنبه"};
+        homeDateView.setText(weekdays[now.get(Calendar.DAY_OF_WEEK)-1] + "، " + jalali[2] + " " + months[jalali[1]-1] + " " + jalali[0]);
+    }
     private void refresh() {
+        updateHomeDate();
         if(recent!=null) { StringBuilder b=new StringBuilder(); for(String e:entries) b.append("• ").append(e).append("\n"); recent.setText(b.length()==0?"هنوز چیزی ثبت نشده است":b.toString().trim()); }
         if(remindersView!=null) refreshReminders();
         if(inventoryView!=null) refreshInventory();
@@ -1569,6 +1766,9 @@ public class MainActivity extends Activity {
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
+        voiceHandler.removeCallbacksAndMessages(null);
+        voiceIntent = null;
+        if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
         if(recognizer!=null) recognizer.destroy();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
