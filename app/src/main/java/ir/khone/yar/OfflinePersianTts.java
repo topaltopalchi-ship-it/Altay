@@ -132,15 +132,19 @@ final class OfflinePersianTts {
                 Toast.LENGTH_LONG).show();
         worker.execute(() -> {
             File archive = new File(activity.getCacheDir(), "persian-tts-model.tar.bz2");
+            String stage = "آماده‌سازی دانلود";
             try {
                 if (!hasModelFiles()) {
+                    stage = "دریافت فایل مدل";
                     downloadFile(MODEL_ARCHIVE, archive, (downloaded, total) -> mainHandler.post(() -> notifyDownloadProgress(downloaded, total)));
+                    stage = "بازکردن فایل فشرده مدل";
                     if (!modelRoot.exists() && !modelRoot.mkdirs()) {
                         throw new IllegalStateException("Cannot create model directory");
                     }
                     extractArchive(archive, modelRoot);
                     if (!hasModelFiles()) throw new IllegalStateException("Model files missing after extraction");
                 }
+                stage = "راه‌اندازی موتور گفتار آفلاین";
                 initializeEngine();
                 mainHandler.post(() -> {
                     notifyDownloadCallbacks(engine != null, engine != null ? null : "مدل گفتار نصب نشد.");
@@ -151,9 +155,12 @@ final class OfflinePersianTts {
                 });
             } catch (Exception e) {
                 downloadAttempted = false;
+                final String detail = stage + " ناموفق بود: "
+                        + e.getClass().getSimpleName()
+                        + (e.getMessage() == null || e.getMessage().trim().isEmpty() ? "" : " — " + e.getMessage());
                 mainHandler.post(() -> {
-                    notifyDownloadCallbacks(false, "دانلود مدل گفتار ناموفق بود. اینترنت را بررسی کن و دوباره تلاش کن.");
-                    Toast.makeText(activity, "دانلود مدل گفتار ناموفق بود. اینترنت را بررسی کن و دوباره تلاش کن.", Toast.LENGTH_LONG).show();
+                    notifyDownloadCallbacks(false, detail);
+                    Toast.makeText(activity, detail, Toast.LENGTH_LONG).show();
                 });
             } finally {
                 downloading = false;
