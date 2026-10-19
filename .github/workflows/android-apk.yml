@@ -2,7 +2,7 @@ name: Build OBA Android APK
 
 on:
   push:
-    branches: [ main, fix/offline-persian-tts ]
+    branches: [ main, fix/offline-persian-tts, test/disable-vosk-recognition ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
