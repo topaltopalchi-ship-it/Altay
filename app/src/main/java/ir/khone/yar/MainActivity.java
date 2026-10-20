@@ -1049,34 +1049,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void prepareSherpaModel() {
-        if (offlinePersianTts == null) offlinePersianTts = new OfflinePersianTts(this);
-        if (offlinePersianTts.isReady()) return;
-        offlinePersianTts.ensureModelDownloaded(new OfflinePersianTts.DownloadCallback() {
-            @Override public void onProgress(long downloadedBytes, long totalBytes) {
-                if (status == null || isFinishing()) return;
-                if (totalBytes > 0) {
-                    int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
-                    status.setText("دانلود صدای فارسی Sherpa: " + percent + "% (" + (downloadedBytes / (1024 * 1024)) + " مگابایت از " + (totalBytes / (1024 * 1024)) + ")");
-                } else {
-                    status.setText("دانلود صدای فارسی Sherpa: " + (downloadedBytes / (1024 * 1024)) + " مگابایت دریافت شد…");
-                }
-            }
-            @Override public void onReady() {
-                if (isFinishing()) return;
-                if (status != null) status.setText("صدای فارسی Sherpa آماده است؛ تشخیص گفتار با Vosk جداگانه اجرا می‌شود.");
-            }
-            @Override public void onError(String message) {
-                if (isFinishing()) return;
-                String detail = (message == null || message.trim().isEmpty())
-                        ? "علت خطای آماده‌سازی صدای آفلاین مشخص نشد."
-                        : message;
-                if (status != null) status.setText("صدای آفلاین آماده نشد: " + detail);
-                Toast.makeText(MainActivity.this, detail, Toast.LENGTH_LONG).show();
-            }
-        });
-    }
-
     private void ensureVoskModelAndStart(String mode) {
         File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
         if (modelDirectory != null) {
