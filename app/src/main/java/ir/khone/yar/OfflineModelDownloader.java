@@ -71,19 +71,24 @@ public final class OfflineModelDownloader {
                 connection.setReadTimeout(READ_TIMEOUT_MS);
                 connection.setRequestMethod("GET");
                 connection.setInstanceFollowRedirects(true);
+                long alreadyDownloaded = stagingZip.isFile() ? stagingZip.length() : 0L;
+                if (alreadyDownloaded > 0) connection.setRequestProperty("Range", "bytes=" + alreadyDownloaded + "-");
                 connection.connect();
 
                 int status = connection.getResponseCode();
-                if (status < 200 || status >= 300) {
+                if (status != HttpURLConnection.HTTP_OK && status != HttpURLConnection.HTTP_PARTIAL) {
                     throw new IllegalStateException("دریافت مدل ناموفق بود (HTTP " + status + ").");
                 }
 
-                long total = connection.getContentLength();
-                long downloaded = 0;
-                long lastProgressReport = 0;
-                try (InputStream in = new BufferedInputStream(connection.getInputStream());
-                     FileOutputStream out = new FileOutputStream(stagingZip)) {
-                    byte[] buffer = new byte[16384];
+                boolean append = alreadyDownloaded > 0 && status == HttpURLConnection.HTTP_PARTIAL;
+                if (!append) alreadyDownloaded = 0L;
+                long responseLength = connection.getContentLengthLong();
+                long total = responseLength > 0 ? responseLength + alreadyDownloaded : -1L;
+                long downloaded = alreadyDownloaded;
+                long lastProgressReport = downloaded;
+                try (InputStream in = new BufferedInputStream(connection.getInputStream(), 262144);
+                     FileOutputStream out = new FileOutputStream(stagingZip, append)) {
+                    byte[] buffer = new byte[262144];
                     int count;
                     while ((count = in.read(buffer)) != -1) {
                         out.write(buffer, 0, count);
@@ -139,10 +144,12 @@ public final class OfflineModelDownloader {
                 MAIN.post(() -> callback.onError(message));
             } finally {
                 if (connection != null) connection.disconnect();
-                //noinspection ResultOfMethodCallIgnored
-                stagingZip.delete();
-                //noinspection ResultOfMethodCallIgnored
-                completedZip.delete();
+                if (getInstalledModelDirectory(appContext) != null) {
+                    //noinspection ResultOfMethodCallIgnored
+                    stagingZip.delete();
+                    //noinspection ResultOfMethodCallIgnored
+                    completedZip.delete();
+                }
                 deleteRecursively(stagingDir);
             }
         });
