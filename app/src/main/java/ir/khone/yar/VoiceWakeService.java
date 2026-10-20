@@ -90,6 +90,12 @@ public class VoiceWakeService extends Service {
         }, 500);
     }
 
+    private void scheduleRetry(long delayMillis) {
+        handler.postDelayed(() -> {
+            if (!stopping && !paused) ensureWorkerAfterPause();
+        }, delayMillis);
+    }
+
     private void prepareAndListen() {
         try {
             File modelDir = new File(getFilesDir(), MODEL_DIR_NAME);
@@ -103,12 +109,7 @@ public class VoiceWakeService extends Service {
             listenLoop();
         } catch (Exception e) {
             updateNotification("مدل تشخیص آماده نشد؛ اینترنت و فضای خالی را بررسی کن");
-            if (!stopping) handler.postDelayed(() -> {
-                if (!stopping && (worker == null || !worker.isAlive())) {
-                    worker = new Thread(this::prepareAndListen, "OBA-Vosk-Wake");
-                    worker.start();
-                }
-            }, 8000);
+            scheduleRetry(8000);
         }
     }
 
@@ -125,6 +126,7 @@ public class VoiceWakeService extends Service {
             recorder.release();
             audioRecord = null;
             updateNotification("میکروفون در دسترس نیست؛ اجازهٔ میکروفون را بررسی کن");
+            scheduleRetry(3000);
             return;
         }
 
@@ -148,7 +150,10 @@ public class VoiceWakeService extends Service {
                 }
             }
         } catch (Exception e) {
-            if (!stopping) updateNotification("تشخیص اوبا متوقف شد؛ دوباره تلاش می‌کنیم");
+            if (!stopping && !paused) {
+                updateNotification("تشخیص اوبا متوقف شد؛ دوباره تلاش می‌کنیم");
+                scheduleRetry(3000);
+            }
         } finally {
             listening = false;
             try { recorder.stop(); } catch (Exception ignored) {}
