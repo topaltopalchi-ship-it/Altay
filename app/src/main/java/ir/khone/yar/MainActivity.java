@@ -2232,16 +2232,56 @@ public class MainActivity extends Activity {
     }
 
     private long parseAmount(String s) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[0-9]+").matcher(s);
-        if (m.find()) {
+        // Normalize Persian/Arabic digits before parsing.
+        String normalized = normalize(s == null ? "" : s);
+        // Prefer the number immediately associated with the currency amount, not an
+        // earlier quantity such as "3 کیلو". Search each amount marker independently.
+        java.util.regex.Pattern currencyPattern = java.util.regex.Pattern.compile(
+            "([0-9]+(?:[,٬.][0-9]{3})*|[\\u0600-\\u06FF]+(?:\\s+[\\u0600-\\u06FF]+){0,3})\\s*(میلیارد|میلیون|هزار)?\\s*(?:تومان|تومن|ریال)"
+        );
+        java.util.regex.Matcher currency = currencyPattern.matcher(normalized);
+        long currencyAmount = -1;
+        while (currency.find()) {
+            String numberPart = currency.group(1).replace(",", "").replace("٬", "").replace(".", "").trim();
+            long n;
+            try { n = Long.parseLong(numberPart); }
+            catch (Exception ex) { n = wordNumber(numberPart); }
+            String scale = currency.group(2) == null ? "" : currency.group(2);
+            if (n > 0) {
+                if ("میلیارد".equals(scale)) n *= 1000000000L;
+                else if ("میلیون".equals(scale)) n *= 1000000L;
+                else if ("هزار".equals(scale)) n *= 1000L;
+                currencyAmount = n;
+            }
+        }
+        if (currencyAmount > 0) return currencyAmount;
+
+        // Fallback: explicit scaled amount phrases. Pick the number immediately before
+        // the scale word, rather than the first number in the whole utterance.
+        java.util.regex.Matcher scaled = java.util.regex.Pattern
+            .compile("([0-9]+)\\s*(میلیارد|میلیون|هزار)").matcher(normalized);
+        long scaledAmount = -1;
+        while (scaled.find()) {
             try {
-                long n = Long.parseLong(m.group());
-                if (s.contains("میلیون")) return n * 1000000L;
-                if (s.contains("هزار")) return n * 1000L;
-                return n;
+                long n = Long.parseLong(scaled.group(1));
+                String scale = scaled.group(2);
+                if ("میلیارد".equals(scale)) n *= 1000000000L;
+                else if ("میلیون".equals(scale)) n *= 1000000L;
+                else n *= 1000L;
+                scaledAmount = n;
             } catch (Exception ignored) {}
         }
-        return wordNumber(s);
+        if (scaledAmount > 0) return scaledAmount;
+
+        // Plain numeric amounts: the last number is generally the amount when a
+        // quantity/count appeared earlier in the spoken sentence.
+        java.util.regex.Matcher numbers = java.util.regex.Pattern.compile("[0-9]+").matcher(normalized);
+        long lastNumber = -1;
+        while (numbers.find()) {
+            try { lastNumber = Long.parseLong(numbers.group()); } catch (Exception ignored) {}
+        }
+        if (lastNumber > 0) return lastNumber;
+        return wordNumber(normalized);
     }
 
     private long[] extractNumbers(String s) {
