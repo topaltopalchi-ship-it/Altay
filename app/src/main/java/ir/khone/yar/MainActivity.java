@@ -102,6 +102,19 @@ public class MainActivity extends Activity {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
         }
+        if (getIntent() != null && getIntent().getBooleanExtra("ir.khone.yar.START_VOICE_AFTER_WAKE", false)) {
+            getIntent().removeExtra("ir.khone.yar.START_VOICE_AFTER_WAKE");
+            root.post(() -> startVoice("auto"));
+        }
+    }
+
+    @Override public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getBooleanExtra("ir.khone.yar.START_VOICE_AFTER_WAKE", false)) {
+            intent.removeExtra("ir.khone.yar.START_VOICE_AFTER_WAKE");
+            if (root != null) root.post(() -> startVoice("auto"));
+        }
     }
 
     private void buildUi() {
