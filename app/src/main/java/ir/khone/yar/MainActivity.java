@@ -998,9 +998,13 @@ public class MainActivity extends Activity {
         amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         form.addView(amountInput, lp(-1,-2,0,0,0,8));
         EditText descriptionInput = new EditText(this);
-        descriptionInput.setHint("شرح اختیاری (مثلاً خرید نان)");
+        descriptionInput.setHint("نام کالا (مثلاً گوشت یا پنیر)");
         descriptionInput.setSingleLine(true);
         form.addView(descriptionInput, lp(-1,-2,0,0,0,4));
+        EditText quantityInput = new EditText(this);
+        quantityInput.setHint("مقدار یا وزن (مثلاً ۲ کیلو یا ۳ عدد)");
+        quantityInput.setSingleLine(true);
+        form.addView(quantityInput, lp(-1,-2,0,0,0,4));
         new AlertDialog.Builder(this).setTitle(category + " ← " + subgroup)
             .setView(form).setNegativeButton("لغو", null)
             .setPositiveButton("ثبت هزینه", (dialog, which) -> {
@@ -1014,6 +1018,9 @@ public class MainActivity extends Activity {
                 if (amount <= 0) { Toast.makeText(this, "مبلغ باید بیشتر از صفر باشد.", Toast.LENGTH_LONG).show(); return; }
                 if (amount > Long.MAX_VALUE - expenseTotal) { Toast.makeText(this, "مبلغ بیش از حد مجاز است.", Toast.LENGTH_LONG).show(); return; }
                 String description = descriptionInput.getText().toString().trim();
+                String quantity = quantityInput.getText().toString().trim();
+                if (description.isEmpty()) description = subgroup;
+                if (!quantity.isEmpty()) description = description + " — مقدار: " + quantity;
                 expenseTotal += amount;
                 prefs.edit().putLong("expense", expenseTotal).apply();
                 String entryTitle = subgroup + (description.isEmpty() ? "" : " — " + description);
