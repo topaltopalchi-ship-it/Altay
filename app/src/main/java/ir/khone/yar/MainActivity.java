@@ -1299,7 +1299,7 @@ public class MainActivity extends Activity {
         String n = normalize(digits); int month = -1;
         for (int i=0;i<months.length;i++) if (n.contains(normalize(months[i]))) { month=i+1; break; }
         if (month < 0) return false;
-        java.util.regex.Matcher dm = java.util.regex.Pattern.compile("(^|\\\\D)([0-9]{1,2})(?=\\\\D|$)").matcher(digits);
+        java.util.regex.Matcher dm = java.util.regex.Pattern.compile("(^|\\D)([0-9]{1,2})(?=\\D|$)").matcher(digits);
         int day=-1; while(dm.find()) { try { int v=Integer.parseInt(dm.group(2)); if(v>=1 && v<=31){day=v;break;} } catch(Exception ignored){} }
         Calendar now=Calendar.getInstance(); int[] jt=gregorianToJalali(now.get(Calendar.YEAR),now.get(Calendar.MONTH)+1,now.get(Calendar.DAY_OF_MONTH));
         java.util.regex.Matcher ym=java.util.regex.Pattern.compile("(13[0-9]{2}|14[0-9]{2}|15[0-9]{2})").matcher(digits); int year=jt[0]; if(ym.find()) year=Integer.parseInt(ym.group(1));
