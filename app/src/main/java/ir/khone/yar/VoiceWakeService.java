@@ -169,11 +169,19 @@ public class VoiceWakeService extends Service {
     }
 
     private boolean containsWakeWord(String text) {
-        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT)
-            .replace(" ", "").replace("‌", "")
+        if (text == null || text.trim().isEmpty()) return false;
+        String normalized = text.toLowerCase(Locale.ROOT)
             .replace("ي", "ی").replace("ك", "ک")
-            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا");
-        return normalized.contains("اوبا") || normalized.contains("oba");
+            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا")
+            .replace('‌', ' ').trim();
+        // Accept a split rendering such as "او با" only when it is the whole result.
+        String compact = normalized.replaceAll("\\s+", "");
+        if ("اوبا".equals(compact) || "oba".equals(compact)) return true;
+        // Match a separate word, not a longer word such as "اوباما".
+        for (String word : normalized.split("[^\\p{L}\\p{N}]+")) {
+            if ("اوبا".equals(word) || "oba".equals(word)) return true;
+        }
+        return false;
     }
 
     private void openApp() {
