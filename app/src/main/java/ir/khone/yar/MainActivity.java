@@ -996,21 +996,26 @@ public class MainActivity extends Activity {
     private void handleContinuousExpense(String raw) {
         String normalized = normalize(raw);
         long amount = parseAmount(normalized);
-        String item = normalized
-            .replaceAll("[0-9]+", " ")
-            .replace("تومان", " ").replace("تومن", " ").replace("ریال", " ")
-            .replace("میلیون", " ").replace("هزار", " ")
-            .replace("یک", " ").replace("یه", " ").replace("دو", " ").replace("سه", " ")
-            .replace("چهار", " ").replace("پنج", " ").replace("شش", " ").replace("شیش", " ")
-            .replace("هفت", " ").replace("هشت", " ").replace("نه", " ").replace("ده", " ")
-            .replace("یازده", " ").replace("دوازده", " ").replace("سیزده", " ").replace("چهارده", " ")
-            .replace("پانزده", " ").replace("شانزده", " ").replace("هفده", " ").replace("هجده", " ")
-            .replace("نوزده", " ").replace("بیست", " ").replace("سی", " ").replace("چهل", " ")
-            .replace("پنجاه", " ").replace("شصت", " ").replace("هفتاد", " ").replace("هشتاد", " ")
-            .replace("نود", " ").replace("صد", " ").replace("دویست", " ").replace("سیصد", " ")
-            .replace("چهارصد", " ").replace("پانصد", " ")
-            .replace("هزینه", " ").replace("خرج", " ").replace("برای", " ")
-            .replace("ثبت", " ").replace("کن", " ").replaceAll("\\s+", " ").trim();
+        String[] numberWords = new String[]{
+            "یک", "یه", "دو", "دوتا", "سه", "چهار", "پنج", "شش", "شیش", "هفت", "هشت", "نه", "ده",
+            "یازده", "دوازده", "سیزده", "چهارده", "پانزده", "شانزده", "هفده", "هجده", "نوزده",
+            "بیست", "سی", "چهل", "پنجاه", "شصت", "هفتاد", "هشتاد", "نود", "صد", "دویست",
+            "سیصد", "چهارصد", "پانصد", "هزار", "میلیون", "تومان", "تومن", "ریال",
+            "هزینه", "خرج", "برای", "ثبت", "کن"
+        };
+        StringBuilder itemBuilder = new StringBuilder();
+        for (String token : normalized.split("\\s+")) {
+            if (token.matches("[0-9]+")) continue;
+            boolean numberOrFiller = false;
+            for (String numberWord : numberWords) {
+                if (token.equals(numberWord)) { numberOrFiller = true; break; }
+            }
+            if (!numberOrFiller) {
+                if (itemBuilder.length() > 0) itemBuilder.append(' ');
+                itemBuilder.append(token);
+            }
+        }
+        String item = itemBuilder.toString().trim();
         if (amount <= 0 || item.isEmpty()) {
             if (status != null) status.setText("مورد یا مبلغ واضح نبود؛ دوباره بگو، مثلاً «نان، دویست هزار تومان».");
             return;
