@@ -2240,7 +2240,7 @@ public class MainActivity extends Activity {
                 }
             }
         }
-        String row = type + " • " + title + (amount>0 ? " • " + fmt(amount) + " تومان" : "");
+        String row = type + " • " + title + (amount > 0 ? " • " + new SimpleDateFormat("yyyy/MM/dd", new Locale("fa", "IR")).format(new Date()) + " • " + fmt(amount) + " تومان" : "");
         entries.add(0,row); while(entries.size()>12) entries.remove(entries.size()-1);
         StringBuilder b=new StringBuilder(); for(String e:entries)b.append(e).append("\n");
         prefs.edit().putString("entries",b.toString()).apply();
