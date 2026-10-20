@@ -1299,8 +1299,8 @@ public class MainActivity extends Activity {
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
         prefs.edit().putBoolean("wake_enabled", true).apply();
         resumeWakeAfterCommand = true;
-        if (!quietVoiceSession && status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
-        if (!quietVoiceSession) Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
+        if (!quietVoiceSession && status != null) status.setText("در حال بررسی فایل‌های تشخیص گفتار؛ در صورت نیاز دانلود آغاز می‌شود…");
+        if (!quietVoiceSession) Toast.makeText(this, "آماده‌سازی تشخیص گفتار فارسی…", Toast.LENGTH_SHORT).show();
 
         // Give Android a moment to release the microphone from the wake-word service.
         if (root != null) {
@@ -1401,27 +1401,27 @@ public class MainActivity extends Activity {
     private void downloadVoskModelAutomatically() {
         if (isFinishing() || OfflineModelDownloader.getInstalledModelDirectory(this) != null || downloadingVoskModel) return;
         downloadingVoskModel = true;
-        if (status != null) status.setText("در حال دانلود خودکار مدل گفتار فارسی Vosk…");
+        if (status != null) status.setText("در حال دریافت بستهٔ تشخیص گفتار فارسی…");
         OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
             @Override public void onProgress(long downloadedBytes, long totalBytes) {
                 if (status == null || isFinishing()) return;
                 if (totalBytes > 0) {
                     int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
-                    status.setText("دانلود خودکار مدل Vosk: " + percent + "%");
+                    status.setText("دریافت بستهٔ گفتار فارسی: " + percent + "%");
                 } else {
-                    status.setText("در حال دانلود مدل Vosk…");
+                    status.setText("در حال دریافت بستهٔ گفتار فارسی…");
                 }
             }
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("مدل گفتار فارسی Vosk دانلود و نصب شد؛ تشخیص گفتار آفلاین آماده است.");
+                    status.setText("بستهٔ تشخیص گفتار فارسی آماده شد؛ تشخیص گفتار آفلاین فعال است.");
                 }
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
                 if (isFinishing() || isDestroyed()) return;
-                if (status != null) status.setText("دانلود مدل فارسی قطع شد؛ اوبا خودش دوباره تلاش می‌کند. علت: " + message);
+                if (status != null) status.setText("دریافت بستهٔ گفتار قطع شد؛ اوبا دوباره تلاش می‌کند. علت: " + message);
                 // Retry automatically after network failures. Do not require the user to
                 // press the microphone button again; the download starts again while the
                 // activity is alive, with a capped delay to avoid hammering the server.
@@ -1446,32 +1446,32 @@ public class MainActivity extends Activity {
             return;
         }
         if (downloadingVoskModel) {
-            if (status != null) status.setText("دانلود مدل Vosk در حال انجام است؛ کمی صبر کن…");
+            if (status != null) status.setText("دریافت بستهٔ گفتار در حال انجام است؛ کمی صبر کن…");
             return;
         }
         downloadingVoskModel = true;
-        if (status != null) status.setText("در حال دانلود مدل تشخیص گفتار فارسی Vosk…");
+        if (status != null) status.setText("در حال دریافت بستهٔ تشخیص گفتار فارسی…");
         OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
             @Override public void onProgress(long downloadedBytes, long totalBytes) {
                 if (status == null || isFinishing()) return;
                 if (totalBytes > 0) {
                     int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
-                    status.setText("دانلود مدل Vosk: " + percent + "%");
+                    status.setText("دریافت بستهٔ گفتار فارسی: " + percent + "%");
                 } else {
-                    status.setText("در حال دانلود مدل Vosk…");
+                    status.setText("در حال دریافت بستهٔ گفتار فارسی…");
                 }
             }
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                if (status != null) status.setText("مدل تشخیص گفتار فارسی Vosk نصب شد؛ میکروفون را شروع می‌کنم…");
+                if (status != null) status.setText("بستهٔ تشخیص گفتار فارسی آماده شد؛ میکروفون را فعال می‌کنم…");
                 startOfflineVoice(mode, installedDirectory);
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                if (status != null) status.setText("دانلود مدل Vosk ناموفق بود: " + message);
-                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود: " + message, Toast.LENGTH_LONG).show();
+                if (status != null) status.setText("دریافت بستهٔ تشخیص گفتار ناموفق بود: " + message);
+                Toast.makeText(MainActivity.this, "دریافت بستهٔ تشخیص گفتار ناموفق بود: " + message, Toast.LENGTH_LONG).show();
             }
         });
     }
