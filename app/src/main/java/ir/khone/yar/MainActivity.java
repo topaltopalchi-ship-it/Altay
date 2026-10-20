@@ -170,7 +170,6 @@ public class MainActivity extends Activity {
         transcriptBox.setStroke(dp(1), Color.rgb(210, 216, 220));
         continuousTranscriptView.setBackground(transcriptBox);
         continuousTranscriptView.setTextColor(Color.WHITE);
-        continuousTranscriptView.setShadowLayer(dp(1), 0, dp(1), Color.rgb(10, 18, 65));
         continuousTranscriptView.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         continuousTranscriptView.setLineSpacing(dp(3), 1.08f);
         continuousTranscriptView.setTextIsSelectable(true);
@@ -942,7 +941,6 @@ public class MainActivity extends Activity {
             item.setTextColor(Color.rgb(24, 37, 105));
             item.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD));
             item.setElevation(dp(6));
-            item.setShadowLayer(dp(2), 0, dp(3), Color.rgb(30, 35, 75));
             item.setPadding(dp(10), dp(4), dp(10), dp(4));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(54));
             params.setMargins(dp(2), dp(4), dp(2), dp(4));
