@@ -22,23 +22,28 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         void onError(String message);
     }
 
+    // Treat a long pause as the end of the user's complete message, not each sentence.
+    private static final long END_OF_MESSAGE_SILENCE_MS = 6000L;
+
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
+    private final StringBuilder collectedText = new StringBuilder();
     private volatile boolean stopped = false;
     private volatile boolean delivered = false;
     private Model model;
     private SpeechService speechService;
     private Listener listener;
+    private final Runnable finishAfterSilence = this::deliverCollectedText;
 
     public void start(Context context, File modelDirectory, Listener callback) {
         stopped = false;
         delivered = false;
         listener = callback;
-        postStatus("مدل Vosk دانلود شده؛ در حال بارگذاری فایل‌های مدل در حافظه…");
+        synchronized (collectedText) { collectedText.setLength(0); }
+        postStatus("در حال آماده‌سازی شنیدن…");
         loader.execute(() -> {
             try {
                 if (stopped) return;
-                postStatus("در حال بازکردن مدل Vosk؛ اگر برنامه بسته شد، احتمالاً فایل مدل یا حافظه مشکل دارد…");
                 Model loaded = new Model(modelDirectory.getAbsolutePath());
                 if (stopped) {
                     loaded.close();
@@ -52,7 +57,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
                     service.stop();
                     return;
                 }
-                postStatus("🎙 حالت آفلاین فعال است؛ صحبت کن و بعد مکث کن.");
+                postStatus("🎙 آماده شنیدن هستم؛ راحت و کامل صحبت کن. بعد از پایان حرفت چند ثانیه مکث کن.");
                 service.startListening(this);
             } catch (Throwable e) {
                 postError("راه‌اندازی گفتار آفلاین ممکن نشد: " +
@@ -64,6 +69,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
 
     public void stop() {
         stopped = true;
+        main.removeCallbacks(finishAfterSilence);
         loader.shutdownNow();
         SpeechService service = speechService;
         speechService = null;
@@ -78,28 +84,43 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     }
 
     @Override public void onPartialResult(String hypothesis) {
-        if (stopped) return;
-        String text = extractText(hypothesis, "partial");
-        if (!text.isEmpty()) postStatus("شنیدم: " + text);
+        // Intentionally do not show partial hypotheses: they cause the screen to flicker
+        // and make fragments look like separate messages.
     }
 
     @Override public void onResult(String hypothesis) {
-        deliverResult(hypothesis);
+        collectResult(hypothesis, "text");
     }
 
     @Override public void onFinalResult(String hypothesis) {
-        deliverResult(hypothesis);
+        collectResult(hypothesis, "text");
     }
 
-    private void deliverResult(String json) {
+    private void collectResult(String json, String key) {
         if (stopped || delivered) return;
-        String text = extractText(json, "text");
+        String text = extractText(json, key);
+        if (text.isEmpty()) return;
+
+        synchronized (collectedText) {
+            String current = collectedText.toString();
+            // Vosk may report the same final segment through both result callbacks.
+            if (current.length() == 0 || !current.toString().endsWith(text)) {
+                if (current.length() > 0) collectedText.append(' ');
+                collectedText.append(text);
+            }
+        }
+        main.removeCallbacks(finishAfterSilence);
+        main.postDelayed(finishAfterSilence, END_OF_MESSAGE_SILENCE_MS);
+    }
+
+    private void deliverCollectedText() {
+        if (stopped || delivered) return;
+        String text;
+        synchronized (collectedText) { text = collectedText.toString().trim(); }
         if (text.isEmpty()) return;
         delivered = true;
         Listener callback = listener;
-        if (callback != null) main.post(() -> {
-            callback.onText(text);
-        });
+        if (callback != null) callback.onText(text);
         stop();
     }
 
@@ -112,8 +133,25 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
 
     @Override public void onTimeout() {
         if (stopped || delivered) return;
-        postError("صدایی تشخیص داده نشد؛ دوباره تلاش کن.");
-        stop();
+        synchronized (collectedText) {
+            if (collectedText.length() > 0) {
+                main.removeCallbacks(finishAfterSilence);
+                main.post(finishAfterSilence);
+                return;
+            }
+        }
+        // No speech yet: keep the same model/service ready instead of asking the user
+        // to tap the microphone again after a short initial wait.
+        main.postDelayed(() -> {
+            SpeechService service = speechService;
+            if (!stopped && !delivered && service != null) {
+                try { service.startListening(this); }
+                catch (Throwable e) {
+                    postError("میکروفون آماده نشد؛ دوباره دکمهٔ صوتی را بزن.");
+                    stop();
+                }
+            }
+        }, 400L);
     }
 
     private String extractText(String json, String key) {
