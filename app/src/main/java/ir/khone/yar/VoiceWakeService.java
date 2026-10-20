@@ -67,6 +67,12 @@ public class VoiceWakeService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        // Wake-word activation is disabled in this version.
+        stopping = true;
+        stopSelf(startId);
+        return START_NOT_STICKY;
+
+        /* Disabled wake listener implementation:
         stopping = false;
         try {
             startForeground(NOTIFICATION_ID, buildNotification("در حال آماده‌سازی شنیدن آفلاین…"));
@@ -80,6 +86,7 @@ public class VoiceWakeService extends Service {
         }
         handler.post(this::prepareAndListen);
         return START_STICKY;
+        */
     }
 
     private void prepareAndListen() {
