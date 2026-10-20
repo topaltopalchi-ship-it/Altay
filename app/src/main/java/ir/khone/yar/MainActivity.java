@@ -999,7 +999,7 @@ public class MainActivity extends Activity {
             item.setMinHeight(dp(54));
             GradientDrawable face = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.rgb(244, 155, 195), Color.rgb(222, 104, 158)});
+                new int[]{Color.rgb(184, 216, 255), Color.rgb(142, 188, 245)});
             face.setCornerRadius(dp(14));
             face.setStroke(dp(3), Color.rgb(24, 37, 105));
             item.setBackground(face);
