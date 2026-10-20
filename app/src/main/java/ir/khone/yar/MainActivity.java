@@ -941,8 +941,10 @@ public class MainActivity extends Activity {
         Button voice = button("🎙  ثبت صوتی", Color.WHITE, Color.WHITE, 17);
         voice.setMinHeight(dp(54));
         voice.setOnClickListener(v -> {
-            status.setText("برای «" + category + " / " + subgroup + "» هزینه و مبلغ را بگو.");
-            startVoice("auto");
+            pendingPurchaseCategory = category;
+            pendingPurchaseSubgroup = subgroup;
+            status.setText("نام کالا، مقدار یا وزن و مبلغ را بگو.");
+            startVoice("subgroup_purchase");
         });
         choices.addView(voice, lp(-1, -2, 0, 0, 0, 4));
 
