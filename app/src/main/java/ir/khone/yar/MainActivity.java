@@ -49,6 +49,8 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
     private Button wakeButton;
+    private boolean resumeWakeAfterCommand = true;
+    private boolean wakeTriggeredSession = false;
     private TextToSpeech tts;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
@@ -99,10 +101,14 @@ public class MainActivity extends Activity {
             }
         });
         buildUi();
-        // Automatically prepare the Vosk model on first launch, without starting the microphone.
+        wakeTriggeredSession = VoiceWakeService.ACTION_WAKE_DETECTED.equals(getIntent() == null ? null : getIntent().getAction());
+        // Prepare the offline model once, then keep the wake-word service running automatically.
         if (OfflineModelDownloader.getInstalledModelDirectory(this) == null) {
             root.postDelayed(() -> downloadVoskModelAutomatically(), 800);
+        } else if (!wakeTriggeredSession) {
+            root.postDelayed(() -> ensureWakeServiceEnabled(), 500);
         }
+        if (wakeTriggeredSession) root.postDelayed(() -> startVoice("auto"), 650);
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
         }
@@ -142,10 +148,6 @@ public class MainActivity extends Activity {
         speak.setMinHeight(dp(52)); speak.setOnClickListener(v -> startVoice("auto"));
         content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
 
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
-        wakeButton.setMinHeight(dp(44));
-        wakeButton.setOnClickListener(v -> toggleWakeService());
-        content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
@@ -960,13 +962,11 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // The wake-word service also owns the microphone. Stop it before starting Vosk,
-        // otherwise Vosk may appear to do nothing while Android keeps the mic busy.
+        // The wake-word service and command recognizer must never own the microphone together.
+        // Pause wake detection for this one command; the service is restarted afterwards.
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
-        prefs.edit().putBoolean("wake_enabled", false).apply();
-        if (wakeButton != null) {
-            wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
-        }
+        prefs.edit().putBoolean("wake_enabled", true).apply();
+        resumeWakeAfterCommand = true;
         if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
         Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
 
@@ -1083,7 +1083,8 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("مدل گفتار فارسی Vosk دانلود و آماده شد؛ برای صحبت دکمهٔ صوتی را بزن.");
+                    status.setText("مدل گفتار فارسی آماده شد؛ اوبا در حال آماده‌شدن برای شنیدن خودکار است.");
+                    ensureWakeServiceEnabled();
                 }
             }
             @Override public void onError(String message) {
@@ -1161,27 +1162,23 @@ public class MainActivity extends Activity {
                     if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                     handleVoice(text);
-                    // Restart recognition after each completed command so expenses can
-                    // be dictated one after another without touching the voice button.
-                    if (!isFinishing() && root != null) {
+                    // Return to hands-free wake-word mode after one command. Say "اوبا" again
+                    // to dictate another command, avoiding a permanent second microphone owner.
+                    if (resumeWakeAfterCommand && !isFinishing() && root != null) {
+                        resumeWakeAfterCommand = false;
                         root.postDelayed(() -> {
-                            if (isFinishing() || isDestroyed()) return;
-                            if (offlineEngine == null) {
-                                startOfflineVoice(pendingMode, modelDirectory);
-                            }
+                            if (!isFinishing() && !isDestroyed()) ensureWakeServiceEnabled();
                         }, 1800);
                     }
                 }
                 @Override public void onError(String message) {
                     if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText(message + " تلاش برای شنیدن دوباره…");
-                    // Recover automatically from silence / transient microphone errors.
-                    if (!isFinishing() && root != null) {
+                    // If a command session times out, return to the wake-word listener automatically.
+                    if (resumeWakeAfterCommand && !isFinishing() && root != null) {
+                        resumeWakeAfterCommand = false;
                         root.postDelayed(() -> {
-                            if (isFinishing() || isDestroyed()) return;
-                            if (offlineEngine == null) {
-                                startOfflineVoice(pendingMode, modelDirectory);
-                            }
+                            if (!isFinishing() && !isDestroyed()) ensureWakeServiceEnabled();
                         }, 1500);
                     }
                 }
@@ -1191,27 +1188,30 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && VoiceWakeService.ACTION_WAKE_DETECTED.equals(intent.getAction())) {
+            wakeTriggeredSession = true;
+            root.postDelayed(() -> startVoice("auto"), 350);
+        }
+    }
+
+    private void ensureWakeServiceEnabled() {
+        if (isFinishing() || isDestroyed()) return;
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 46);
+            return;
+        }
+        if (OfflineModelDownloader.getInstalledModelDirectory(this) == null) return;
+        startWakeService();
+    }
+
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
         if (requestCode == AUDIO_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startVoice(pendingMode);
         else if (requestCode == 46 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startWakeService();
         else { status.setText("برای فرمان صوتی باید اجازهٔ میکروفون بدهی."); say("برای استفاده صوتی اجازه میکروفون لازم است"); }
-    }
-
-    private void toggleWakeService() {
-        if (prefs.getBoolean("wake_enabled", false)) {
-            stopService(new Intent(this, VoiceWakeService.class));
-            prefs.edit().putBoolean("wake_enabled", false).apply();
-            wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
-            status.setText("شنیدن نام OBA خاموش شد.");
-            say("شنیدن نام OBA خاموش شد");
-            return;
-        }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 46);
-            return;
-        }
-        startWakeService();
     }
 
     private void startWakeService() {
@@ -1221,13 +1221,11 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
             else startService(service);
             prefs.edit().putBoolean("wake_enabled", true).apply();
-            if (wakeButton != null) wakeButton.setText("🔕 خاموش کردن شنیدن نام OBA");
-            status.setText("شنیدن نام OBA فعال شد. بگو «اوبا»؛ برای توقف، دکمه خاموش کردن را بزن.");
+            status.setText("شنیدن خودکار اوبا فعال است. بگو «اوبا» و سپس فرمانت را بیان کن.");
             say("OBA آماده شنیدن نامش است");
         } catch (Exception e) {
             prefs.edit().putBoolean("wake_enabled", false).apply();
             status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
-            if (wakeButton != null) wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
         }
     }
 
