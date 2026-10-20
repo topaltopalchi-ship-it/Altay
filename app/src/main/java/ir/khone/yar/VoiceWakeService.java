@@ -61,6 +61,8 @@ public class VoiceWakeService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        stopping = false;
+        startForeground(NOTIFICATION_ID, buildNotification("آماده‌سازی تشخیص آفلاین اوبا"));
         if (ACTION_PAUSE.equals(action)) {
             paused = true;
             stopCapture();
@@ -68,9 +70,7 @@ public class VoiceWakeService extends Service {
             return START_STICKY;
         }
 
-        stopping = false;
         paused = false;
-        startForeground(NOTIFICATION_ID, buildNotification("آماده‌سازی تشخیص آفلاین اوبا"));
         ensureWorkerAfterPause();
         return START_STICKY;
     }
