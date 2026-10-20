@@ -169,7 +169,8 @@ public class MainActivity extends Activity {
         GradientDrawable transcriptBox = round(Color.WHITE, 12);
         transcriptBox.setStroke(dp(1), Color.rgb(210, 216, 220));
         continuousTranscriptView.setBackground(transcriptBox);
-        continuousTranscriptView.setTextColor(Color.rgb(28, 32, 36));
+        continuousTranscriptView.setTextColor(Color.WHITE);
+        continuousTranscriptView.setShadowLayer(dp(1), 0, dp(1), Color.rgb(10, 18, 65));
         continuousTranscriptView.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         continuousTranscriptView.setLineSpacing(dp(3), 1.08f);
         continuousTranscriptView.setTextIsSelectable(true);
