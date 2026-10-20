@@ -41,6 +41,5 @@ android {
 dependencies {
     implementation 'com.alphacephei:vosk-android:0.3.47'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
-    implementation 'org.apache.commons:commons-compress:1.27.1'
     testImplementation 'junit:junit:4.13.2'
 }
