@@ -1347,29 +1347,28 @@ public class MainActivity extends Activity {
     }
 
     private String[] parseContinuousExpense(String raw) {
-        String normalized = normalize(raw);
-        long amount = parseAmount(normalized);
-        String[] numberWords = new String[]{
-            "یک", "یه", "دو", "دوتا", "سه", "چهار", "پنج", "شش", "شیش", "هفت", "هشت", "نه", "ده",
-            "یازده", "دوازده", "سیزده", "چهارده", "پانزده", "شانزده", "هفده", "هجده", "نوزده",
-            "بیست", "سی", "چهل", "پنجاه", "شصت", "هفتاد", "هشتاد", "نود", "صد", "دویست",
-            "سیصد", "چهارصد", "پانصد", "هزار", "میلیون", "تومان", "تومن", "ریال",
-            "هزینه", "خرج", "برای", "ثبت", "کن", "اصلاح"
-        };
-        StringBuilder itemBuilder = new StringBuilder();
-        for (String token : normalized.split("\\s+")) {
-            if (token.matches("[0-9]+")) continue;
-            boolean numberOrFiller = false;
-            for (String numberWord : numberWords) {
-                if (token.equals(numberWord)) { numberOrFiller = true; break; }
-            }
-            if (!numberOrFiller) {
-                if (itemBuilder.length() > 0) itemBuilder.append(' ');
-                itemBuilder.append(token);
-            }
+        // Treat speech as a description plus one explicit currency amount.
+        // Quantity numbers (e.g. "5 kilo") are text only and are never added to
+        // the amount or multiplied by anything.
+        String normalized = normalize(raw == null ? "" : raw).trim();
+        java.util.regex.Pattern currencyPattern = java.util.regex.Pattern.compile(
+            "([0-9][0-9,٬.]*|[\\u0600-\\u06FF]+(?:\\s+[\\u0600-\\u06FF]+){0,3})\\s*(میلیارد|میلیون|هزار)?\\s*(تومان|تومن|ریال)"
+        );
+        java.util.regex.Matcher currency = currencyPattern.matcher(normalized);
+        String amountPhrase = null;
+        while (currency.find()) {
+            amountPhrase = currency.group();
         }
-        String item = itemBuilder.toString().trim();
-        if (amount <= 0 || item.isEmpty()) return null;
+        if (amountPhrase == null) return null;
+        long amount = parseAmount(amountPhrase);
+        if (amount <= 0) return null;
+
+        // Remove only the currency amount phrase; leave quantities and item name intact.
+        String item = normalized.replace(amountPhrase, " ")
+            .replaceAll("\\s+", " ")
+            .replaceAll("(?i)\\b(?:هزینه|خرج|برای|ثبت|کن|ذخیره|تومان|تومن|ریال)\\b", " ")
+            .replaceAll("\\s+", " ").trim();
+        if (item.isEmpty()) return null;
         return new String[]{item, String.valueOf(amount)};
     }
 
