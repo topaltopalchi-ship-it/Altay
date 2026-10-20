@@ -1675,11 +1675,21 @@ public class MainActivity extends Activity {
         if (subIndex < 0) return false;
         long amount = parseAmount(normalized);
         if (amount <= 0) return false;
+        // Preserve spoken quantity/unit in the archive title (e.g. "۳ کیلو لوبیا").
+        java.util.regex.Matcher quantityMatcher = java.util.regex.Pattern
+            .compile("([0-9۰-۹]+(?:[.,٫][0-9۰-۹]+)?\\s*(?:کیلوگرم|کیلو|گرم|عدد|بسته|لیتر))")
+            .matcher(raw);
+        String quantityText = quantityMatcher.find() ? quantityMatcher.group(1).trim() : "";
         String title = raw;
         String[] remove = {"اوبا","اوبآ","خانه","ماشین","مغازه","مدرسه","سلامت","سایر",
-            known[catIndex][subIndex], "تومان","تومن","هزار","میلیون","هزینه","خرج","خرید کردم","خریدم","خریداری کردم","به مبلغ","به قیمت"};
+            known[catIndex][subIndex], "تومان","تومن","هزار","میلیون","میلیارد","هزینه","خرج","خرید کردم","خریدم","خریداری کردم","به مبلغ","به قیمت","قیمت"};
         for (String word : remove) if (word != null && !word.isEmpty()) title = title.replace(word, " ");
-        title = title.replaceAll("[0-9۰-۹,،]+", " ").replaceAll("\\s+", " ").trim();
+        title = title.replaceAll("[0-9۰-۹,،٬]+", " ").replaceAll("\\s+", " ").trim();
+        if (!quantityText.isEmpty()) {
+            String unit = quantityText.replaceAll("[0-9۰-۹]+", "").trim();
+            title = title.replace(unit, "").replaceAll("\\s+", " ").trim();
+            title = quantityText + (title.isEmpty() ? "" : " " + title);
+        }
         if (title.isEmpty()) title = "هزینه " + known[catIndex][subIndex];
         expenseTotal += amount;
         prefs.edit().putLong("expense", expenseTotal).apply();
@@ -1954,10 +1964,19 @@ public class MainActivity extends Activity {
             say("به فهرست خرید اضافه شد. برای کم شدن از بودجه، قیمت را هم بگو.");
             refresh(); return;
         }
+        java.util.regex.Matcher quantityMatcher = java.util.regex.Pattern
+            .compile("([0-9۰-۹]+(?:[.,٫][0-9۰-۹]+)?\\s*(?:کیلوگرم|کیلو|گرم|عدد|بسته|لیتر))")
+            .matcher(raw);
+        String quantityText = quantityMatcher.find() ? quantityMatcher.group(1).trim() : "";
         String item = raw.replace("خریدم", "").replace("خرید کردم", "").replace("خریداری کردم", "")
             .replace("به قیمت", " ").replace("به مبلغ", " ").replace("قیمت", " ")
-            .replace("تومان", " ").replace("تومن", " ").replace("هزار", " ").replace("میلیون", " ")
-            .replaceAll("[0-9۰-۹]+", " ").replaceAll("\\s+", " ").trim();
+            .replace("تومان", " ").replace("تومن", " ").replace("هزار", " ").replace("میلیون", " ").replace("میلیارد", " ")
+            .replaceAll("[0-9۰-۹,،٬]+", " ").replaceAll("\\s+", " ").trim();
+        if (!quantityText.isEmpty()) {
+            String unit = quantityText.replaceAll("[0-9۰-۹]+", "").trim();
+            item = item.replace(unit, "").replaceAll("\\s+", " ").trim();
+            item = quantityText + (item.isEmpty() ? "" : " " + item);
+        }
         if (item.isEmpty()) item = "خرید خانه";
         expenseTotal += amount;
         prefs.edit().putLong("expense", expenseTotal).apply();
