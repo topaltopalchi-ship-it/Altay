@@ -216,8 +216,6 @@ public class MainActivity extends Activity {
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
         Button remindersBtn = button("🔔 یادآوری‌ها", Color.rgb(255, 239, 205), dark, 10);
         remindersBtn.setOnClickListener(v -> startReminderDraft());
-        Button archiveBtn = button("📚 آرشیو", Color.WHITE, dark, 10);
-        archiveBtn.setOnClickListener(v -> showExpenseArchive());
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 10);
         docsBtn.setOnClickListener(v -> showHomeDocuments());
         Button audioBtn = button("🎧 صداها", Color.WHITE, dark, 10);
@@ -226,7 +224,7 @@ public class MainActivity extends Activity {
         backupBtn.setOnClickListener(v -> showBackupOptions());
         Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 10);
         chartBtn.setOnClickListener(v -> showExpenseCharts());
-        for (Button b : new Button[]{remindersBtn, archiveBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
+        for (Button b : new Button[]{remindersBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
             bp.setMargins(dp(2), dp(2), dp(2), dp(2));
             b.setMinHeight(dp(54));
