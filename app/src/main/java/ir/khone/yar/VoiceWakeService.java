@@ -11,12 +11,10 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
-import android.speech.RecognitionListener;
-import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
-import java.util.ArrayList;
+
+import java.io.File;
 import java.util.Locale;
 
 public class VoiceWakeService extends Service {
@@ -25,19 +23,20 @@ public class VoiceWakeService extends Service {
     private static final String CHANNEL_ID = "khoneyar_wake_channel";
     private static final int NOTIFICATION_ID = 7102;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private SpeechRecognizer recognizer;
+    private OfflineVoskSpeechEngine engine;
     private TextToSpeech tts;
     private boolean stopping = false;
     private boolean speaking = false;
+    private boolean preparingModel = false;
     private PowerManager.WakeLock wakeLock;
 
     @Override public void onCreate() {
         super.onCreate();
-        try { createChannel(); } catch (Throwable ignored) {}
+        createChannel();
         try {
-            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-            if (powerManager != null) {
-                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
                 wakeLock.setReferenceCounted(false);
             }
         } catch (Throwable ignored) { wakeLock = null; }
@@ -49,18 +48,8 @@ public class VoiceWakeService extends Service {
                         tts.setSpeechRate(0.92f);
                         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                             @Override public void onStart(String id) {}
-                            @Override public void onDone(String id) {
-                                handler.post(() -> {
-                                    speaking = false;
-                                    if (!stopping) handler.postDelayed(() -> beginListening(), 700);
-                                });
-                            }
-                            @Override public void onError(String id) {
-                                handler.post(() -> {
-                                    speaking = false;
-                                    if (!stopping) handler.postDelayed(() -> beginListening(), 700);
-                                });
-                            }
+                            @Override public void onDone(String id) { resumeAfterSpeech(); }
+                            @Override public void onError(String id) { resumeAfterSpeech(); }
                         });
                     } catch (Throwable ignored) { tts = null; }
                 }
@@ -78,10 +67,7 @@ public class VoiceWakeService extends Service {
         }
         stopping = false;
         try {
-            // Android 14+ can reject microphone foreground services when runtime
-            // permission or while-in-use eligibility is missing. Never let that
-            // exception terminate the app process.
-            startForeground(NOTIFICATION_ID, buildNotification("در حال آماده‌سازی شنیدن نام اوبا…"));
+            startForeground(NOTIFICATION_ID, buildNotification("در حال آماده‌سازی شنیدن آفلاین…"));
         } catch (Throwable e) {
             stopping = true;
             stopSelf(startId);
@@ -90,101 +76,102 @@ public class VoiceWakeService extends Service {
         if (wakeLock != null && !wakeLock.isHeld()) {
             try { wakeLock.acquire(); } catch (Exception ignored) {}
         }
-        handler.post(() -> {
-            if (!stopping) beginListening();
-        });
+        handler.post(this::prepareAndListen);
         return START_STICKY;
     }
 
-    private void beginListening() {
-        if (stopping || speaking) return;
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            updateNotification("تشخیص گفتار در دسترس نیست؛ سرویس گفتار فارسی را بررسی کن");
-            handler.postDelayed(() -> beginListening(), 5000);
+    private void prepareAndListen() {
+        if (stopping || speaking || preparingModel || engine != null) return;
+        File model = OfflineModelDownloader.getInstalledModelDirectory(this);
+        if (model == null) {
+            preparingModel = true;
+            updateNotification("مدل گفتار آفلاین در حال دریافت است…");
+            OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
+                @Override public void onProgress(long downloaded, long total) {
+                    if (stopping) return;
+                    String progress = total > 0
+                        ? "دریافت مدل گفتار: " + (downloaded * 100 / total) + "%"
+                        : "در حال دریافت مدل گفتار آفلاین…";
+                    updateNotification(progress);
+                }
+                @Override public void onInstalled(File directory) {
+                    preparingModel = false;
+                    if (!stopping) startVosk(directory);
+                }
+                @Override public void onError(String message) {
+                    preparingModel = false;
+                    updateNotification("مدل آفلاین آماده نیست؛ برنامه را باز کن و اینترنت را بررسی کن");
+                    if (!stopping) handler.postDelayed(VoiceWakeService.this::prepareAndListen, 15000);
+                }
+            });
             return;
         }
-        try {
-            if (recognizer != null) {
-                recognizer.destroy();
-                recognizer = null;
+        startVosk(model);
+    }
+
+    private void startVosk(File modelDirectory) {
+        if (stopping || speaking || engine != null) return;
+        updateNotification("در حال راه‌اندازی Vosk آفلاین…");
+        OfflineVoskSpeechEngine next = new OfflineVoskSpeechEngine();
+        engine = next;
+        next.start(getApplicationContext(), modelDirectory, new OfflineVoskSpeechEngine.Listener() {
+            @Override public void onStatus(String status) {
+                if (!stopping) updateNotification(status);
             }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new RecognitionListener() {
-                @Override public void onReadyForSpeech(android.os.Bundle params) {
+            @Override public void onText(String text) {
+                if (engine == next) engine = null;
+                if (stopping) return;
+                String normalized = normalize(text);
+                boolean wake = normalized.contains("اوبا") || normalized.contains("oba")
+                    || normalized.contains("خونهیار") || normalized.contains("خانیار")
+                    || normalized.contains("خونیار");
+                if (wake) {
+                    updateNotification("کلمهٔ اوبا شنیده شد؛ در حال باز کردن برنامه…");
+                    Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
+                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    try { startActivity(launch); } catch (Throwable ignored) {}
+                    speaking = true;
+                    if (tts != null) {
+                        tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
+                    } else {
+                        speaking = false;
+                        handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1200);
+                    }
+                } else {
                     updateNotification("در حال شنیدن؛ بگو «اوبا»");
+                    handler.postDelayed(VoiceWakeService.this::prepareAndListen, 350);
                 }
-                @Override public void onBeginningOfSpeech() {}
-                @Override public void onRmsChanged(float rmsdB) {}
-                @Override public void onBufferReceived(byte[] buffer) {}
-                @Override public void onEndOfSpeech() {}
-                @Override public void onError(int error) {
-                    if (!stopping && !speaking) handler.postDelayed(() -> beginListening(), 900);
-                }
-                @Override public void onResults(android.os.Bundle results) {
-                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    boolean wake = false;
-                    if (matches != null) {
-                        for (String phrase : matches) {
-                            String normalized = normalize(phrase);
-                            if (normalized.contains("اوبا") || normalized.contains("oba") ||
-                                normalized.contains("خونهیار") || normalized.contains("خانیار") ||
-                                normalized.contains("خونهیار") || normalized.contains("خونیار")) {
-                                wake = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (wake) {
-                        updateNotification("نام OBA شنیده شد؛ برنامه باز می‌شود");
-                        Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
-                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                        try { startActivity(launch); } catch (Exception ignored) {}
-                        speaking = true;
-                        Runnable fallback = () -> {
-                            if (tts != null) {
-                                tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
-                            } else if (!stopping) {
-                                speaking = false;
-                                handler.postDelayed(() -> beginListening(), 1200);
-                            }
-                        };
-                        // Sherpa is intentionally disabled for this diagnostic build.
-                        // Reply with Android's system TTS only.
-                        fallback.run();
-                    } else if (!stopping) {
-                        handler.postDelayed(() -> beginListening(), 650);
-                    }
-                }
-                @Override public void onPartialResults(android.os.Bundle partialResults) {}
-                @Override public void onEvent(int eventType, android.os.Bundle params) {}
-            });
-            Intent speech = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
-            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-            speech.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
-            recognizer.startListening(speech);
-        } catch (Throwable e) {
-            // Speech service providers and native recognizers can throw runtime
-            // or linkage errors on some devices. Keep the service alive and retry.
-            if (!stopping) handler.postDelayed(() -> beginListening(), 2500);
-        }
+            }
+            @Override public void onError(String message) {
+                if (engine == next) engine = null;
+                if (stopping) return;
+                updateNotification("خطای شنیدن آفلاین؛ تلاش دوباره…");
+                handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1800);
+            }
+        });
+    }
+
+    private void resumeAfterSpeech() {
+        handler.post(() -> {
+            speaking = false;
+            if (!stopping) {
+                updateNotification("در حال شنیدن؛ بگو «اوبا»");
+                handler.postDelayed(this::prepareAndListen, 700);
+            }
+        });
     }
 
     private String normalize(String text) {
-        return text.toLowerCase(Locale.ROOT).replace('‌', ' ').replace(" ", "")
-            .replace("‌", "").replace("ئ", "ی").replace("ك", "ک").replace("ي", "ی")
-            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا")
-            .replace("ه", "ه");
+        return text.toLowerCase(Locale.ROOT).replace(" ", "").replace("‌", "")
+            .replace("ئ", "ی").replace("ك", "ک").replace("ي", "ی")
+            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا");
     }
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "شنیدن نام OBA", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("اعلان دائمی برای سرویس شنیدن نام OBA");
+            channel.setDescription("اعلان دائمی سرویس شنیدن آفلاین نام OBA");
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
@@ -197,11 +184,8 @@ public class VoiceWakeService extends Service {
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, CHANNEL_ID) : new Notification.Builder(this);
         builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("OBA")
-            .setContentText(text)
-            .setContentIntent(pending)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true);
+            .setContentTitle("OBA").setContentText(text).setContentIntent(pending)
+            .setOngoing(true).setOnlyAlertOnce(true);
         return builder.build();
     }
 
@@ -213,10 +197,9 @@ public class VoiceWakeService extends Service {
     @Override public void onDestroy() {
         stopping = true;
         handler.removeCallbacksAndMessages(null);
-        if (recognizer != null) {
-            recognizer.cancel();
-            recognizer.destroy();
-            recognizer = null;
+        if (engine != null) {
+            engine.stop();
+            engine = null;
         }
         if (tts != null) {
             tts.stop();
