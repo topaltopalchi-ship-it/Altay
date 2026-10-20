@@ -1077,57 +1077,16 @@ public class MainActivity extends Activity {
     }
 
     private void showEntryMethodDialog(String category, String subgroup) {
-        LinearLayout choices = new LinearLayout(this);
-        choices.setOrientation(LinearLayout.VERTICAL);
-        choices.setPadding(dp(18), dp(8), dp(18), dp(8));
-
-        Button manual = button("⌨️  ثبت دستی", Color.WHITE, Color.WHITE, 17);
-        manual.setMinHeight(dp(54));
-        manual.setOnClickListener(v -> {
-            // Close the method chooser before opening the manual form.
-            showCategoryExpenseForm(category, subgroup);
-        });
-        choices.addView(manual, lp(-1, -2, 0, 4, 0, 8));
-
-        Button voice = button("🎙  ثبت خریدها با صدا", Color.WHITE, Color.WHITE, 18);
-        voice.setMinHeight(dp(54));
-        GradientDrawable voiceFace = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.rgb(32, 49, 128), Color.rgb(13, 22, 75)});
-        voiceFace.setCornerRadius(dp(12));
-        voiceFace.setStroke(dp(2), Color.rgb(24, 37, 105));
-        voice.setBackground(voiceFace);
-        voice.setTextColor(Color.WHITE);
-        voice.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD));
-        voice.setElevation(dp(2));
-        voice.setOnClickListener(v -> {
-            pendingPurchaseCategory = category;
-            pendingPurchaseSubgroup = subgroup;
-            status.setText("نام کالا، مقدار یا وزن و مبلغ را بگو.");
-            startVoice("subgroup_purchase");
-        });
-        choices.addView(voice, lp(-1, -2, 0, 0, 0, 4));
-
+        // Expense entry is centralized on the dashboard. Subgroups are archive-only.
         Button archive = button("🗂️  آرشیو خریدها", Color.WHITE, Color.WHITE, 17);
         archive.setMinHeight(dp(54));
         archive.setOnClickListener(v -> showSubgroupPurchaseArchive(category, subgroup));
-        choices.addView(archive, lp(-1, -2, 0, 4, 0, 4));
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
-            .setView(choices)
-            .setNegativeButton("انصراف", null)
-            .create();
-        manual.setOnClickListener(v -> {
-            dialog.dismiss();
-            showCategoryExpenseForm(category, subgroup);
-        });
-        voice.setOnClickListener(v -> {
-            dialog.dismiss();
-            pendingPurchaseCategory = category;
-            pendingPurchaseSubgroup = subgroup;
-            status.setText("برای «" + category + " / " + subgroup + "» نام خرید، وزن یا تعداد و مبلغ را بگو؛ خرید پس از تشخیص مبلغ خودکار ذخیره می‌شود.");
-            startVoice("subgroup_purchase");
-        });
-        dialog.show();
+            .setView(archive)
+            .setNegativeButton("بستن", null)
+            .show();
     }
 
     private void showSubgroupPurchaseArchive(String category, String subgroup) {
