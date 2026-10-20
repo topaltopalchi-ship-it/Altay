@@ -1709,8 +1709,10 @@ public class MainActivity extends Activity {
             String quantityText = quantityMatcher.find() ? quantityMatcher.group(1).trim() : "";
             String title = raw.replace("تومان", "").replace("تومن", "").trim();
             title = title.replaceAll("[0-9۰-۹,٬]+", " ").replaceAll("\\s+", " ").trim();
-            if (!quantityText.isEmpty() && !title.contains(quantityText.replaceAll("[0-9۰-۹]+", "").trim())) {
-                title = quantityText + " " + title;
+            if (!quantityText.isEmpty()) {
+                String unitText = quantityText.replaceAll("[0-9۰-۹]+", "").trim();
+                title = title.replace(unitText, "").replaceAll("\\s+", " ").trim();
+                title = quantityText + (title.isEmpty() ? "" : " " + title);
             }
             if (title.isEmpty()) title = pendingPurchaseSubgroup;
             expenseTotal += amount;
