@@ -1064,8 +1064,10 @@ public class MainActivity extends Activity {
         });
         voice.setOnClickListener(v -> {
             dialog.dismiss();
-            status.setText("برای «" + category + " / " + subgroup + "» هزینه و مبلغ را بگو.");
-            startVoice("auto");
+            pendingPurchaseCategory = category;
+            pendingPurchaseSubgroup = subgroup;
+            status.setText("برای «" + category + " / " + subgroup + "» نام خرید، وزن یا تعداد و مبلغ را بگو؛ خرید پس از تشخیص مبلغ خودکار ذخیره می‌شود.");
+            startVoice("subgroup_purchase");
         });
         dialog.show();
     }
@@ -1699,8 +1701,17 @@ public class MainActivity extends Activity {
         if (mode.equals("subgroup_purchase")) {
             long amount = parseAmount(s);
             if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً ۲ کیلو گوشت ۱۲۰۰۰۰۰ تومان."); say("لطفاً مبلغ خرید را هم بگو"); return; }
+            // Preserve quantity/weight (especially kilograms) in the archive even when
+            // the numeric amount is removed from the spoken sentence.
+            java.util.regex.Matcher quantityMatcher = java.util.regex.Pattern
+                .compile("([0-9۰-۹]+(?:[.,٫][0-9۰-۹]+)?\\s*(?:کیلوگرم|کیلو|گرم|عدد|بسته|لیتر))")
+                .matcher(raw);
+            String quantityText = quantityMatcher.find() ? quantityMatcher.group(1).trim() : "";
             String title = raw.replace("تومان", "").replace("تومن", "").trim();
-            title = title.replaceAll("[0-9۰-۹,٬]+", " ").trim();
+            title = title.replaceAll("[0-9۰-۹,٬]+", " ").replaceAll("\\s+", " ").trim();
+            if (!quantityText.isEmpty() && !title.contains(quantityText.replaceAll("[0-9۰-۹]+", "").trim())) {
+                title = quantityText + " " + title;
+            }
             if (title.isEmpty()) title = pendingPurchaseSubgroup;
             expenseTotal += amount;
             prefs.edit().putLong("expense", expenseTotal).apply();
