@@ -111,9 +111,8 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         if (callback != null) main.post(() -> {
             callback.onText(text);
         });
-        // Keep the recognizer and loaded model alive so the next utterance
-        // can be recognized without reopening the large Vosk model.
-        delivered = false;
+        // Keep the recognizer and loaded model alive. The next partial
+        // result resets delivered, avoiding duplicate final callbacks.
     }
 
     @Override public void onError(Exception e) {
