@@ -1580,6 +1580,20 @@ public class MainActivity extends Activity {
         if (tryRegisterCategorizedExpense(raw, s)) return;
 
         String mode = pendingMode;
+        if (mode.equals("subgroup_purchase")) {
+            long amount = parseAmount(s);
+            if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً ۲ کیلو گوشت ۱۲۰۰۰۰۰ تومان."); say("لطفاً مبلغ خرید را هم بگو"); return; }
+            String title = raw.replace("تومان", "").replace("تومن", "").trim();
+            title = title.replaceAll("[0-9۰-۹,٬]+", " ").trim();
+            if (title.isEmpty()) title = pendingPurchaseSubgroup;
+            expenseTotal += amount;
+            prefs.edit().putLong("expense", expenseTotal).apply();
+            addEntry(pendingPurchaseCategory, pendingPurchaseSubgroup + " — " + title, amount);
+            String message = "خرید در «" + pendingPurchaseSubgroup + "» به مبلغ " + fmt(amount) + " تومان در آرشیو و تقویم هزینه ثبت شد.";
+            status.setText(message); say(message); refresh();
+            pendingMode = "auto"; pendingPurchaseCategory = ""; pendingPurchaseSubgroup = "";
+            return;
+        }
         if (mode.equals("auto")) {
             if (contains(s,"بودجه خانه","بودجه ماهانه","تنظیم بودجه")) mode="budget";
             else if (contains(s,"موجودی خانه","چی داریم","چه چیزهایی داریم")) { refreshInventory(); status.setText(inventoryView.getText()); say("موجودی خانه روی صفحه نمایش داده شد"); return; }
