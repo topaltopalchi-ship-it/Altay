@@ -648,7 +648,7 @@ public class MainActivity extends Activity {
         }
         String[] labels = new String[files.length + 1];
         labels[0] = "🎙 ضبط صدای جدید";
-        for (int i = 0; i < files.length; i++) labels[i + 1] = new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(new Date(files[i].lastModified())) + " • " + files[i].getName();
+        for (int i = 0; i < files.length; i++) labels[i + 1] = formatPersianDateTime(new Date(files[i].lastModified())) + " • " + files[i].getName();
         new AlertDialog.Builder(this).setTitle("آرشیو صداهای ذخیره‌شده")
             .setItems(labels, (d, which) -> {
                 if (which == 0) { startAudioRecording(); return; }
@@ -2014,7 +2014,7 @@ public class MainActivity extends Activity {
                 long when = Long.parseLong(parts[0]);
                 boolean monthly = "monthly".equals(parts[1]);
                 String title = parts[2];
-                String date = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(new Date(when));
+                String date = formatPersianDateTime(new Date(when));
                 rows.add(when + "|" + "• " + title + " — " + date + (monthly ? " (هر ماه)" : ""));
             } catch (Exception ignored) {}
         }
@@ -2158,7 +2158,7 @@ public class MainActivity extends Activity {
         String saved = when + "\n" + (monthly ? "monthly" : "once") + "\n" + title + "\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
         ReminderReceiver.schedule(this, id, when, title, monthly);
-        String whenText = new SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.getDefault()).format(due.getTime());
+        String whenText = formatPersianDateTime(due.getTime());
         String confirmation = "یادآوری «" + title + "» برای " + whenText + (monthly ? " و تکرار ماهانه" : "") + " ثبت شد.";
         addEntry("یادآوری", confirmation, 0);
         status.setText(confirmation);
@@ -2191,7 +2191,7 @@ public class MainActivity extends Activity {
 
         long currentKm = extractMileage(s);
         long nextKm = extractNextMileage(s);
-        String date = new SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(new Date());
+        String date = formatPersianDate(new Date());
         String kind = oil ? "تعویض روغن" : "سرویس/تعمیر خودرو";
         StringBuilder detail = new StringBuilder(kind).append(" • ").append(date);
         if (currentKm > 0) detail.append(" • کیلومتر فعلی: ").append(fmt(currentKm));
@@ -2374,6 +2374,11 @@ public class MainActivity extends Activity {
             .replace('0','۰').replace('1','۱').replace('2','۲').replace('3','۳')
             .replace('4','۴').replace('5','۵').replace('6','۶').replace('7','۷')
             .replace('8','۸').replace('9','۹');
+    }
+
+    private String formatPersianDateTime(Date date) {
+        java.text.SimpleDateFormat timeFormat = new java.text.SimpleDateFormat("HH:mm", Locale.getDefault());
+        return formatPersianDate(date) + "  " + timeFormat.format(date);
     }
 
     private void addEntry(String type, String title, long amount) {
