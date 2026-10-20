@@ -19,15 +19,14 @@ import java.util.zip.ZipInputStream;
 /**
  * Downloads and installs the Persian Vosk model into app-private storage.
  *
- * The app invokes downloadModel() in response to the user's voice-button tap
- * when no local model is installed. Downloads are stored in app-private storage.
+ * The app invokes downloadModel() automatically when no local model is installed. Downloads are stored in app-private storage.
  */
 public final class OfflineModelDownloader {
     public static final String MODEL_DIRECTORY = "vosk-model-small-fa-0.42";
-    // Primary mirror hosted on Hugging Face; the original alphacephei host is
-    // unreachable from some mobile networks. The archive keeps the standard Vosk layout.
+    // Official Vosk model archive. The previous Hugging Face URL was not a
+    // verified model source and could fail before any bytes downloaded.
     private static final String MODEL_URL =
-            "https://huggingface.co/localstack/vosk-models/resolve/main/vosk-model-small-fa-0.42.zip";
+            "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip";
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
 
