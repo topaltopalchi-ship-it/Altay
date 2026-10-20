@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
     private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private boolean continuousExpenseListening = false;
+    private Button continuousExpenseButton;
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
     private boolean quietVoiceSession = false;
@@ -126,6 +128,27 @@ public class MainActivity extends Activity {
         content.addView(brand, lp(-1, -2, 0, 4, 0, 1));
         TextView subtitle = text("مدیریت خانه، فقط با حرف زدن", 16, Color.DKGRAY, false); subtitle.setGravity(Gravity.CENTER);
         content.addView(subtitle, lp(-1, -2, 0, 0, 0, 8));
+
+        // Primary dashboard control: explicit opt-in continuous listening for expense entries.
+        continuousExpenseButton = new Button(this);
+        continuousExpenseButton.setText("🎙  فعال‌سازی ثبت صوتی هزینه‌ها");
+        continuousExpenseButton.setTextSize(17);
+        continuousExpenseButton.setTextColor(Color.WHITE);
+        continuousExpenseButton.setAllCaps(false);
+        continuousExpenseButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        continuousExpenseButton.setGravity(Gravity.CENTER);
+        continuousExpenseButton.setPadding(dp(12), dp(14), dp(12), dp(14));
+        GradientDrawable voiceFace = new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(8, 91, 91), Color.rgb(12, 116, 105), Color.rgb(17, 73, 75)}
+        );
+        voiceFace.setCornerRadius(dp(18));
+        voiceFace.setStroke(dp(2), Color.rgb(211, 174, 92));
+        continuousExpenseButton.setBackground(voiceFace);
+        continuousExpenseButton.setElevation(dp(7));
+        continuousExpenseButton.setMinHeight(dp(62));
+        continuousExpenseButton.setOnClickListener(v -> toggleContinuousExpenseListening());
+        content.addView(continuousExpenseButton, lp(-1, -2, 0, 3, 0, 12));
 
         TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 18, dark, true);
         content.addView(categoryTitle, lp(-1,-2,0,2,0,4));
@@ -955,6 +978,51 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p = lp(-1,-2,0,3,0,5); cards.addView(card,p);
     }
 
+    private void toggleContinuousExpenseListening() {
+        if (continuousExpenseListening) {
+            continuousExpenseListening = false;
+            if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
+            if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  فعال‌سازی ثبت صوتی هزینه‌ها");
+            if (status != null) status.setText("ثبت صوتی پیوسته متوقف شد.");
+            return;
+        }
+        continuousExpenseListening = true;
+        if (continuousExpenseButton != null) continuousExpenseButton.setText("■  توقف ثبت صوتی هزینه‌ها");
+        if (status != null) status.setText("ثبت صوتی فعال شد؛ هر هزینه را جداگانه بگو، مثلاً «نان، دویست هزار تومان».");
+        startVoice("continuous_expense");
+    }
+
+    private void handleContinuousExpense(String raw) {
+        String normalized = normalize(raw);
+        long amount = parseAmount(normalized);
+        String item = normalized
+            .replaceAll("[0-9]+", " ")
+            .replace("تومان", " ").replace("تومن", " ").replace("ریال", " ")
+            .replace("میلیون", " ").replace("هزار", " ")
+            .replace("یک", " ").replace("یه", " ").replace("دو", " ").replace("سه", " ")
+            .replace("چهار", " ").replace("پنج", " ").replace("شش", " ").replace("شیش", " ")
+            .replace("هفت", " ").replace("هشت", " ").replace("نه", " ").replace("ده", " ")
+            .replace("یازده", " ").replace("دوازده", " ").replace("سیزده", " ").replace("چهارده", " ")
+            .replace("پانزده", " ").replace("شانزده", " ").replace("هفده", " ").replace("هجده", " ")
+            .replace("نوزده", " ").replace("بیست", " ").replace("سی", " ").replace("چهل", " ")
+            .replace("پنجاه", " ").replace("شصت", " ").replace("هفتاد", " ").replace("هشتاد", " ")
+            .replace("نود", " ").replace("صد", " ").replace("دویست", " ").replace("سیصد", " ")
+            .replace("چهارصد", " ").replace("پانصد", " ")
+            .replace("هزینه", " ").replace("خرج", " ").replace("برای", " ")
+            .replace("ثبت", " ").replace("کن", " ").replaceAll("\\s+", " ").trim();
+        if (amount <= 0 || item.isEmpty()) {
+            if (status != null) status.setText("مورد یا مبلغ واضح نبود؛ دوباره بگو، مثلاً «نان، دویست هزار تومان».");
+            return;
+        }
+        expenseTotal += amount;
+        prefs.edit().putLong("expense", expenseTotal).apply();
+        addEntry("خانه", item, amount);
+        String confirmation = "ثبت شد: " + item + " — " + fmt(amount) + " تومان. مورد بعدی را بگو.";
+        if (status != null) status.setText(confirmation);
+        refresh();
+    }
+
     private void startVoice(String mode) {
         pendingMode = mode;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -1160,18 +1228,27 @@ public class MainActivity extends Activity {
                 @Override public void onText(String text) {
                     if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
-                    handleVoice(text);
-                    // A wake-word launch starts a hands-free session: keep listening for
-                    // consecutive commands without requiring another wake word or button.
-                    // Vosk ends its recognizer after each finalized utterance, so start a
-                    // fresh engine after the command has been processed.
-                    // Do not restart listening automatically; the home-screen wake button is removed.
+                    if (continuousExpenseListening) {
+                        handleContinuousExpense(text);
+                        if (continuousExpenseListening && root != null) {
+                            root.postDelayed(() -> {
+                                if (continuousExpenseListening && !isFinishing() && !isDestroyed()) {
+                                    startVoice("continuous_expense");
+                                }
+                            }, 900);
+                        }
+                    } else {
+                        handleVoice(text);
+                    }
                 }
                 @Override public void onError(String message) {
                     if (offlineEngine == activeEngine) offlineEngine = null;
-                    if (status != null && !isFinishing()) status.setText(message + " تلاش برای شنیدن دوباره…");
-                    // Keep a wake-triggered session available after silence/no-match too.
-                    // Do not restart listening automatically after an error.
+                    if (status != null && !isFinishing()) status.setText(message + (continuousExpenseListening ? " دوباره گوش می‌دهم…" : ""));
+                    if (continuousExpenseListening && root != null) {
+                        root.postDelayed(() -> {
+                            if (continuousExpenseListening && !isFinishing() && !isDestroyed()) startVoice("continuous_expense");
+                        }, 1200);
+                    }
                 }
             });
         } catch (Exception e) {
