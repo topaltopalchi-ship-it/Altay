@@ -947,8 +947,71 @@ public class MainActivity extends Activity {
             list.addView(item, params);
             item.setOnClickListener(v -> {
                 dialog.dismiss();
-                if ("خانه".equals(category) && option.contains("اسکن مدارک خانه")) showHomeDocuments();
-                else showEntryMethodDialog(category, option);
+                if ("خانه".equals(category) && option.contains("اسکن مدارک خانه")) {
+                    showHomeDocuments();
+                } else if (!"ماشین".equals(category)) {
+                    showNestedSubgroups(category, option);
+                } else {
+                    showEntryMethodDialog(category, option);
+                }
+            });
+        }
+        dialog.show();
+    }
+
+
+    private void showNestedSubgroups(String category, String parent) {
+        String[] children;
+        switch (parent) {
+            case "مواد غذایی": children = new String[]{"لبنیات", "حبوبات", "گوشت و مرغ", "ماهی", "غلات و برنج", "نان و شیرینی", "میوه‌ها و سبزیجات", "خشکبار و آجیل", "چاشنی و ادویه", "نوشیدنی‌ها", "مواد غذایی دیگر"}; break;
+            case "لوازم خانه": children = new String[]{"ظروف و لوازم آشپزخانه", "وسایل برقی", "مبلمان و دکور", "لوازم خواب و حمام", "ابزار و یراق", "لوازم خانه دیگر"}; break;
+            case "قبض و خدمات": children = new String[]{"برق", "آب", "گاز", "تلفن و اینترنت", "شارژ ساختمان", "خدمات دیگر"}; break;
+            case "اجاره و تعمیرات": children = new String[]{"اجاره", "تعمیرات لوله‌کشی", "تعمیرات برق", "تعمیرات وسایل", "نقاشی و بازسازی", "هزینه‌های دیگر"}; break;
+            case "نظافت": children = new String[]{"مواد شوینده", "دستمال و کیسه زباله", "لوازم نظافت", "خدمات نظافت", "سایر لوازم نظافت"}; break;
+            case "خرید کالا": children = new String[]{"کالای اصلی", "بسته‌بندی", "لوازم مصرفی", "حمل کالا", "سایر خریدها"}; break;
+            case "اجاره مغازه": children = new String[]{"اجاره ماهانه", "ودیعه و تمدید", "هزینه‌های مرتبط"}; break;
+            case "حقوق": children = new String[]{"حقوق کارکنان", "اضافه‌کاری", "پاداش و مزایا", "بیمه کارکنان"}; break;
+            case "تعمیرات": children = new String[]{"تعمیر تجهیزات", "تعمیرات ساختمان", "تعمیرات برق", "سایر تعمیرات"}; break;
+            case "شهریه": children = new String[]{"شهریه اصلی", "ثبت‌نام", "کلاس فوق‌برنامه", "هزینه‌های دیگر"}; break;
+            case "کتاب و لوازم‌التحریر": children = new String[]{"کتاب درسی", "دفتر و کاغذ", "نوشت‌افزار", "کیف و جامدادی", "لوازم دیگر"}; break;
+            case "رفت‌وآمد": children = new String[]{"سرویس", "اتوبوس و مترو", "تاکسی", "هزینه‌های دیگر"}; break;
+            case "لباس فرم": children = new String[]{"لباس", "کفش", "دوخت و تعمیر", "سایر موارد"}; break;
+            case "فعالیت‌ها": children = new String[]{"اردو", "ورزش", "برنامه‌های مدرسه", "سایر فعالیت‌ها"}; break;
+            case "دکتر": children = new String[]{"ویزیت عمومی", "متخصص", "اورژانس", "سایر ویزیت‌ها"}; break;
+            case "دارو": children = new String[]{"داروی نسخه‌ای", "داروی بدون نسخه", "لوازم پزشکی", "سایر داروها"}; break;
+            case "آزمایش": children = new String[]{"آزمایش خون", "تصویربرداری", "آزمایش‌های دیگر"}; break;
+            case "بیمه درمانی": children = new String[]{"حق بیمه", "فرانشیز", "هزینه‌های دیگر"}; break;
+            case "دندان‌پزشکی": children = new String[]{"معاینه", "ترمیم", "جرم‌گیری", "سایر خدمات"}; break;
+            default: children = new String[]{"خرید روزمره", "هزینه خدمات", "تعمیر و نگهداری", "سایر موارد"};
+        }
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(list);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("زیرمجموعهٔ «" + parent + "»")
+            .setView(scroll).setNegativeButton("بازگشت", null).create();
+        for (String child : children) {
+            Button item = button(child, Color.WHITE, Color.rgb(24, 37, 105), 16);
+            item.setAllCaps(false);
+            item.setMinHeight(dp(54));
+            GradientDrawable face = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(244, 155, 195), Color.rgb(222, 104, 158)});
+            face.setCornerRadius(dp(14));
+            face.setStroke(dp(3), Color.rgb(24, 37, 105));
+            item.setBackground(face);
+            item.setTextColor(Color.rgb(24, 37, 105));
+            item.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD));
+            item.setElevation(dp(6));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(54));
+            params.setMargins(dp(2), dp(4), dp(2), dp(4));
+            list.addView(item, params);
+            item.setOnClickListener(v -> {
+                dialog.dismiss();
+                showEntryMethodDialog(category, parent + " / " + child);
             });
         }
         dialog.show();
