@@ -598,7 +598,7 @@ public class MainActivity extends Activity {
                 StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\\n\\n");
                 for (String category : categories) {
                     report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
-                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\\n");
+                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\n");
                     report.append("\\n");
                 }
                 if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
@@ -1100,6 +1100,7 @@ public class MainActivity extends Activity {
             display.append(i + 1).append(") ").append(pendingVoiceExpenses.get(i)).append("\\n");
         }
         if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\\n");
+        if (!liveVoicePartial.isEmpty()) display.append("در حال شنیدن: ").append(liveVoicePartial).append("\n");
         if (correctingNextVoicePhrase) display.append("🎙 منتظر متن اصلاح‌شده…");
         display.append("\\nراهنما: بگو «اصلاح» و سپس متن درست را بخوان تا مورد آخر جایگزین شود.");
         continuousTranscriptView.setText(display.toString());
