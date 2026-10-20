@@ -95,12 +95,18 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         if (stopped || delivered) return;
         String text = extractText(json, "text");
         if (text.isEmpty()) return;
+
+        // Vosk's SpeechService can keep listening after an endpoint result.
+        // Deliver one utterance, ignore a possible duplicate final callback,
+        // then re-arm delivery without destroying the recognizer/model.
         delivered = true;
         Listener callback = listener;
         if (callback != null) main.post(() -> {
-            callback.onText(text);
+            if (!stopped) callback.onText(text);
         });
-        stop();
+        main.postDelayed(() -> {
+            if (!stopped) delivered = false;
+        }, 1200);
     }
 
     @Override public void onError(Exception e) {
