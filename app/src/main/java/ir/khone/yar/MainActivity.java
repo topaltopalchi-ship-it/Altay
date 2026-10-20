@@ -1689,9 +1689,81 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    private boolean awaitingArchiveCorrection = false;
+    private String archiveCorrectionTarget = "";
+
+    private void handleArchiveVoiceCommand(String raw, String normalized) {
+        String compact = normalized.replace("‌", "").replace(" ", "");
+        if (awaitingArchiveCorrection) {
+            String corrected = raw.trim();
+            String oldAll = prefs.getString("entries", "");
+            String[] rows = oldAll.isEmpty() ? new String[0] : oldAll.split("\\n");
+            boolean changed = false;
+            StringBuilder kept = new StringBuilder();
+            for (String row : rows) {
+                if (!changed && row.toLowerCase(Locale.ROOT).contains(archiveCorrectionTarget.toLowerCase(Locale.ROOT))) {
+                    if (kept.length() > 0) kept.append("\\n");
+                    kept.append(corrected);
+                    changed = true;
+                } else {
+                    if (kept.length() > 0) kept.append("\\n");
+                    kept.append(row);
+                }
+            }
+            awaitingArchiveCorrection = false;
+            archiveCorrectionTarget = "";
+            if (changed) {
+                prefs.edit().putString("entries", kept.toString()).apply();
+                entries.clear();
+                for (String row : kept.toString().split("\\n")) if (!row.trim().isEmpty()) entries.add(row);
+                refresh();
+                status.setText("شرح مورد در آرشیو اصلاح شد. توجه: جمع مبالغ و تاریخچهٔ تحلیلی ممکن است نیاز به اصلاح جداگانه داشته باشد.");
+            } else status.setText("موردی با آن نام در آرشیو پیدا نشد؛ چیزی تغییر نکرد.");
+            return;
+        }
+        if (compact.startsWith("اصلاح")) {
+            String target = normalized.replaceFirst("^اصلاح(\\s+کن)?\\s*", "").trim();
+            if (target.isEmpty()) {
+                status.setText("بعد از «اصلاح» نام مورد را هم بگو؛ مثلاً «اصلاح پنیر».");
+                return;
+            }
+            archiveCorrectionTarget = target;
+            awaitingArchiveCorrection = true;
+            status.setText("حالا شرح درست مورد «" + target + "» را کامل بگو تا در آرشیو جایگزین شود.");
+            return;
+        }
+        if (compact.startsWith("پاککن") || compact.startsWith("حذفکن")) {
+            String target = normalized.replaceFirst("^(پاک\\s*کن|حذف\\s*کن)\\s*", "").trim();
+            if (target.isEmpty()) {
+                status.setText("برای جلوگیری از حذف اشتباهی، نام مورد را هم بگو؛ مثلاً «پاک کن پنیر».");
+                return;
+            }
+            String oldAll = prefs.getString("entries", "");
+            StringBuilder kept = new StringBuilder();
+            int removed = 0;
+            for (String row : oldAll.split("\\n")) {
+                if (row.toLowerCase(Locale.ROOT).contains(target.toLowerCase(Locale.ROOT))) { removed++; continue; }
+                if (kept.length() > 0) kept.append("\\n");
+                kept.append(row);
+            }
+            if (removed > 0) {
+                prefs.edit().putString("entries", kept.toString()).apply();
+                entries.clear();
+                for (String row : kept.toString().split("\\n")) if (!row.trim().isEmpty()) entries.add(row);
+                refresh();
+                status.setText(removed + " مورد از فهرست آرشیو نمایش‌داده‌شده حذف شد. جمع کل و تاریخچهٔ تحلیلی به‌صورت خودکار تغییر نکرده‌اند.");
+            } else status.setText("موردی با نام «" + target + "» در آرشیو پیدا نشد.");
+        }
+    }
+
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
+        String compactCommand = s.replace("‌", "").replace(" ", "");
+        if (compactCommand.startsWith("پاککن") || compactCommand.startsWith("حذفکن") || compactCommand.startsWith("اصلاح")) {
+            handleArchiveVoiceCommand(raw, s);
+            return;
+        }
 
         // Accept a complete spoken expense command, including category and subgroup,
         // in one utterance: "خانه، لوازم خانه، پنج میلیون، خرید ماشین ظرف‌شویی".
