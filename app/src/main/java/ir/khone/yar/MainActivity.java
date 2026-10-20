@@ -431,7 +431,7 @@ public class MainActivity extends Activity {
     private String[] subgroupNames(String category) {
         // This bucket is also used for dashboard/voice expenses that have no explicit subgroup.
         // Keep it available in every category so dated calendar entries can be opened in the archive.
-        if ("خانه".equals(category)) return new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه", "خریدهای روزانه"};
+        if ("خانه".equals(category)) return new String[]{"مواد غذایی", "لبنیات", "نوشیدنی‌ها", "میوه و سبزیجات", "گوشت و پروتئین", "نان و شیرینی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه", "خریدهای روزانه"};
         if ("ماشین".equals(category)) return new String[]{"سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه‌های ماشین", "خریدهای روزانه"};
         if ("مدرسه".equals(category)) return new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه", "خریدهای روزانه"};
         if ("مغازه".equals(category)) return new String[]{"خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه‌های مغازه", "خریدهای روزانه"};
@@ -2447,13 +2447,27 @@ public class MainActivity extends Activity {
         StringBuilder b=new StringBuilder(); for(String e:entries)b.append(e).append("\n");
         prefs.edit().putString("entries",b.toString()).apply();
     }
+    private String inferPurchaseSubgroup(String category, String item) {
+        String value = item == null ? "" : item.trim().toLowerCase(Locale.ROOT)
+            .replace('ي', 'ی').replace('ك', 'ک');
+        if ("خانه".equals(category)) {
+            if (value.matches(".*(نوشابه|آب معدنی|آبمیوه|آب میوه|دوغ|دلستر|نوشیدنی|چای|قهوه|شربت).*")) return "نوشیدنی‌ها";
+            if (value.matches(".*(پنیر|شیر|ماست|کره|خامه|کشک|دوغ|بستنی|لبنیات).*")) return "لبنیات";
+            if (value.matches(".*(سیب|موز|پرتقال|خیار|گوجه|کاهو|میوه|سبزی|هویج|پیاز|سیب زمینی).*")) return "میوه و سبزیجات";
+            if (value.matches(".*(گوشت|مرغ|ماهی|تخم مرغ|تخم‌مرغ|سوسیس|کالباس|پروتئین).*")) return "گوشت و پروتئین";
+            if (value.matches(".*(نان|باگت|شیرینی|کیک|بیسکویت).*")) return "نان و شیرینی";
+            if (value.matches(".*(برنج|روغن|ماکارونی|قند|شکر|حبوبات|رب|ادویه|ماکارونی|آرد).*")) return "مواد غذایی";
+        }
+        if ("مغازه".equals(category)) return "خرید کالا";
+        return "خریدهای روزانه";
+    }
+
     private void recordExpenseHistory(String type, String title, long amount) {
         String[] parts = title.split(" — ", 2);
-        // Dashboard/voice entries often arrive without a subgroup prefix.
-        // Give these records a stable archive bucket instead of leaving subgroup blank,
-        // which made them invisible in subgroup archives even though the calendar stored them.
-        String subgroup = parts.length > 1 ? parts[0].trim() : "خریدهای روزانه";
         String item = (parts.length > 1 ? parts[1] : parts[0]).trim();
+        // Keep an explicitly selected subgroup. Dashboard/voice entries are classified
+        // by item name so drinks, dairy, produce, etc. land in their relevant archive.
+        String subgroup = parts.length > 1 ? parts[0].trim() : inferPurchaseSubgroup(type, item);
         long timestamp = System.currentTimeMillis();
         String row = timestamp + "\t" + type.replace('\t', ' ') + "\t" + subgroup.replace('\t', ' ') + "\t" + item.replace('\t', ' ') + "\t" + amount;
         String old = prefs.getString("oba_expense_history", "");
