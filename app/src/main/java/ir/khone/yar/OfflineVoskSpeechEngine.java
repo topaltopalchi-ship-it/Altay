@@ -23,6 +23,9 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     }
 
     private final Handler main = new Handler(Looper.getMainLooper());
+    // Keep the heavy Vosk model in memory between utterances to avoid reloading it on every tap.
+    private static volatile Model sharedModel;
+    private static final Object MODEL_LOCK = new Object();
     private final ExecutorService loader = Executors.newSingleThreadExecutor();
     private volatile boolean stopped = false;
     private volatile boolean delivered = false;
@@ -38,14 +41,22 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         loader.execute(() -> {
             try {
                 if (stopped) return;
-                postStatus("در حال بازکردن مدل Vosk؛ اگر برنامه بسته شد، احتمالاً فایل مدل یا حافظه مشکل دارد…");
-                Model loaded = new Model(modelDirectory.getAbsolutePath());
-                if (stopped) {
-                    loaded.close();
-                    return;
+                Model loaded = sharedModel;
+                if (loaded == null) {
+                    postStatus("بار اول است؛ مدل گفتار فارسی را در حافظه آماده می‌کنم. ممکن است چند لحظه طول بکشد…");
+                    synchronized (MODEL_LOCK) {
+                        loaded = sharedModel;
+                        if (loaded == null) {
+                            loaded = new Model(modelDirectory.getAbsolutePath());
+                            sharedModel = loaded;
+                        }
+                    }
+                } else {
+                    postStatus("مدل گفتار آماده است؛ میکروفون را روشن می‌کنم…");
                 }
+                if (stopped) return;
                 model = loaded;
-                Recognizer recognizer = new Recognizer(model, 16000.0f);
+                Recognizer recognizer = new Recognizer(loaded, 16000.0f);
                 SpeechService service = new SpeechService(recognizer, 16000.0f);
                 speechService = service;
                 if (stopped) {
@@ -70,11 +81,8 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         if (service != null) {
             try { service.stop(); } catch (Exception ignored) {}
         }
-        Model loaded = model;
+        // Keep sharedModel alive for the next voice command; closing it here forces a slow reload.
         model = null;
-        if (loaded != null) {
-            try { loaded.close(); } catch (Exception ignored) {}
-        }
     }
 
     @Override public void onPartialResult(String hypothesis) {
