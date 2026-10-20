@@ -34,6 +34,8 @@ public class VoiceWakeService extends Service {
     public static final String ACTION_STOP = "ir.khone.yar.WAKE_STOP";
     public static final String ACTION_PAUSE = "ir.khone.yar.WAKE_PAUSE";
     private static final String CHANNEL_ID = "khoneyar_wake_channel";
+    private static final String WAKE_ALERT_CHANNEL_ID = "khoneyar_wake_alert_channel";
+    private static final int WAKE_ALERT_NOTIFICATION_ID = 7104;
     private static final int NOTIFICATION_ID = 7102;
     private static final String MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.5.zip";
     private static final String MODEL_DIR_NAME = "vosk-model-fa";
@@ -191,16 +193,18 @@ public class VoiceWakeService extends Service {
 
     private void openApp() {
         if (stopping) return;
+        // Android 10+ can silently block activities launched from a background service.
+        // Try opening directly, but always provide a visible, tappable fallback notification.
         Intent launch = new Intent(this, MainActivity.class);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP |
             Intent.FLAG_ACTIVITY_SINGLE_TOP);
         try {
             startActivity(launch);
         } catch (Exception ignored) {
-            updateNotification("اوبا شنیده شد؛ برای بازکردن برنامه اعلان را لمس کن");
+            // The notification below remains the reliable user-initiated route.
         }
-        // Do not restart microphone capture while MainActivity is foreground.
-        // MainActivity resumes wake listening when it leaves the foreground.
+        showWakeDetectedNotification();
+        // Keep capture paused until the user opens the app; MainActivity resumes it on exit.
     }
 
     private void listenAgain() {
@@ -296,14 +300,26 @@ public class VoiceWakeService extends Service {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "شنیدن نام OBA", NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("اعلان سرویس تشخیص آفلاین نام OBA");
             NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) manager.createNotificationChannel(channel);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+                NotificationChannel alertChannel = new NotificationChannel(
+                    WAKE_ALERT_CHANNEL_ID, "اوبا شنیده شد", NotificationManager.IMPORTANCE_HIGH);
+                alertChannel.setDescription("برای بازکردن OBA پس از شنیدن کلمه اوبا");
+                manager.createNotificationChannel(alertChannel);
+            }
         }
     }
 
-    private Notification buildNotification(String text) {
+    private PendingIntent appPendingIntent(int requestCode) {
         Intent open = new Intent(this, MainActivity.class);
-        PendingIntent pending = PendingIntent.getActivity(this, 7103, open,
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP |
+            Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        return PendingIntent.getActivity(this, requestCode, open,
             PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
+    }
+
+    private Notification buildNotification(String text) {
+        PendingIntent pending = appPendingIntent(7103);
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, CHANNEL_ID) : new Notification.Builder(this);
         builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
@@ -313,6 +329,20 @@ public class VoiceWakeService extends Service {
             .setOngoing(true)
             .setOnlyAlertOnce(true);
         return builder.build();
+    }
+
+    private void showWakeDetectedNotification() {
+        Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+            ? new Notification.Builder(this, WAKE_ALERT_CHANNEL_ID) : new Notification.Builder(this);
+        builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("OBA آماده است")
+            .setContentText("کلمهٔ «اوبا» شنیده شد؛ برای بازکردن برنامه لمس کن")
+            .setContentIntent(appPendingIntent(7104))
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(false);
+        if (Build.VERSION.SDK_INT < 26) builder.setPriority(Notification.PRIORITY_HIGH);
+        NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (manager != null) manager.notify(WAKE_ALERT_NOTIFICATION_ID, builder.build());
     }
 
     private void updateNotification(String text) {
