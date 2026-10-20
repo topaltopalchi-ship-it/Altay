@@ -955,8 +955,23 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
             return;
         }
-        // Diagnostic configuration: use Vosk for recognition and Android system TTS.
-        ensureVoskModelAndStart(mode);
+
+        // The wake-word service also owns the microphone. Stop it before starting Vosk,
+        // otherwise Vosk may appear to do nothing while Android keeps the mic busy.
+        try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
+        prefs.edit().putBoolean("wake_enabled", false).apply();
+        if (wakeButton != null) {
+            wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
+        }
+        if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
+        Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
+
+        // Give Android a moment to release the microphone from the wake-word service.
+        if (root != null) {
+            root.postDelayed(() -> ensureVoskModelAndStart(mode), 500);
+        } else {
+            ensureVoskModelAndStart(mode);
+        }
     }
 
     private void startPlatformVoice(String mode) {
