@@ -14,24 +14,8 @@ public class BootReceiver extends BroadcastReceiver {
 
         ReminderReceiver.restore(context);
 
-        // Android 14+ restricts starting a microphone foreground service directly
-        // from BOOT_COMPLETED. On older Android versions, restore the listener when
-        // the user has already granted microphone access and enabled OBA once.
-        if (Build.VERSION.SDK_INT >= 34) return;
-        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) return;
-
+        // Voice wake-up is disabled. Only restore reminders after device restart.
         SharedPreferences prefs = context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE);
-        if (!prefs.getBoolean("wake_enabled", false)
-                || OfflineModelDownloader.getInstalledModelDirectory(context) == null) return;
-
-        Intent service = new Intent(context, VoiceWakeService.class);
-        service.setAction(VoiceWakeService.ACTION_START);
-        try {
-            if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
-            else context.startService(service);
-        } catch (Exception ignored) {
-            // The next foreground app launch will retry starting the wake listener.
-        }
+        prefs.edit().putBoolean("wake_enabled", false).apply();
     }
 }
