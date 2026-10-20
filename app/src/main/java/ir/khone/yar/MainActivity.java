@@ -179,6 +179,7 @@ public class MainActivity extends Activity {
         voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
         commitContinuousButton = button("تأیید و ثبت همه", Color.WHITE, dark, 13);
         commitContinuousButton.setOnClickListener(v -> commitPendingVoiceExpenses());
+        commitContinuousButton.setVisibility(View.GONE);
         Button clearContinuousButton = button("پاک‌کردن فهرست", Color.WHITE, dark, 13);
         clearContinuousButton.setOnClickListener(v -> clearPendingVoiceExpenses());
         voiceReviewRow.addView(commitContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
@@ -1165,6 +1166,22 @@ public class MainActivity extends Activity {
     private void handleContinuousExpense(String raw) {
         String normalized = normalize(raw).trim();
         if (normalized.isEmpty()) return;
+
+        String saveCommand = normalized.replace("‌", "").replace(" ", "");
+        if (saveCommand.contains("ذخیرهکن") || saveCommand.contains("ثبتکن") ||
+            saveCommand.contains("تمامشدذخیرهکن") || saveCommand.contains("هزینههاتمامشد")) {
+            continuousExpenseListening = false;
+            if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
+            if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
+            awaitingVoiceConfirmation = false;
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  فعال‌سازی ثبت صوتی هزینه‌ها");
+            if (!unfinishedVoiceExpense.trim().isEmpty()) {
+                if (status != null) status.setText("آخرین مورد هنوز با «تومان» کامل نشده؛ لطفاً مبلغ آن را همراه کلمهٔ تومان بگو، سپس «ذخیره کن» را تکرار کن.");
+                return;
+            }
+            commitPendingVoiceExpenses();
+            return;
+        }
 
         if (normalized.startsWith("اصلاح")) {
             String target = normalized.replaceFirst("^اصلاح( مورد)?( کن)?\\s*", "").trim();
