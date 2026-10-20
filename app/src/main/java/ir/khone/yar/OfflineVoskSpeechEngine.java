@@ -30,10 +30,16 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     private Model model;
     private SpeechService speechService;
     private Listener listener;
+    private volatile boolean continuousMode = false;
 
     public void start(Context context, File modelDirectory, Listener callback) {
+        start(context, modelDirectory, callback, false);
+    }
+
+    public void start(Context context, File modelDirectory, Listener callback, boolean continuous) {
         stopped = false;
         delivered = false;
+        continuousMode = continuous;
         listener = callback;
         postStatus("مدل Vosk دانلود شده؛ در حال بارگذاری فایل‌های مدل در حافظه…");
         loader.execute(() -> {
@@ -90,11 +96,25 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     }
 
     @Override public void onResult(String hypothesis) {
-        deliverResult(hypothesis);
+        if (continuousMode) {
+            deliverContinuousResult(hypothesis);
+        } else {
+            deliverResult(hypothesis);
+        }
     }
 
     @Override public void onFinalResult(String hypothesis) {
-        deliverResult(hypothesis);
+        if (!continuousMode) deliverResult(hypothesis);
+    }
+
+    private void deliverContinuousResult(String json) {
+        if (stopped) return;
+        String text = extractText(json, "text");
+        if (text.isEmpty()) return;
+        Listener callback = listener;
+        if (callback != null) main.post(() -> {
+            if (!stopped) callback.onText(text);
+        });
     }
 
     private void deliverResult(String json) {
@@ -104,7 +124,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         delivered = true;
         Listener callback = listener;
         if (callback != null) main.post(() -> {
-            callback.onText(text);
+            if (!stopped) callback.onText(text);
         });
         stop();
     }
@@ -118,6 +138,10 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
 
     @Override public void onTimeout() {
         if (stopped || delivered) return;
+        if (continuousMode) {
+            postStatus("🎙 هنوز فعال هستم؛ صحبت کن. متن‌های قبلی در فهرست می‌مانند.");
+            return;
+        }
         postError("صدایی تشخیص داده نشد؛ دوباره تلاش کن.");
         stop();
     }
