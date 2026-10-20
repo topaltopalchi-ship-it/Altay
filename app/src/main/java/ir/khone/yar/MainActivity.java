@@ -1088,9 +1088,21 @@ public class MainActivity extends Activity {
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
-                if (isFinishing()) return;
-                if (status != null) status.setText("دانلود خودکار Vosk انجام نشد: " + message + "؛ اینترنت را بررسی کن و دکمهٔ صوتی را بزن تا دوباره تلاش شود.");
-                Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود: " + message, Toast.LENGTH_LONG).show();
+                if (isFinishing() || isDestroyed()) return;
+                if (status != null) status.setText("دانلود مدل فارسی قطع شد؛ اوبا خودش دوباره تلاش می‌کند. علت: " + message);
+                // Retry automatically after network failures. Do not require the user to
+                // press the microphone button again; the download starts again while the
+                // activity is alive, with a capped delay to avoid hammering the server.
+                final long retryDelayMs = 15000L;
+                if (root != null) {
+                    root.postDelayed(() -> {
+                        if (!isFinishing() && !isDestroyed()
+                                && OfflineModelDownloader.getInstalledModelDirectory(MainActivity.this) == null
+                                && !downloadingVoskModel) {
+                            downloadVoskModelAutomatically();
+                        }
+                    }, retryDelayMs);
+                }
             }
         });
     }
