@@ -1369,24 +1369,39 @@ public class MainActivity extends Activity {
         }
         int saved = 0;
         StringBuilder rejected = new StringBuilder();
+        ArrayList<String> failed = new ArrayList<>();
         for (String raw : new ArrayList<>(pendingVoiceExpenses)) {
             String[] parsed = parseContinuousExpense(raw);
             if (parsed == null) {
                 rejected.append("• ").append(raw).append("\n");
+                failed.add(raw);
                 continue;
             }
-            long amount = Long.parseLong(parsed[1]);
+            long amount;
+            try { amount = Long.parseLong(parsed[1]); }
+            catch (Exception ex) {
+                rejected.append("• ").append(raw).append("\n");
+                failed.add(raw);
+                continue;
+            }
+            if (amount <= 0 || parsed[0].trim().isEmpty()) {
+                rejected.append("• ").append(raw).append("\n");
+                failed.add(raw);
+                continue;
+            }
             expenseTotal += amount;
-            prefs.edit().putLong("expense", expenseTotal).apply();
+            prefs.edit().putLong("expense", expenseTotal).commit();
             addEntry("خانه", parsed[0], amount);
             saved++;
         }
+        // Never discard a phrase that could not be parsed: leave it visible for correction.
         pendingVoiceExpenses.clear();
+        pendingVoiceExpenses.addAll(failed);
         correctingNextVoicePhrase = false;
         liveVoicePartial = "";
         updateContinuousTranscript();
         refresh();
-        if (status != null) status.setText(saved + " مورد ثبت شد." + (rejected.length() > 0 ? " این موارد به‌دلیل نامشخص بودن شرح یا مبلغ ثبت نشدند: " + rejected : ""));
+        if (status != null) status.setText(saved + " مورد ثبت شد." + (rejected.length() > 0 ? " این موارد ثبت نشدند و در فهرست باقی ماندند؛ متن را اصلاح کن: " + rejected : ""));
     }
 
     private void startVoice(String mode) {
