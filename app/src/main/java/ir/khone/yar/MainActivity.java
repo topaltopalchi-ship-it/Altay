@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
     private TextToSpeech tts;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
+    private boolean startVoiceAfterVoskDownload = false;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
@@ -99,6 +100,11 @@ public class MainActivity extends Activity {
             }
         });
         buildUi();
+        // Download the offline Persian speech model on first launch after the APK is installed.
+        // This does not request microphone access or start listening; it only prepares Vosk.
+        if (OfflineModelDownloader.getInstalledModelDirectory(this) == null) {
+            root.postDelayed(() -> ensureVoskModelDownloaded(), 800);
+        }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
         }
@@ -1062,18 +1068,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void ensureVoskModelDownloaded() {
+        ensureVoskModel(null, false);
+    }
+
     private void ensureVoskModelAndStart(String mode) {
+        pendingMode = mode;
+        startVoiceAfterVoskDownload = true;
+        ensureVoskModel(mode, true);
+    }
+
+    private void ensureVoskModel(String mode, boolean startVoiceWhenReady) {
         File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
         if (modelDirectory != null) {
-            startOfflineVoice(mode, modelDirectory);
+            if (startVoiceWhenReady) {
+                startVoiceAfterVoskDownload = false;
+                startOfflineVoice(mode, modelDirectory);
+            } else if (status != null) {
+                status.setText("مدل گفتار فارسی آماده است؛ برای صحبت، دکمهٔ صوتی را بزن.");
+            }
             return;
         }
         if (downloadingVoskModel) {
+            if (startVoiceWhenReady) startVoiceAfterVoskDownload = true;
             if (status != null) status.setText("دانلود مدل Vosk در حال انجام است؛ کمی صبر کن…");
             return;
         }
+
         downloadingVoskModel = true;
-        if (status != null) status.setText("در حال دانلود مدل تشخیص گفتار فارسی Vosk…");
+        if (status != null) status.setText("در حال دانلود خودکار مدل گفتار فارسی Vosk…");
         OfflineModelDownloader.downloadModel(this, new OfflineModelDownloader.Callback() {
             @Override public void onProgress(long downloadedBytes, long totalBytes) {
                 if (status == null || isFinishing()) return;
@@ -1084,16 +1107,20 @@ public class MainActivity extends Activity {
                     status.setText("در حال دانلود مدل Vosk…");
                 }
             }
+
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                if (status != null) status.setText("مدل تشخیص گفتار فارسی Vosk نصب شد؛ میکروفون را شروع می‌کنم…");
-                startOfflineVoice(mode, installedDirectory);
+                if (status != null) status.setText("مدل گفتار فارسی Vosk با موفقیت آماده شد.");
+                boolean shouldStartVoice = startVoiceAfterVoskDownload;
+                startVoiceAfterVoskDownload = false;
+                if (shouldStartVoice) startOfflineVoice(pendingMode, installedDirectory);
             }
+
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
-                if (status != null) status.setText("دانلود مدل Vosk ناموفق بود: " + message);
+                if (status != null) status.setText("دانلود مدل Vosk ناموفق بود: " + message + "؛ برای تلاش دوباره دکمهٔ صوتی را بزن.");
                 Toast.makeText(MainActivity.this, "دانلود مدل Vosk ناموفق بود: " + message, Toast.LENGTH_LONG).show();
             }
         });
