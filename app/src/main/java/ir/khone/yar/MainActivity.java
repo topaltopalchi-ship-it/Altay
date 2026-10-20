@@ -1134,6 +1134,17 @@ public class MainActivity extends Activity {
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                     recordVoiceCalendar(text);
                     handleVoice(text);
+                    // Clear the previous sentence after a short pause. The Vosk
+                    // engine remains active, ready to receive the next sentence
+                    // without requiring another tap on the microphone button.
+                    if (status != null) {
+                        status.removeCallbacksAndMessages(null);
+                        status.postDelayed(() -> {
+                            if (!isFinishing() && status != null) {
+                                status.setText("🎙 آماده‌ام؛ جملهٔ بعدی را بگو.");
+                            }
+                        }, 1800);
+                    }
                 }
                 @Override public void onError(String message) {
                     if (status != null && !isFinishing()) status.setText(message);
