@@ -594,7 +594,7 @@ public class MainActivity extends Activity {
                 String history = prefs.getString("oba_expense_history", "");
                 java.util.LinkedHashMap<String, Long> totalsByCategory = new java.util.LinkedHashMap<>();
                 java.util.LinkedHashMap<String, java.util.List<String>> detailsByCategory = new java.util.LinkedHashMap<>();
-                String[] categories = {"خانه", "مدرسه", "ماشین", "سلامت", "سایر"};
+                String[] categories = {"خانه", "مدرسه", "ماشین", "مغازه", "سلامت", "سایر"};
                 for (String category : categories) { totalsByCategory.put(category, 0L); detailsByCategory.put(category, new java.util.ArrayList<>()); }
                 long dayTotal = 0L;
                 if (!history.trim().isEmpty()) for (String row : history.split("\\n")) {
@@ -1077,36 +1077,16 @@ public class MainActivity extends Activity {
     }
 
     private void showEntryMethodDialog(String category, String subgroup) {
-        // Keep subgroup entry and its archive connected to the same expense history.
-        LinearLayout options = new LinearLayout(this);
-        options.setOrientation(LinearLayout.VERTICAL);
-        options.setPadding(dp(8), dp(4), dp(8), dp(4));
-
-        Button register = button("✍️  ثبت هزینه", Color.WHITE, Color.WHITE, 17);
-        register.setMinHeight(dp(54));
-        register.setOnClickListener(v -> {
-            // Close the subgroup chooser before opening the actual registration form.
-            ((AlertDialog) v.getTag()).dismiss();
-            showCategoryExpenseForm(category, subgroup);
-        });
-
+        // Subgroups remain archive-only; expense entry is handled on the dashboard.
         Button archive = button("🗂️  آرشیو خریدها", Color.WHITE, Color.WHITE, 17);
         archive.setMinHeight(dp(54));
-        archive.setOnClickListener(v -> {
-            ((AlertDialog) v.getTag()).dismiss();
-            showSubgroupPurchaseArchive(category, subgroup);
-        });
+        archive.setOnClickListener(v -> showSubgroupPurchaseArchive(category, subgroup));
 
-        options.addView(register, lp(-1, -2, 0, 0, 0, 8));
-        options.addView(archive, lp(-1, -2, 0, 0, 0, 0));
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
-            .setView(options)
+            .setView(archive)
             .setNegativeButton("بستن", null)
-            .create();
-        register.setTag(dialog);
-        archive.setTag(dialog);
-        dialog.show();
+            .show();
     }
 
     private void showSubgroupPurchaseArchive(String category, String subgroup) {
