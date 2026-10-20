@@ -88,7 +88,10 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     @Override public void onPartialResult(String hypothesis) {
         if (stopped) return;
         String text = extractText(hypothesis, "partial");
-        if (!text.isEmpty()) postStatus("شنیدم: " + text);
+        if (!text.isEmpty()) {
+            delivered = false;
+            postStatus("🎙 اوبا گوش می‌دهد: " + text);
+        }
     }
 
     @Override public void onResult(String hypothesis) {
@@ -108,7 +111,9 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
         if (callback != null) main.post(() -> {
             callback.onText(text);
         });
-        stop();
+        // Keep the recognizer and loaded model alive so the next utterance
+        // can be recognized without reopening the large Vosk model.
+        delivered = false;
     }
 
     @Override public void onError(Exception e) {
