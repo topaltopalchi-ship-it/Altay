@@ -1568,9 +1568,37 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(w<0?w:dp(w),h<0?h:dp(h)); p.setMargins(dp(l),dp(t),dp(r),dp(b)); return p;
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
+    @Override protected void onResume() {
+        super.onResume();
+        // Pause the background wake listener while this screen may use speech recognition.
+        if (prefs != null && prefs.getBoolean("wake_enabled", false)) {
+            Intent pause = new Intent(this, VoiceWakeService.class);
+            pause.setAction(VoiceWakeService.ACTION_PAUSE);
+            try { startService(pause); } catch (Exception ignored) {}
+        }
+    }
+
+    @Override protected void onPause() {
+        // Resume wake-word detection when the app leaves the foreground.
+        if (prefs != null && prefs.getBoolean("wake_enabled", false)) {
+            Intent resume = new Intent(this, VoiceWakeService.class);
+            resume.setAction(VoiceWakeService.ACTION_START);
+            try { startService(resume); } catch (Exception ignored) {}
+        }
+        super.onPause();
+    }
+
     @Override protected void onDestroy() {
-        if(recognizer!=null) recognizer.destroy();
-        if(tts!=null) tts.shutdown();
+        if(recognizer!=null) {
+            try { recognizer.cancel(); } catch (Exception ignored) {}
+            recognizer.destroy();
+            recognizer = null;
+        }
+        if(tts!=null) {
+            tts.stop();
+            tts.shutdown();
+            tts = null;
+        }
         super.onDestroy();
     }
 }
