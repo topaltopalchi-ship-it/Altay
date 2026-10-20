@@ -8,6 +8,9 @@ import android.app.PendingIntent;
 import android.os.Build;
 import android.provider.Settings;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -48,6 +51,17 @@ public class MainActivity extends Activity {
     private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
+    private boolean voiceReceiverRegistered = false;
+    private final BroadcastReceiver voiceResultReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            String transcript = intent == null ? "" : intent.getStringExtra(VoiceWakeService.EXTRA_TRANSCRIPT);
+            if (transcript == null || transcript.trim().isEmpty()) {
+                status.setText("صدایی تشخیص داده نشد؛ واضح‌تر صحبت کن و دوباره تلاش کن.");
+                return;
+            }
+            handleVoice(transcript);
+        }
+    };
     private Button wakeButton;
     private TextToSpeech tts;
     private String pendingMode = "auto";
@@ -67,6 +81,7 @@ public class MainActivity extends Activity {
         loadEntries();
         tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
         buildUi();
+        registerVoiceResultReceiver();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
         }
@@ -919,49 +934,18 @@ public class MainActivity extends Activity {
 
     private void startVoice(String mode) {
         pendingMode = mode;
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("تشخیص گفتار در دسترس نیست؛ سرویس گفتار Google و زبان فارسی را در گوشی بررسی کن.");
-            say("تشخیص گفتار در این گوشی در دسترس نیست"); return;
-        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION); return;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
         }
+        status.setText("🎙 تشخیص گفتار آفلاین آماده می‌شود؛ در اولین استفاده، مدل Vosk دانلود می‌شود…");
+        Intent transcribe = new Intent(this, VoiceWakeService.class);
+        transcribe.setAction(VoiceWakeService.ACTION_TRANSCRIBE);
         try {
-            if (recognizer != null) { recognizer.destroy(); recognizer = null; }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
-                public void onReadyForSpeech(Bundle b) { status.setText("🎙 گوش می‌دهم… حالا صحبت کن"); }
-                public void onBeginningOfSpeech() { status.setText("صدایت دریافت شد…"); }
-                public void onRmsChanged(float r) {}
-                public void onBufferReceived(byte[] b) {}
-                public void onEndOfSpeech() { status.setText("در حال فهمیدن صحبتت…"); }
-                public void onError(int e) {
-                    String msg = e == SpeechRecognizer.ERROR_NO_MATCH ? "متوجه نشدم؛ آرام‌تر و با مبلغ واضح بگو." :
-                        e == SpeechRecognizer.ERROR_NETWORK ? "سرویس تشخیص گفتار به اینترنت نیاز دارد یا اتصال قطع است." :
-                        "تشخیص صدا انجام نشد. دوباره تلاش کن.";
-                    status.setText(msg); say(msg);
-                }
-                public void onResults(Bundle b) {
-                    ArrayList<String> result = b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (result != null && !result.isEmpty()) handleVoice(result.get(0));
-                }
-                public void onPartialResults(Bundle b) {}
-                public void onEvent(int a, Bundle b) {}
-            });
-            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
-            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "با آرامش جزئیات هزینه، مبلغ و توضیحات را کامل بگو؛ برای پایان صحبت مکث کن");
-            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-            // Ask the speech service to wait longer before deciding the user has finished.
-            // Actual limits depend on the speech-recognition app installed on the device.
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS", 10000L);
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS", 6000L);
-            intent.putExtra("android.speech.extra.SPEECH_INPUT_MINIMUM_LENGTH_MILLIS", 15000L);
-            recognizer.startListening(intent);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(transcribe);
+            else startService(transcribe);
         } catch (Exception e) {
-            status.setText("شروع میکروفون ممکن نشد؛ مجوز میکروفون و سرویس گفتار را بررسی کن.");
+            status.setText("شروع تشخیص آفلاین ممکن نشد؛ مجوز میکروفون و اجرای سرویس را بررسی کن.");
         }
     }
 
@@ -1588,7 +1572,19 @@ public class MainActivity extends Activity {
         super.onPause();
     }
 
+    private void registerVoiceResultReceiver() {
+        if (voiceReceiverRegistered) return;
+        IntentFilter filter = new IntentFilter(VoiceWakeService.ACTION_TRANSCRIPT_RESULT);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(voiceResultReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(voiceResultReceiver, filter);
+        voiceReceiverRegistered = true;
+    }
+
     @Override protected void onDestroy() {
+        if (voiceReceiverRegistered) {
+            try { unregisterReceiver(voiceResultReceiver); } catch (Exception ignored) {}
+            voiceReceiverRegistered = false;
+        }
         if(recognizer!=null) {
             try { recognizer.cancel(); } catch (Exception ignored) {}
             recognizer.destroy();
