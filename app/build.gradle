@@ -1,9 +1,6 @@
 plugins { id 'com.android.application' }
 
 def releaseKeystorePath = System.getenv("OBA_KEYSTORE_PATH")
-def sherpaAarFile = file("$projectDir/libs/sherpa-onnx-1.13.8.aar")
-def sherpaAarUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar"
-def sherpaAarSha256 = "633c24321e06b1fe79feafa03ea16cbc0f8a286641e2da3559bac91bdb13bd96"
 
 android {
     namespace 'ir.khone.yar'
@@ -41,41 +38,9 @@ android {
     }
 }
 
-tasks.register("downloadSherpaOnnxAar") {
-    outputs.file(sherpaAarFile)
-    doLast {
-        def sha256 = { File f ->
-            java.security.MessageDigest.getInstance("SHA-256").digest(f.bytes)
-                .collect { String.format("%02x", it) }.join()
-        }
-        if (sherpaAarFile.isFile() && sha256(sherpaAarFile) == sherpaAarSha256) return
-        sherpaAarFile.parentFile.mkdirs()
-        def partial = new File(sherpaAarFile.parentFile, sherpaAarFile.name + ".part")
-        try {
-            new URL(sherpaAarUrl).withInputStream { input ->
-                partial.withOutputStream { output -> output << input }
-            }
-            if (sha256(partial) != sherpaAarSha256) {
-                throw new GradleException("sherpa-onnx AAR SHA-256 verification failed")
-            }
-            if (sherpaAarFile.exists()) sherpaAarFile.delete()
-            if (!partial.renameTo(sherpaAarFile)) {
-                throw new GradleException("Could not install downloaded sherpa-onnx AAR")
-            }
-        } finally {
-            if (partial.exists()) partial.delete()
-        }
-    }
-}
-
-tasks.configureEach {
-    if (name == "preBuild") dependsOn("downloadSherpaOnnxAar")
-}
-
 dependencies {
     implementation 'com.alphacephei:vosk-android:0.3.47'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
-    implementation files("libs/sherpa-onnx-1.13.8.aar")
     implementation 'org.apache.commons:commons-compress:1.27.1'
     testImplementation 'junit:junit:4.13.2'
 }
