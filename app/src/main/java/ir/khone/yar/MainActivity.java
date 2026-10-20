@@ -1698,61 +1698,100 @@ public class MainActivity extends Activity {
             String corrected = raw.trim();
             String oldAll = prefs.getString("entries", "");
             String[] rows = oldAll.isEmpty() ? new String[0] : oldAll.split("\\n");
-            boolean changed = false;
-            StringBuilder kept = new StringBuilder();
-            for (String row : rows) {
-                if (!changed && row.toLowerCase(Locale.ROOT).contains(archiveCorrectionTarget.toLowerCase(Locale.ROOT))) {
-                    if (kept.length() > 0) kept.append("\\n");
-                    kept.append(corrected);
-                    changed = true;
-                } else {
-                    if (kept.length() > 0) kept.append("\\n");
-                    kept.append(row);
-                }
+            java.util.ArrayList<Integer> matches = new java.util.ArrayList<>();
+            for (int i = 0; i < rows.length; i++) {
+                if (rows[i].toLowerCase(Locale.ROOT).contains(archiveCorrectionTarget.toLowerCase(Locale.ROOT))) matches.add(i);
             }
             awaitingArchiveCorrection = false;
-            archiveCorrectionTarget = "";
-            if (changed) {
-                prefs.edit().putString("entries", kept.toString()).apply();
+            if (matches.size() == 1) {
+                rows[matches.get(0)] = corrected;
+                StringBuilder saved = new StringBuilder();
+                for (String row : rows) { if (saved.length() > 0) saved.append("\n"); saved.append(row); }
+                prefs.edit().putString("entries", saved.toString()).apply();
                 entries.clear();
-                for (String row : kept.toString().split("\\n")) if (!row.trim().isEmpty()) entries.add(row);
+                for (String row : rows) if (!row.trim().isEmpty()) entries.add(row);
                 refresh();
-                status.setText("شرح مورد در آرشیو اصلاح شد. توجه: جمع مبالغ و تاریخچهٔ تحلیلی ممکن است نیاز به اصلاح جداگانه داشته باشد.");
+                status.setText("شرح مورد در آرشیو اصلاح شد. جمع مبالغ و تاریخچه تحلیلی هنوز جداگانه به‌روزرسانی نشده‌اند.");
+            } else if (matches.size() > 1) {
+                status.setText("چند مورد با نام «" + archiveCorrectionTarget + "» پیدا شد؛ برای جلوگیری از اصلاح اشتباه، فعلاً چیزی تغییر نکرد. نام مورد را همراه تاریخ یا مبلغ دقیق‌تر بگو.");
             } else status.setText("موردی با آن نام در آرشیو پیدا نشد؛ چیزی تغییر نکرد.");
+            archiveCorrectionTarget = "";
             return;
         }
         if (compact.startsWith("اصلاح")) {
             String target = normalized.replaceFirst("^اصلاح(\\s+کن)?\\s*", "").trim();
             if (target.isEmpty()) {
-                status.setText("بعد از «اصلاح» نام مورد را هم بگو؛ مثلاً «اصلاح پنیر».");
+                status.setText("بعد از «اصلاح» نام مورد را هم بگو؛ مثلاً «اصلاح پنیر، ۴ مهر».");
                 return;
             }
             archiveCorrectionTarget = target;
             awaitingArchiveCorrection = true;
-            status.setText("حالا شرح درست مورد «" + target + "» را کامل بگو تا در آرشیو جایگزین شود.");
+            status.setText("حالا شرح درست مورد «" + target + "» را کامل بگو. اگر چند مورد هم‌نام باشد، برای جلوگیری از اصلاح اشتباه چیزی تغییر نمی‌کند.");
             return;
         }
         if (compact.startsWith("پاککن") || compact.startsWith("حذفکن")) {
             String target = normalized.replaceFirst("^(پاک\\s*کن|حذف\\s*کن)\\s*", "").trim();
             if (target.isEmpty()) {
-                status.setText("برای جلوگیری از حذف اشتباهی، نام مورد را هم بگو؛ مثلاً «پاک کن پنیر».");
+                status.setText("برای حذف دقیق، نام کالا و در صورت امکان تاریخ را بگو؛ مثلاً «پاک کن پنیر، ۴ مهر».");
+                return;
+            }
+            // Never delete by a broad item-name match. Require one exact archive row and
+            // a confirmation dialog. If a date is spoken, it must be present in that row.
+            java.util.regex.Matcher dm = java.util.regex.Pattern
+                .compile("((?:[0-3]?[0-9])\\s*(?:مهر|آبان|آذر|دی|بهمن|اسفند|فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور))")
+                .matcher(target);
+            String requestedDate = "";
+            if (dm.find()) {
+                requestedDate = dm.group(1).replaceAll("\\s+", " ").trim();
+                target = (target.substring(0, dm.start()) + " " + target.substring(dm.end())).replaceAll("[،,]", " ").trim();
+            }
+            final String itemTarget = target;
+            final String dateTarget = requestedDate;
+            if (itemTarget.isEmpty()) {
+                status.setText("نام کالا مشخص نیست؛ مثلاً «پاک کن پنیر، ۴ مهر».");
                 return;
             }
             String oldAll = prefs.getString("entries", "");
-            StringBuilder kept = new StringBuilder();
-            int removed = 0;
-            for (String row : oldAll.split("\\n")) {
-                if (row.toLowerCase(Locale.ROOT).contains(target.toLowerCase(Locale.ROOT))) { removed++; continue; }
-                if (kept.length() > 0) kept.append("\\n");
-                kept.append(row);
+            String[] rows = oldAll.isEmpty() ? new String[0] : oldAll.split("\\n");
+            java.util.ArrayList<Integer> matches = new java.util.ArrayList<>();
+            for (int i = 0; i < rows.length; i++) {
+                String lower = rows[i].toLowerCase(Locale.ROOT);
+                if (!lower.contains(itemTarget.toLowerCase(Locale.ROOT))) continue;
+                if (!dateTarget.isEmpty() && !lower.contains(dateTarget.toLowerCase(Locale.ROOT))) continue;
+                matches.add(i);
             }
-            if (removed > 0) {
-                prefs.edit().putString("entries", kept.toString()).apply();
-                entries.clear();
-                for (String row : kept.toString().split("\\n")) if (!row.trim().isEmpty()) entries.add(row);
-                refresh();
-                status.setText(removed + " مورد از فهرست آرشیو نمایش‌داده‌شده حذف شد. جمع کل و تاریخچهٔ تحلیلی به‌صورت خودکار تغییر نکرده‌اند.");
-            } else status.setText("موردی با نام «" + target + "» در آرشیو پیدا نشد.");
+            if (matches.isEmpty()) {
+                if (!dateTarget.isEmpty()) {
+                    status.setText("هیچ ردیف آرشیوی با نام «" + itemTarget + "» و تاریخ «" + dateTarget + "» پیدا نشد. برای جلوگیری از حذف پنیرِ روز دیگر، چیزی حذف نشد؛ آرشیو فعلی تاریخ هر خرید را در متن ردیف ذخیره نمی‌کند.");
+                } else status.setText("موردی با نام «" + itemTarget + "» پیدا نشد؛ چیزی حذف نشد.");
+                return;
+            }
+            final String[] choices = new String[matches.size()];
+            for (int i = 0; i < matches.size(); i++) choices[i] = rows[matches.get(i)];
+            final int[] selected = new int[]{-1};
+            AlertDialog.Builder dialog = new AlertDialog.Builder(this)
+                .setTitle("انتخاب دقیق مورد برای حذف")
+                .setSingleChoiceItems(choices, -1, (d, which) -> selected[0] = which)
+                .setNegativeButton("انصراف", (d, w) -> status.setText("حذف لغو شد؛ آرشیو تغییری نکرد."))
+                .setPositiveButton("حذف مورد انتخاب‌شده", (d, w) -> {
+                    if (selected[0] < 0) {
+                        status.setText("هیچ موردی انتخاب نشد؛ چیزی حذف نشد.");
+                        return;
+                    }
+                    int rowIndex = matches.get(selected[0]);
+                    StringBuilder kept = new StringBuilder();
+                    for (int i = 0; i < rows.length; i++) {
+                        if (i == rowIndex) continue;
+                        if (kept.length() > 0) kept.append("\n");
+                        kept.append(rows[i]);
+                    }
+                    prefs.edit().putString("entries", kept.toString()).apply();
+                    entries.clear();
+                    for (String row : kept.toString().split("\\n")) if (!row.trim().isEmpty()) entries.add(row);
+                    refresh();
+                    status.setText("فقط همین ردیف از آرشیو نمایشی حذف شد. جمع هزینه‌ها و تاریخچه تحلیلی هنوز به‌روزرسانی نشده‌اند.");
+                });
+            dialog.show();
         }
     }
 
