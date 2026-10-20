@@ -1080,7 +1080,7 @@ public class MainActivity extends Activity {
                 String[] parts = row.split("\\t", -1);
                 if (parts.length < 5 || !category.equals(parts[1].trim()) || !subgroup.equals(parts[2].trim())) continue;
                 try {
-                    String date = new SimpleDateFormat("yyyy/MM/dd", new Locale("fa", "IR")).format(new Date(Long.parseLong(parts[0])));
+                    String date = formatPersianDate(new Date(Long.parseLong(parts[0])));
                     matches.add(date + " • " + parts[3].trim() + " • " + fmt(Long.parseLong(parts[4])) + " تومان");
                 } catch (Exception ignored) {}
             }
@@ -2222,6 +2222,38 @@ public class MainActivity extends Activity {
                 .replace("،"," ").replace("؟"," ").replace("رو"," ").replace("برای"," ").replace("تومن","تومان").trim();
     }
     private boolean contains(String s, String... words) { for(String w:words) if(s.contains(w)) return true; return false; }
+    // Convert a Gregorian date to the Persian Solar Hijri calendar (works on minSdk 23).
+    private String formatPersianDate(Date date) {
+        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        calendar.setTime(date);
+        int gy = calendar.get(java.util.Calendar.YEAR);
+        int gm = calendar.get(java.util.Calendar.MONTH) + 1;
+        int gd = calendar.get(java.util.Calendar.DAY_OF_MONTH);
+        int[] gDays = {0,31,59,90,120,151,181,212,243,273,304,334};
+        int gy2 = gm > 2 ? gy + 1 : gy;
+        int days = 355666 + 365 * gy + (gy2 + 3) / 4 - (gy2 + 99) / 100 + (gy2 + 399) / 400 + gd + gDays[gm - 1];
+        int jy = -1595 + 33 * (days / 12053);
+        days %= 12053;
+        jy += 4 * (days / 1461);
+        days %= 1461;
+        if (days > 365) {
+            jy += (days - 1) / 365;
+            days = (days - 1) % 365;
+        }
+        int jm, jd;
+        if (days < 186) {
+            jm = 1 + days / 31;
+            jd = 1 + days % 31;
+        } else {
+            jm = 7 + (days - 186) / 30;
+            jd = 1 + (days - 186) % 30;
+        }
+        return String.format(java.util.Locale.ROOT, "%04d/%02d/%02d", jy, jm, jd)
+            .replace('0','۰').replace('1','۱').replace('2','۲').replace('3','۳')
+            .replace('4','۴').replace('5','۵').replace('6','۶').replace('7','۷')
+            .replace('8','۸').replace('9','۹');
+    }
+
     private void addEntry(String type, String title, long amount) {
         if (amount > 0 && !"درآمد".equals(type) && !"یادآوری".equals(type)) recordExpenseHistory(type, title, amount);
         if (amount > 0 && java.util.Arrays.asList("خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر").contains(type)) {
@@ -2240,7 +2272,7 @@ public class MainActivity extends Activity {
                 }
             }
         }
-        String row = type + " • " + title + (amount > 0 ? " • " + new SimpleDateFormat("yyyy/MM/dd", new Locale("fa", "IR")).format(new Date()) + " • " + fmt(amount) + " تومان" : "");
+        String row = type + " • " + title + (amount > 0 ? " • " + formatPersianDate(new Date()) + " • " + fmt(amount) + " تومان" : "");
         entries.add(0,row); while(entries.size()>12) entries.remove(entries.size()-1);
         StringBuilder b=new StringBuilder(); for(String e:entries)b.append(e).append("\n");
         prefs.edit().putString("entries",b.toString()).apply();
