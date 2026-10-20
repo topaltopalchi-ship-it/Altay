@@ -429,12 +429,14 @@ public class MainActivity extends Activity {
     }
 
     private String[] subgroupNames(String category) {
-        if ("خانه".equals(category)) return new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه"};
-        if ("ماشین".equals(category)) return new String[]{"سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه‌های ماشین"};
-        if ("مدرسه".equals(category)) return new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
-        if ("مغازه".equals(category)) return new String[]{"خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه‌های مغازه"};
-        if ("سلامت".equals(category)) return new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
-        return new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
+        // This bucket is also used for dashboard/voice expenses that have no explicit subgroup.
+        // Keep it available in every category so dated calendar entries can be opened in the archive.
+        if ("خانه".equals(category)) return new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "سایر هزینه‌های خانه", "خریدهای روزانه"};
+        if ("ماشین".equals(category)) return new String[]{"سوخت", "روغن و فیلتر", "تسمه تایم و تعمیرات", "بیمه", "لاستیک", "پارکینگ و عوارض", "سایر هزینه‌های ماشین", "خریدهای روزانه"};
+        if ("مدرسه".equals(category)) return new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه", "خریدهای روزانه"};
+        if ("مغازه".equals(category)) return new String[]{"خرید کالا", "اجاره مغازه", "قبض و خدمات", "حقوق", "تعمیرات", "سایر هزینه‌های مغازه", "خریدهای روزانه"};
+        if ("سلامت".equals(category)) return new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت", "خریدهای روزانه"};
+        return new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر", "خریدهای روزانه"};
     }
 
     private class PieChartView extends View {
