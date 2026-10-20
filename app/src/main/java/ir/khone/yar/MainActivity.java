@@ -50,7 +50,6 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private Button wakeButton;
     private TextToSpeech tts;
-    private OfflinePersianTts offlinePersianTts;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
@@ -952,14 +951,14 @@ public class MainActivity extends Activity {
     }
 
     private void startVoice(String mode) {
-        // DIAGNOSTIC TEST ONLY: deliberately do not initialize Vosk,
-        // Sherpa, Android SpeechRecognizer, or access the microphone.
-        // If tapping the button still crashes, investigate the UI/activity path.
-        Toast.makeText(this, "آزمایش: میکروفون موقتاً غیرفعال است", Toast.LENGTH_LONG).show();
-        if (status != null) {
-            status.setText("آزمایش عیب‌یابی: موتورهای صوتی اجرا نشدند.");
+        pendingMode = mode;
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+            return;
         }
-        return;
+        // Diagnostic configuration: use Vosk for recognition, with Sherpa TTS
+        // deliberately not initialized or called anywhere in this app flow.
+        ensureVoskModelAndStart(mode);
     }
 
     private void startPlatformVoice(String mode) {
@@ -1692,11 +1691,8 @@ public class MainActivity extends Activity {
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void say(String s) {
-        if (offlinePersianTts != null) {
-            offlinePersianTts.speak(s, () -> speakWithSystemTts(s));
-        } else {
-            speakWithSystemTts(s);
-        }
+        // Temporarily use Android's built-in TTS only to isolate Sherpa.
+        speakWithSystemTts(s);
     }
     private void speakWithSystemTts(String s) {
         if (tts != null) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "khoneyar");
@@ -1754,7 +1750,6 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
-        if(offlinePersianTts!=null) offlinePersianTts.shutdown();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
     }
