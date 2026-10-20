@@ -606,14 +606,67 @@ public class MainActivity extends Activity {
                         detailsByCategory.get(category).add((subgroup.isEmpty() ? "" : subgroup + " — ") + item + " : " + fmt(amount) + " تومان");
                     } catch (Exception ignored) {}
                 }
-                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\\n\\n");
+                LinearLayout reportCards = new LinearLayout(this);
+                reportCards.setOrientation(LinearLayout.VERTICAL);
+                reportCards.setPadding(16, 8, 16, 8);
+                TextView totalCard = new TextView(this);
+                totalCard.setText("مجموع مخارج: " + fmt(dayTotal) + " تومان");
+                totalCard.setTextSize(20);
+                totalCard.setTypeface(null, Typeface.BOLD);
+                totalCard.setTextColor(Color.WHITE);
+                totalCard.setGravity(Gravity.CENTER);
+                totalCard.setPadding(18, 18, 18, 18);
+                GradientDrawable totalBg = new GradientDrawable();
+                totalBg.setColor(Color.rgb(25, 55, 110));
+                totalBg.setCornerRadius(18);
+                totalCard.setBackground(totalBg);
+                LinearLayout.LayoutParams totalParams = new LinearLayout.LayoutParams(-1, -2);
+                totalParams.setMargins(0, 0, 0, 12);
+                reportCards.addView(totalCard, totalParams);
                 for (String category : categories) {
-                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
-                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\n");
-                    report.append("\n");
+                    LinearLayout categoryCard = new LinearLayout(this);
+                    categoryCard.setOrientation(LinearLayout.VERTICAL);
+                    categoryCard.setPadding(16, 12, 16, 12);
+                    GradientDrawable cardBg = new GradientDrawable();
+                    cardBg.setColor(Color.rgb(245, 248, 255));
+                    cardBg.setCornerRadius(14);
+                    cardBg.setStroke(1, Color.rgb(205, 215, 235));
+                    categoryCard.setBackground(cardBg);
+                    TextView categoryTitle = new TextView(this);
+                    categoryTitle.setText(category + "  •  " + fmt(totalsByCategory.get(category)) + " تومان");
+                    categoryTitle.setTextSize(18);
+                    categoryTitle.setTypeface(null, Typeface.BOLD);
+                    categoryTitle.setTextColor(Color.rgb(25, 55, 110));
+                    categoryTitle.setGravity(Gravity.RIGHT);
+                    categoryCard.addView(categoryTitle);
+                    for (String detail : detailsByCategory.get(category)) {
+                        TextView detailView = new TextView(this);
+                        detailView.setText("• " + detail);
+                        detailView.setTextSize(16);
+                        detailView.setTextColor(Color.DKGRAY);
+                        detailView.setGravity(Gravity.RIGHT);
+                        detailView.setPadding(0, 8, 0, 4);
+                        categoryCard.addView(detailView);
+                    }
+                    LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(-1, -2);
+                    cardParams.setMargins(0, 0, 0, 10);
+                    reportCards.addView(categoryCard, cardParams);
                 }
-                if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-                new AlertDialog.Builder(this).setTitle("مخارج " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
+                if (dayTotal == 0) {
+                    TextView empty = new TextView(this);
+                    empty.setText("برای این روز هزینه‌ای ثبت نشده است.");
+                    empty.setTextSize(16);
+                    empty.setGravity(Gravity.CENTER);
+                    reportCards.addView(empty);
+                }
+                ScrollView reportScroll = new ScrollView(this);
+                reportScroll.addView(reportCards);
+                new AlertDialog.Builder(this)
+                    .setTitle("مخارج " + jalaliDateText(jy, jm, jd))
+                    .setView(reportScroll)
+                    .setPositiveButton("باشه", null)
+                    .setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar())
+                    .show();
             }).show();
     }
 
