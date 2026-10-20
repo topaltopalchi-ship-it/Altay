@@ -965,8 +965,15 @@ public class MainActivity extends Activity {
         });
         choices.addView(manual, lp(-1, -2, 0, 4, 0, 8));
 
-        Button voice = button("🎙  ثبت صوتی", Color.WHITE, Color.WHITE, 17);
+        Button voice = button("🎙  ثبت صوتی", Color.WHITE, Color.BLACK, 18);
         voice.setMinHeight(dp(54));
+        GradientDrawable voiceFace = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{Color.WHITE, Color.rgb(250, 250, 250)});
+        voiceFace.setCornerRadius(dp(12));
+        voiceFace.setStroke(dp(2), Color.rgb(24, 37, 105));
+        voice.setBackground(voiceFace);
+        voice.setTextColor(Color.rgb(20, 20, 20));
+        voice.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD));
+        voice.setElevation(dp(2));
         voice.setOnClickListener(v -> {
             pendingPurchaseCategory = category;
             pendingPurchaseSubgroup = subgroup;
