@@ -935,12 +935,15 @@ public class MainActivity extends Activity {
             item.setMinHeight(dp(54));
             GradientDrawable pinkFace = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Color.rgb(255, 228, 240), Color.rgb(247, 190, 216)});
-            pinkFace.setCornerRadius(dp(12));
-            pinkFace.setStroke(dp(2), Color.rgb(24, 37, 105));
+                new int[]{Color.rgb(244, 155, 195), Color.rgb(222, 104, 158)});
+            pinkFace.setCornerRadius(dp(14));
+            pinkFace.setStroke(dp(3), Color.rgb(24, 37, 105));
             item.setBackground(pinkFace);
             item.setTextColor(Color.rgb(24, 37, 105));
-            item.setElevation(dp(2));
+            item.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD));
+            item.setElevation(dp(6));
+            item.setShadowLayer(dp(2), 0, dp(3), Color.rgb(30, 35, 75));
+            item.setPadding(dp(10), dp(4), dp(10), dp(4));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(54));
             params.setMargins(dp(2), dp(4), dp(2), dp(4));
             list.addView(item, params);
