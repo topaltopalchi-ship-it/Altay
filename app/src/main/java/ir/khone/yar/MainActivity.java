@@ -107,7 +107,14 @@ public class MainActivity extends Activity {
         prefs.edit().putBoolean("wake_enabled", false).apply();
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
+            status.setText("تشخیص گفتار گوشی در دسترس نیست؛ مدل آفلاین فارسی اوبا جداگانه آماده می‌شود.");
+        }
+        // Start downloading the Persian Vosk model automatically on the first app launch.
+        // This does not require microphone permission and does not enable wake-word listening.
+        if (OfflineModelDownloader.getInstalledModelDirectory(this) == null) {
+            if (status != null) status.setText("در حال آماده‌سازی و دانلود خودکار مدل گفتار فارسی…");
+            if (root != null) root.postDelayed(this::downloadVoskModelAutomatically, 800);
+            else downloadVoskModelAutomatically();
         }
     }
 
@@ -1076,8 +1083,7 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("مدل گفتار فارسی آماده شد؛ اوبا در حال آماده‌شدن برای شنیدن خودکار است.");
-                    ensureWakeServiceEnabled();
+                    status.setText("مدل گفتار فارسی Vosk دانلود و نصب شد؛ تشخیص گفتار آفلاین آماده است.");
                 }
             }
             @Override public void onError(String message) {
