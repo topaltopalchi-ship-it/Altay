@@ -951,22 +951,18 @@ public class MainActivity extends Activity {
 
     private void startVoice(String mode) {
         pendingMode = mode;
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
-            return;
-        }
 
-        // The wake-word service also owns the microphone. Stop it before starting Vosk,
-        // otherwise Vosk may appear to do nothing while Android keeps the mic busy.
+        // Downloading the offline model does not require microphone permission.
+        // Do not return early here, or a user who has not granted the mic permission
+        // will never see the Vosk download start.
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
         prefs.edit().putBoolean("wake_enabled", false).apply();
         if (wakeButton != null) {
             wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
         }
         if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
-        Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "آماده‌سازی مدل گفتار Vosk…", Toast.LENGTH_SHORT).show();
 
-        // Give Android a moment to release the microphone from the wake-word service.
         if (root != null) {
             root.postDelayed(() -> ensureVoskModelAndStart(mode), 500);
         } else {
@@ -1065,6 +1061,11 @@ public class MainActivity extends Activity {
     private void ensureVoskModelAndStart(String mode) {
         File modelDirectory = OfflineModelDownloader.getInstalledModelDirectory(this);
         if (modelDirectory != null) {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                status.setText("مدل Vosk آماده است؛ برای شنیدن گفتار، اجازهٔ میکروفون را بده.");
+                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+                return;
+            }
             startOfflineVoice(mode, modelDirectory);
             return;
         }
@@ -1087,6 +1088,11 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (isFinishing()) return;
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    if (status != null) status.setText("مدل Vosk دانلود شد؛ حالا اجازهٔ میکروفون را بده تا شنیدن شروع شود.");
+                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
+                    return;
+                }
                 if (status != null) status.setText("مدل تشخیص گفتار فارسی Vosk نصب شد؛ میکروفون را شروع می‌کنم…");
                 startOfflineVoice(mode, installedDirectory);
             }
