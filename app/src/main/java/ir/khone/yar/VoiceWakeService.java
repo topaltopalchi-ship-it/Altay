@@ -79,7 +79,11 @@ public class VoiceWakeService extends Service {
 
     private void ensureWorkerAfterPause() {
         handler.postDelayed(() -> {
-            if (stopping || paused || listening) return;
+            File modelDir = new File(getFilesDir(), MODEL_DIR_NAME);
+            boolean downloadStillNeeded = model == null && !isModelReady(modelDir);
+            // The wake listener must pause while the app uses the microphone, but the
+            // first model download must still be allowed to finish in the foreground.
+            if (stopping || (paused && !downloadStillNeeded) || listening) return;
             if (worker != null && worker.isAlive()) {
                 ensureWorkerAfterPause();
                 return;
