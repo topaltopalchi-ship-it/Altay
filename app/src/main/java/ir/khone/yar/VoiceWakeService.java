@@ -28,6 +28,7 @@ public class VoiceWakeService extends Service {
     private boolean stopping = false;
     private boolean speaking = false;
     private boolean preparingModel = false;
+    private boolean wakeDetected = false;
     private PowerManager.WakeLock wakeLock;
 
     @Override public void onCreate() {
@@ -112,32 +113,28 @@ public class VoiceWakeService extends Service {
     private void startVosk(File modelDirectory) {
         if (stopping || speaking || engine != null) return;
         updateNotification("در حال راه‌اندازی Vosk آفلاین…");
+        wakeDetected = false;
         OfflineVoskSpeechEngine next = new OfflineVoskSpeechEngine();
         engine = next;
         next.start(getApplicationContext(), modelDirectory, new OfflineVoskSpeechEngine.Listener() {
             @Override public void onStatus(String status) {
                 if (!stopping) updateNotification(status);
             }
+            @Override public void onPartialText(String text) {
+                if (stopping || wakeDetected) return;
+                if (isWakeWord(text)) {
+                    wakeDetected = true;
+                    if (engine == next) engine = null;
+                    next.stop();
+                    handleWakeWord();
+                }
+            }
             @Override public void onText(String text) {
                 if (engine == next) engine = null;
-                if (stopping) return;
-                String normalized = normalize(text);
-                boolean wake = normalized.contains("اوبا") || normalized.contains("oba")
-                    || normalized.contains("خونهیار") || normalized.contains("خانیار")
-                    || normalized.contains("خونیار");
-                if (wake) {
-                    updateNotification("کلمهٔ اوبا شنیده شد؛ در حال باز کردن برنامه…");
-                    Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
-                    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    try { startActivity(launch); } catch (Throwable ignored) {}
-                    speaking = true;
-                    if (tts != null) {
-                        tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
-                    } else {
-                        speaking = false;
-                        handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1200);
-                    }
+                if (stopping || wakeDetected) return;
+                if (isWakeWord(text)) {
+                    wakeDetected = true;
+                    handleWakeWord();
                 } else {
                     updateNotification("در حال شنیدن؛ بگو «اوبا»");
                     handler.postDelayed(VoiceWakeService.this::prepareAndListen, 350);
@@ -150,6 +147,31 @@ public class VoiceWakeService extends Service {
                 handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1800);
             }
         });
+    }
+
+    private boolean isWakeWord(String text) {
+        String normalized = normalize(text);
+        return normalized.contains("اوبا") || normalized.contains("oba")
+            || normalized.contains("خونهیار") || normalized.contains("خانیار")
+            || normalized.contains("خونیار");
+    }
+
+    private void handleWakeWord() {
+        if (stopping) return;
+        updateNotification("کلمهٔ اوبا شنیده شد؛ در حال باز کردن برنامه…");
+        Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        try { startActivity(launch); } catch (Throwable e) {
+            updateNotification("اوبا شنیده شد، اما بازکردن صفحه مسدود شد؛ اعلان را لمس کن.");
+        }
+        speaking = true;
+        if (tts != null) {
+            tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
+        } else {
+            speaking = false;
+            handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1200);
+        }
     }
 
     private void resumeAfterSpeech() {
