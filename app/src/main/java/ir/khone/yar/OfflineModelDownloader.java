@@ -24,8 +24,10 @@ import java.util.zip.ZipInputStream;
  */
 public final class OfflineModelDownloader {
     public static final String MODEL_DIRECTORY = "vosk-model-small-fa-0.42";
+    // Primary mirror hosted on Hugging Face; the original alphacephei host is
+    // unreachable from some mobile networks. The archive keeps the standard Vosk layout.
     private static final String MODEL_URL =
-            "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip";
+            "https://huggingface.co/localstack/vosk-models/resolve/main/vosk-model-small-fa-0.42.zip";
     private static final int CONNECT_TIMEOUT_MS = 15000;
     private static final int READ_TIMEOUT_MS = 30000;
 
