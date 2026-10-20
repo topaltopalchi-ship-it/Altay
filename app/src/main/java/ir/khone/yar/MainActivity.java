@@ -65,6 +65,8 @@ public class MainActivity extends Activity {
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
+    private String pendingPurchaseCategory = "";
+    private String pendingPurchaseSubgroup = "";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
