@@ -2447,7 +2447,10 @@ public class MainActivity extends Activity {
     }
     private void recordExpenseHistory(String type, String title, long amount) {
         String[] parts = title.split(" — ", 2);
-        String subgroup = parts.length > 1 ? parts[0].trim() : "";
+        // Dashboard/voice entries often arrive without a subgroup prefix.
+        // Give these records a stable archive bucket instead of leaving subgroup blank,
+        // which made them invisible in subgroup archives even though the calendar stored them.
+        String subgroup = parts.length > 1 ? parts[0].trim() : "خریدهای روزانه";
         String item = (parts.length > 1 ? parts[1] : parts[0]).trim();
         long timestamp = System.currentTimeMillis();
         String row = timestamp + "\t" + type.replace('\t', ' ') + "\t" + subgroup.replace('\t', ' ') + "\t" + item.replace('\t', ' ') + "\t" + amount;
