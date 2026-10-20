@@ -1760,7 +1760,7 @@ public class MainActivity extends Activity {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
         String compactCommand = s.replace("‌", "").replace(" ", "");
-        if (compactCommand.startsWith("پاککن") || compactCommand.startsWith("حذفکن") || compactCommand.startsWith("اصلاح")) {
+        if (awaitingArchiveCorrection || compactCommand.startsWith("پاککن") || compactCommand.startsWith("حذفکن") || compactCommand.startsWith("اصلاح")) {
             handleArchiveVoiceCommand(raw, s);
             return;
         }
