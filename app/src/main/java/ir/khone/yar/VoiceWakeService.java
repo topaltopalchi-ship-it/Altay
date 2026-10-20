@@ -157,8 +157,11 @@ public class VoiceWakeService extends Service {
             speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
             speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
-            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5);
             speech.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            // Prefer the installed offline speech service when the phone supports it.
+            // This is a preference, not a guarantee; some Android providers ignore it.
+            speech.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
             recognizer.startListening(speech);
         } catch (Throwable e) {
             // Speech service providers and native recognizers can throw runtime
@@ -168,10 +171,16 @@ public class VoiceWakeService extends Service {
     }
 
     private String normalize(String text) {
-        return text.toLowerCase(Locale.ROOT).replace('‌', ' ').replace(" ", "")
-            .replace("‌", "").replace("ئ", "ی").replace("ك", "ک").replace("ي", "ی")
+        if (text == null) return "";
+        // Normalize common Persian/Arabic variants and remove marks/punctuation so
+        // "او با", "اُبا", and "OBA!" can all match the same wake word.
+        return text.toLowerCase(Locale.ROOT)
+            .replace("‌", "").replace(" ", "")
+            .replace("ئ", "ی").replace("ك", "ک").replace("ي", "ی")
             .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا")
-            .replace("ه", "ه");
+            .replace("ؤ", "و").replace("ة", "ه")
+            .replaceAll("[\\u064B-\\u065F\\u0670]", "")
+            .replaceAll("[^\\p{L}\\p{N}]", "");
     }
 
     private void createChannel() {
