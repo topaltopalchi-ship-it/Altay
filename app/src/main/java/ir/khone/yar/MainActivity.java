@@ -918,15 +918,38 @@ public class MainActivity extends Activity {
         else if ("مدرسه".equals(category)) groups = new String[]{"شهریه", "کتاب و لوازم‌التحریر", "رفت‌وآمد", "لباس فرم", "فعالیت‌ها", "سایر هزینه‌های مدرسه"};
         else if ("سلامت".equals(category)) groups = new String[]{"دکتر", "دارو", "آزمایش", "بیمه درمانی", "دندان‌پزشکی", "سایر هزینه‌های سلامت"};
         else groups = new String[]{"خرید متفرقه", "هدیه", "سفر", "سایر"};
-        if ("خانه".equals(category)) {
-            groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "📄 اسکن مدارک خانه", "سایر هزینه‌های خانه"};
+        if ("خانه".equals(category)) groups = new String[]{"مواد غذایی", "لوازم خانه", "قبض و خدمات", "اجاره و تعمیرات", "نظافت", "📄 اسکن مدارک خانه", "سایر هزینه‌های خانه"};
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(12), dp(8), dp(12), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(list);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
+            .setView(scroll).setNegativeButton("انصراف", null).create();
+        for (String option : groups) {
+            Button item = button(option, Color.WHITE, Color.rgb(24, 37, 105), 16);
+            item.setAllCaps(false);
+            item.setMinHeight(dp(54));
+            GradientDrawable pinkFace = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Color.rgb(255, 228, 240), Color.rgb(247, 190, 216)});
+            pinkFace.setCornerRadius(dp(12));
+            pinkFace.setStroke(dp(2), Color.rgb(24, 37, 105));
+            item.setBackground(pinkFace);
+            item.setTextColor(Color.rgb(24, 37, 105));
+            item.setElevation(dp(2));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(54));
+            params.setMargins(dp(2), dp(4), dp(2), dp(4));
+            list.addView(item, params);
+            item.setOnClickListener(v -> {
+                dialog.dismiss();
+                if ("خانه".equals(category) && option.contains("اسکن مدارک خانه")) showHomeDocuments();
+                else showEntryMethodDialog(category, option);
+            });
         }
-        final String[] subgroupOptions = groups;
-        new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setItems(subgroupOptions, (dialog, which) -> {
-                if ("خانه".equals(category) && "📄 اسکن مدارک خانه".equals(subgroupOptions[which])) showHomeDocuments();
-                else showEntryMethodDialog(category, subgroupOptions[which]);
-            }).setNegativeButton("انصراف", null).show();
+        dialog.show();
     }
 
     private void showEntryMethodDialog(String category, String subgroup) {
