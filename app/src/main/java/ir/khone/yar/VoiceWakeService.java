@@ -40,6 +40,7 @@ public class VoiceWakeService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private volatile boolean stopping = false;
+    private volatile boolean paused = false;
     private volatile boolean listening = false;
     private volatile boolean wakeHandled = false;
     private Thread worker;
@@ -61,12 +62,14 @@ public class VoiceWakeService extends Service {
             return START_NOT_STICKY;
         }
         if (ACTION_PAUSE.equals(action)) {
+            paused = true;
             stopCapture();
             updateNotification("مکث هنگام استفاده از برنامه");
             return START_STICKY;
         }
 
         stopping = false;
+        paused = false;
         startForeground(NOTIFICATION_ID, buildNotification("آماده‌سازی تشخیص آفلاین اوبا"));
         ensureWorkerAfterPause();
         return START_STICKY;
@@ -74,7 +77,11 @@ public class VoiceWakeService extends Service {
 
     private void ensureWorkerAfterPause() {
         handler.postDelayed(() -> {
-            if (stopping || listening || (worker != null && worker.isAlive())) return;
+            if (stopping || paused || listening) return;
+            if (worker != null && worker.isAlive()) {
+                ensureWorkerAfterPause();
+                return;
+            }
             worker = new Thread(() -> {
                 if (model == null) prepareAndListen();
                 else listenAgain();
@@ -90,7 +97,7 @@ public class VoiceWakeService extends Service {
                 updateNotification("مدل تشخیص اوبا در حال دانلود است");
                 downloadAndExtractModel(modelDir);
             }
-            if (stopping) return;
+            if (stopping || paused) return;
             updateNotification("آماده؛ بگو «اوبا»");
             model = new Model(modelDir.getAbsolutePath());
             listenLoop();
@@ -127,13 +134,14 @@ public class VoiceWakeService extends Service {
             listening = true;
             recorder.startRecording();
             updateNotification("در حال شنیدن؛ بگو «اوبا»");
-            while (!stopping && listening && !wakeHandled) {
+            while (!stopping && !paused && listening && !wakeHandled) {
                 int n = recorder.read(buffer, 0, buffer.length);
                 if (n <= 0) continue;
                 boolean finalResult = recognizer.acceptWaveForm(buffer, n);
                 String json = finalResult ? recognizer.getResult() : recognizer.getPartialResult();
                 if (isWakeWord(json)) {
                     wakeHandled = true;
+                    paused = true;
                     listening = false;
                     updateNotification("اوبا شنیده شد؛ برنامه باز می‌شود");
                     handler.post(this::openApp);
@@ -184,7 +192,7 @@ public class VoiceWakeService extends Service {
 
     private void listenAgain() {
         try {
-            if (model != null && !stopping) listenLoop();
+            if (model != null && !stopping && !paused) listenLoop();
         } catch (Exception ignored) {}
     }
 
