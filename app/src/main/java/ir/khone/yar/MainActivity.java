@@ -50,6 +50,11 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private boolean continuousExpenseListening = false;
     private Button continuousExpenseButton;
+    private TextView continuousTranscriptView;
+    private Button commitContinuousButton;
+    private final ArrayList<String> pendingVoiceExpenses = new ArrayList<>();
+    private String unfinishedVoiceExpense = "";
+    private boolean correctingNextVoicePhrase = false;
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
     private boolean quietVoiceSession = false;
@@ -148,7 +153,26 @@ public class MainActivity extends Activity {
         continuousExpenseButton.setElevation(dp(7));
         continuousExpenseButton.setMinHeight(dp(62));
         continuousExpenseButton.setOnClickListener(v -> toggleContinuousExpenseListening());
-        content.addView(continuousExpenseButton, lp(-1, -2, 0, 3, 0, 12));
+        content.addView(continuousExpenseButton, lp(-1, -2, 0, 3, 0, 6));
+
+        TextView transcriptLabel = text("متن شنیده‌شده و فهرست موقت هزینه‌ها", 15, dark, true);
+        content.addView(transcriptLabel, lp(-1, -2, 0, 2, 0, 3));
+        continuousTranscriptView = text("هنوز متنی دریافت نشده است. ضبط را شروع کن؛ هر مورد را همراه مبلغ و کلمهٔ «تومان» بگو.", 14, dark, false);
+        continuousTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
+        continuousTranscriptView.setMinHeight(dp(104));
+        continuousTranscriptView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        continuousTranscriptView.setBackground(round(Color.WHITE, 12));
+        content.addView(continuousTranscriptView, lp(-1, -2, 0, 0, 0, 5));
+
+        LinearLayout voiceReviewRow = new LinearLayout(this);
+        voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
+        commitContinuousButton = button("تأیید و ثبت همه", Color.WHITE, dark, 13);
+        commitContinuousButton.setOnClickListener(v -> commitPendingVoiceExpenses());
+        Button clearContinuousButton = button("پاک‌کردن فهرست", Color.WHITE, dark, 13);
+        clearContinuousButton.setOnClickListener(v -> clearPendingVoiceExpenses());
+        voiceReviewRow.addView(commitContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
+        voiceReviewRow.addView(clearContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
+        content.addView(voiceReviewRow, lp(-1, -2, 0, 0, 0, 10));
 
         TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 18, dark, true);
         content.addView(categoryTitle, lp(-1,-2,0,2,0,4));
@@ -994,6 +1018,50 @@ public class MainActivity extends Activity {
     }
 
     private void handleContinuousExpense(String raw) {
+        String normalized = normalize(raw).trim();
+        if (normalized.isEmpty()) return;
+
+        if (normalized.equals("اصلاح") || normalized.equals("اصلاح مورد") || normalized.equals("اصلاح کن")) {
+            correctingNextVoicePhrase = true;
+            if (status != null) status.setText("حالت اصلاح فعال شد؛ متن درستِ همان مورد را کامل بگو و در پایان «تومان» بگو.");
+            updateContinuousTranscript();
+            return;
+        }
+
+        if (correctingNextVoicePhrase) {
+            correctingNextVoicePhrase = false;
+            String corrected = normalized;
+            if (!corrected.contains("تومان")) corrected += " تومان";
+            if (pendingVoiceExpenses.isEmpty()) {
+                pendingVoiceExpenses.add(corrected);
+            } else {
+                pendingVoiceExpenses.set(pendingVoiceExpenses.size() - 1, corrected);
+            }
+            unfinishedVoiceExpense = "";
+            if (status != null) status.setText("مورد آخر اصلاح شد؛ برای اصلاح دوباره بگو «اصلاح».");
+            updateContinuousTranscript();
+            return;
+        }
+
+        unfinishedVoiceExpense = (unfinishedVoiceExpense + " " + normalized).trim();
+        boolean added = false;
+        int marker;
+        while ((marker = unfinishedVoiceExpense.indexOf("تومان")) >= 0) {
+            String complete = unfinishedVoiceExpense.substring(0, marker + "تومان".length()).trim();
+            unfinishedVoiceExpense = unfinishedVoiceExpense.substring(marker + "تومان".length()).trim();
+            if (!complete.isEmpty()) {
+                pendingVoiceExpenses.add(complete);
+                added = true;
+            }
+        }
+        updateContinuousTranscript();
+        if (status != null) {
+            if (added) status.setText("مورد به فهرست موقت اضافه شد؛ برای مورد بعدی ادامه بده. برای اصلاح مورد آخر بگو «اصلاح».");
+            else status.setText("متن دریافت شد؛ برای جدا شدن هر هزینه، مبلغ را با کلمهٔ «تومان» تمام کن.");
+        }
+    }
+
+    private String[] parseContinuousExpense(String raw) {
         String normalized = normalize(raw);
         long amount = parseAmount(normalized);
         String[] numberWords = new String[]{
@@ -1001,7 +1069,7 @@ public class MainActivity extends Activity {
             "یازده", "دوازده", "سیزده", "چهارده", "پانزده", "شانزده", "هفده", "هجده", "نوزده",
             "بیست", "سی", "چهل", "پنجاه", "شصت", "هفتاد", "هشتاد", "نود", "صد", "دویست",
             "سیصد", "چهارصد", "پانصد", "هزار", "میلیون", "تومان", "تومن", "ریال",
-            "هزینه", "خرج", "برای", "ثبت", "کن"
+            "هزینه", "خرج", "برای", "ثبت", "کن", "اصلاح"
         };
         StringBuilder itemBuilder = new StringBuilder();
         for (String token : normalized.split("\\s+")) {
@@ -1016,16 +1084,57 @@ public class MainActivity extends Activity {
             }
         }
         String item = itemBuilder.toString().trim();
-        if (amount <= 0 || item.isEmpty()) {
-            if (status != null) status.setText("مورد یا مبلغ واضح نبود؛ دوباره بگو، مثلاً «نان، دویست هزار تومان».");
+        if (amount <= 0 || item.isEmpty()) return null;
+        return new String[]{item, String.valueOf(amount)};
+    }
+
+    private void updateContinuousTranscript() {
+        if (continuousTranscriptView == null) return;
+        StringBuilder display = new StringBuilder();
+        if (pendingVoiceExpenses.isEmpty() && unfinishedVoiceExpense.isEmpty()) {
+            display.append("هنوز متنی دریافت نشده است.");
+        }
+        for (int i = 0; i < pendingVoiceExpenses.size(); i++) {
+            display.append(i + 1).append(") ").append(pendingVoiceExpenses.get(i)).append("\\n");
+        }
+        if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\\n");
+        if (correctingNextVoicePhrase) display.append("🎙 منتظر متن اصلاح‌شده…");
+        display.append("\\nراهنما: بگو «اصلاح» و سپس متن درست را بخوان تا مورد آخر جایگزین شود.");
+        continuousTranscriptView.setText(display.toString());
+    }
+
+    private void clearPendingVoiceExpenses() {
+        pendingVoiceExpenses.clear();
+        unfinishedVoiceExpense = "";
+        correctingNextVoicePhrase = false;
+        updateContinuousTranscript();
+        if (status != null) status.setText("فهرست موقت پاک شد؛ چیزی از این فهرست ثبت نشد.");
+    }
+
+    private void commitPendingVoiceExpenses() {
+        if (!unfinishedVoiceExpense.trim().isEmpty()) {
+            if (status != null) status.setText("مورد آخر هنوز به «تومان» نرسیده؛ مبلغ را کامل بگو یا ضبط را متوقف کن و فهرست را بررسی کن.");
             return;
         }
-        expenseTotal += amount;
-        prefs.edit().putLong("expense", expenseTotal).apply();
-        addEntry("خانه", item, amount);
-        String confirmation = "ثبت شد: " + item + " — " + fmt(amount) + " تومان. مورد بعدی را بگو.";
-        if (status != null) status.setText(confirmation);
+        int saved = 0;
+        StringBuilder rejected = new StringBuilder();
+        for (String raw : new ArrayList<>(pendingVoiceExpenses)) {
+            String[] parsed = parseContinuousExpense(raw);
+            if (parsed == null) {
+                rejected.append("• ").append(raw).append("\\n");
+                continue;
+            }
+            long amount = Long.parseLong(parsed[1]);
+            expenseTotal += amount;
+            prefs.edit().putLong("expense", expenseTotal).apply();
+            addEntry("خانه", parsed[0], amount);
+            saved++;
+        }
+        pendingVoiceExpenses.clear();
+        correctingNextVoicePhrase = false;
+        updateContinuousTranscript();
         refresh();
+        if (status != null) status.setText(saved + " مورد ثبت شد." + (rejected.length() > 0 ? " این موارد به‌دلیل نامشخص بودن شرح یا مبلغ ثبت نشدند: " + rejected : ""));
     }
 
     private void startVoice(String mode) {
@@ -1231,31 +1340,29 @@ public class MainActivity extends Activity {
                     if (status != null && !isFinishing()) status.setText(message);
                 }
                 @Override public void onText(String text) {
-                    if (offlineEngine == activeEngine) offlineEngine = null;
-                    if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                     if (continuousExpenseListening) {
+                        if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                         handleContinuousExpense(text);
-                        if (continuousExpenseListening && root != null) {
-                            root.postDelayed(() -> {
-                                if (continuousExpenseListening && !isFinishing() && !isDestroyed()) {
-                                    startVoice("continuous_expense");
-                                }
-                            }, 900);
-                        }
                     } else {
+                        if (offlineEngine == activeEngine) offlineEngine = null;
+                        if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                         handleVoice(text);
+                    }
+                }
+                @Override public void onPartialText(String text) {
+                    if (continuousExpenseListening && status != null && !isFinishing()) {
+                        status.setText("در حال شنیدن: «" + text + "»");
                     }
                 }
                 @Override public void onError(String message) {
                     if (offlineEngine == activeEngine) offlineEngine = null;
-                    if (status != null && !isFinishing()) status.setText(message + (continuousExpenseListening ? " دوباره گوش می‌دهم…" : ""));
-                    if (continuousExpenseListening && root != null) {
-                        root.postDelayed(() -> {
-                            if (continuousExpenseListening && !isFinishing() && !isDestroyed()) startVoice("continuous_expense");
-                        }, 1200);
+                    if (status != null && !isFinishing()) status.setText(message);
+                    if (continuousExpenseListening) {
+                        continuousExpenseListening = false;
+                        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  فعال‌سازی ثبت صوتی هزینه‌ها");
                     }
                 }
-            });
+            }, continuousExpenseListening);
         } catch (Exception e) {
             status.setText("شروع گفتار آفلاین ممکن نشد؛ دوباره دکمهٔ صوتی را بزن.");
         }
