@@ -98,7 +98,6 @@ public class MainActivity extends Activity {
                 tts.setLanguage(persian);
             }
         });
-        offlinePersianTts = new OfflinePersianTts(this);
         buildUi();
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
@@ -956,8 +955,7 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
             return;
         }
-        // Diagnostic configuration: use Vosk for recognition, with Sherpa TTS
-        // deliberately not initialized or called anywhere in this app flow.
+        // Diagnostic configuration: use Vosk for recognition and Android system TTS.
         ensureVoskModelAndStart(mode);
     }
 
@@ -1663,7 +1661,7 @@ public class MainActivity extends Activity {
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void say(String s) {
-        // Temporarily use Android's built-in TTS only to isolate Sherpa.
+        // Use Android's built-in TTS for this diagnostic build.
         speakWithSystemTts(s);
     }
     private void speakWithSystemTts(String s) {
