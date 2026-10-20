@@ -168,7 +168,7 @@ public class MainActivity extends Activity {
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
-        Button calendarBtn = button("🗓️ تقویم مخارج روزانه", Color.rgb(224, 240, 255), dark, 15);
+        Button calendarBtn = button("🗓️ تقویم روزانه و متن‌های صوتی", Color.rgb(224, 240, 255), dark, 15);
         calendarBtn.setMinHeight(dp(48));
         calendarBtn.setOnClickListener(v -> showExpenseCalendar());
         content.addView(calendarBtn, lp(-1, -2, 0, 2, 0, 6));
@@ -548,7 +548,23 @@ public class MainActivity extends Activity {
                     report.append("\\n");
                 }
                 if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-                new AlertDialog.Builder(this).setTitle("مخارج " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
+                report.append("\\n\\nمتن‌های صوتی ثبت‌شده در این روز:\\n");
+                String voiceHistory = prefs.getString("oba_voice_calendar_v1", "");
+                int voiceCount = 0;
+                if (!voiceHistory.trim().isEmpty()) for (String row : voiceHistory.split("\\\\n")) {
+                    String[] parts = row.split("\\\\t", 2);
+                    if (parts.length < 2) continue;
+                    try {
+                        long timestamp = Long.parseLong(parts[0]);
+                        if (timestamp < start || timestamp >= end) continue;
+                        String spoken = parts[1].replace("\\\\r", " ").replace("\\\\n", " ").trim();
+                        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(timestamp));
+                        report.append("• ").append(time).append(" — ").append(spoken).append("\\n");
+                        voiceCount++;
+                    } catch (Exception ignored) {}
+                }
+                if (voiceCount == 0) report.append("برای این روز متن گفتاری ثبت نشده است.");
+                new AlertDialog.Builder(this).setTitle("تقویم " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
             }).show();
     }
 
@@ -1116,6 +1132,7 @@ public class MainActivity extends Activity {
                 }
                 @Override public void onText(String text) {
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
+                    recordVoiceCalendar(text);
                     handleVoice(text);
                 }
                 @Override public void onError(String message) {
@@ -1631,6 +1648,23 @@ public class MainActivity extends Activity {
                 .replace("،"," ").replace("؟"," ").replace("رو"," ").replace("برای"," ").replace("تومن","تومان").trim();
     }
     private boolean contains(String s, String... words) { for(String w:words) if(s.contains(w)) return true; return false; }
+    private void recordVoiceCalendar(String spokenText) {
+        if (spokenText == null || spokenText.trim().isEmpty()) return;
+        String safeText = spokenText.trim().replace("\\t", " ").replace("\\r", " ").replace("\\n", " ");
+        long timestamp = System.currentTimeMillis();
+        String row = timestamp + "\\t" + safeText;
+        String old = prefs.getString("oba_voice_calendar_v1", "");
+        String combined = row + (old.isEmpty() ? "" : "\\n" + old);
+        String[] rows = combined.split("\\\\n");
+        StringBuilder kept = new StringBuilder();
+        for (int i = 0; i < Math.min(rows.length, 500); i++) {
+            if (i > 0) kept.append("\\n");
+            kept.append(rows[i]);
+        }
+        prefs.edit().putString("oba_voice_calendar_v1", kept.toString()).apply();
+        if (status != null) Toast.makeText(this, "متن گفتار در تقویم امروز ذخیره شد.", Toast.LENGTH_SHORT).show();
+    }
+
     private void addEntry(String type, String title, long amount) {
         if (amount > 0 && !"درآمد".equals(type) && !"یادآوری".equals(type)) recordExpenseHistory(type, title, amount);
         if (amount > 0 && java.util.Arrays.asList("خانه", "ماشین", "مغازه", "مدرسه", "سلامت", "سایر").contains(type)) {
