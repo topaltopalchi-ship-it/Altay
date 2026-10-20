@@ -33,33 +33,39 @@ public class VoiceWakeService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
-        createChannel();
-        PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
-        if (powerManager != null) {
-            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
-            wakeLock.setReferenceCounted(false);
-        }
-        tts = new TextToSpeech(this, status -> {
-            if (status == TextToSpeech.SUCCESS && tts != null) {
-                int language = tts.setLanguage(new Locale("fa", "IR"));
-                tts.setSpeechRate(0.92f);
-                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                    @Override public void onStart(String id) {}
-                    @Override public void onDone(String id) {
-                        handler.post(() -> {
-                            speaking = false;
-                            if (!stopping) handler.postDelayed(() -> beginListening(), 700);
-                        });
-                    }
-                    @Override public void onError(String id) {
-                        handler.post(() -> {
-                            speaking = false;
-                            if (!stopping) handler.postDelayed(() -> beginListening(), 700);
-                        });
-                    }
-                });
+        try { createChannel(); } catch (Throwable ignored) {}
+        try {
+            PowerManager powerManager = (PowerManager) getSystemService(POWER_SERVICE);
+            if (powerManager != null) {
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
+                wakeLock.setReferenceCounted(false);
             }
-        });
+        } catch (Throwable ignored) { wakeLock = null; }
+        try {
+            tts = new TextToSpeech(this, status -> {
+                if (status == TextToSpeech.SUCCESS && tts != null) {
+                    try {
+                        tts.setLanguage(new Locale("fa", "IR"));
+                        tts.setSpeechRate(0.92f);
+                        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                            @Override public void onStart(String id) {}
+                            @Override public void onDone(String id) {
+                                handler.post(() -> {
+                                    speaking = false;
+                                    if (!stopping) handler.postDelayed(() -> beginListening(), 700);
+                                });
+                            }
+                            @Override public void onError(String id) {
+                                handler.post(() -> {
+                                    speaking = false;
+                                    if (!stopping) handler.postDelayed(() -> beginListening(), 700);
+                                });
+                            }
+                        });
+                    } catch (Throwable ignored) { tts = null; }
+                }
+            });
+        } catch (Throwable ignored) { tts = null; }
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
