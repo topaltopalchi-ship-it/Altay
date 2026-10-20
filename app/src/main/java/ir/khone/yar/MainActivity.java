@@ -968,6 +968,27 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void showSubgroupPurchaseArchive(String category, String subgroup) {
+        String history = prefs.getString("oba_expense_history", "");
+        ArrayList<String> matches = new ArrayList<>();
+        if (!history.trim().isEmpty()) {
+            for (String row : history.split("\\n")) {
+                String[] parts = row.split("\\t", -1);
+                if (parts.length < 5 || !category.equals(parts[1].trim()) || !subgroup.equals(parts[2].trim())) continue;
+                try {
+                    String date = new SimpleDateFormat("yyyy/MM/dd", new Locale("fa", "IR")).format(new Date(Long.parseLong(parts[0])));
+                    matches.add(date + " • " + parts[3].trim() + " • " + fmt(Long.parseLong(parts[4])) + " تومان");
+                } catch (Exception ignored) {}
+            }
+        }
+        if (matches.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("آرشیو خریدهای «" + subgroup + "»").setMessage("هنوز خریدی برای این زیرمجموعه ثبت نشده است.").setPositiveButton("باشه", null).show();
+            return;
+        }
+        String[] items = matches.toArray(new String[0]);
+        new AlertDialog.Builder(this).setTitle("آرشیو خریدهای «" + subgroup + "»").setItems(items, (d, which) -> new AlertDialog.Builder(this).setTitle("جزئیات خرید").setMessage(items[which]).setPositiveButton("باشه", null).show()).setNegativeButton("بستن", null).show();
+    }
+
     private void showCategoryExpenseForm(String category, String subgroup) {
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
