@@ -1311,8 +1311,12 @@ public class MainActivity extends Activity {
 
         // Extract the amount ONLY from a phrase explicitly tied to currency.
         // Example: "پنج کیلو برنج ۱۰ میلیون تومن" -> amount phrase "۱۰ میلیون تومن".
+        // Do not let the amount matcher consume item words (e.g. "برنج ده میلیون تومان").
+        // The previous broad Persian-letter alternative could match "برنج ده میلیون" as the number,
+        // leaving an empty item description and causing the whole purchase to be rejected.
+        String numberWords = "(?:یک|یه|دو|سه|چهار|پنج|شش|شیش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|هیجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|دویست|سیصد|چهارصد|پانصد)";
         java.util.regex.Pattern currencyPattern = java.util.regex.Pattern.compile(
-            "([0-9][0-9,٬.]*|[\\u0600-\\u06FF]+(?:\\s+[\\u0600-\\u06FF]+){0,3})\\s*(میلیارد|میلیون|هزار)?\\s*(تومان|تومن|ریال)"
+            "([0-9][0-9,٬.]*|" + numberWords + "(?:\\\\s+" + numberWords + "){0,3})\\\\s*(میلیارد|میلیون|هزار)?\\\\s*(تومان|تومن|ریال)"
         );
         java.util.regex.Matcher matcher = currencyPattern.matcher(normalized);
         String amountPhrase = null;
