@@ -138,14 +138,29 @@ public class MainActivity extends Activity {
             content.addView(row, lp(-1,-2,0,0,0,0));
         }
 
-        Button speak = button("🎙  صحبت کن؛ OBA گوش می‌دهد", Color.rgb(0, 150, 220), Color.WHITE, 20);
-        speak.setMinHeight(dp(52)); speak.setOnClickListener(v -> startVoice("auto"));
-        content.addView(speak, lp(-1, -2, 0, 4, 0, 6));
-
-        wakeButton = button(prefs.getBoolean("wake_enabled", false) ? "🔕 خاموش کردن شنیدن نام OBA" : "🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل", Color.rgb(124, 83, 210), Color.WHITE, 16);
-        wakeButton.setMinHeight(dp(44));
+        // Primary dashboard action: premium centered rectangular control for voice capture.
+        wakeButton = button(
+            prefs.getBoolean("wake_enabled", false)
+                ? "■  توقف شنیدن و ثبت صوتی"
+                : "🎙  فعال‌سازی ضبط و ثبت صوتی",
+            Color.rgb(0, 105, 100), Color.WHITE, 18
+        );
+        wakeButton.setMinHeight(dp(62));
+        wakeButton.setTextSize(18);
+        wakeButton.setPadding(dp(18), dp(12), dp(18), dp(12));
+        GradientDrawable premiumVoiceBg = new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(0, 112, 108), Color.rgb(0, 77, 83), Color.rgb(8, 54, 67)}
+        );
+        premiumVoiceBg.setCornerRadius(dp(14));
+        premiumVoiceBg.setStroke(dp(2), Color.rgb(211, 174, 92));
+        wakeButton.setBackground(premiumVoiceBg);
+        wakeButton.setElevation(dp(8));
+        wakeButton.setStateListAnimator(null);
         wakeButton.setOnClickListener(v -> toggleWakeService());
-        content.addView(wakeButton, lp(-1, -2, 0, 0, 0, 10));
+        LinearLayout.LayoutParams voiceActionParams = lp(-1, 62, 8, 8, 8, 10);
+        voiceActionParams.gravity = Gravity.CENTER_HORIZONTAL;
+        content.addView(wakeButton, voiceActionParams);
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
@@ -965,7 +980,7 @@ public class MainActivity extends Activity {
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
         prefs.edit().putBoolean("wake_enabled", false).apply();
         if (wakeButton != null) {
-            wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
+            wakeButton.setText("🎙  فعال‌سازی ضبط و ثبت صوتی");
         }
         if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
         Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
@@ -1221,13 +1236,13 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
             else startService(service);
             prefs.edit().putBoolean("wake_enabled", true).apply();
-            if (wakeButton != null) wakeButton.setText("🔕 خاموش کردن شنیدن نام OBA");
+            if (wakeButton != null) wakeButton.setText("■  توقف شنیدن و ثبت صوتی");
             status.setText("شنیدن نام OBA فعال شد. بگو «اوبا»؛ برای توقف، دکمه خاموش کردن را بزن.");
             say("OBA آماده شنیدن نامش است");
         } catch (Exception e) {
             prefs.edit().putBoolean("wake_enabled", false).apply();
             status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
-            if (wakeButton != null) wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
+            if (wakeButton != null) wakeButton.setText("🎙  فعال‌سازی ضبط و ثبت صوتی");
         }
     }
 
