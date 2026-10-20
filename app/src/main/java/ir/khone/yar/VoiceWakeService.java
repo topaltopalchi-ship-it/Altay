@@ -48,6 +48,7 @@ public class VoiceWakeService extends Service {
     private volatile boolean paused = false;
     private volatile boolean listening = false;
     private volatile boolean wakeHandled = false;
+    private volatile boolean transcriptionRequested = false;
     private Thread worker;
     private AudioRecord audioRecord;
     private Model model;
@@ -68,6 +69,14 @@ public class VoiceWakeService extends Service {
         }
         stopping = false;
         startForeground(NOTIFICATION_ID, buildNotification("آماده‌سازی تشخیص آفلاین اوبا"));
+        if (ACTION_TRANSCRIBE.equals(action)) {
+            paused = false;
+            transcriptionRequested = true;
+            stopCapture();
+            updateNotification("تشخیص گفتار آفلاین؛ صحبت کن");
+            ensureWorkerAfterPause();
+            return START_STICKY;
+        }
         if (ACTION_PAUSE.equals(action)) {
             paused = true;
             stopCapture();
@@ -93,6 +102,7 @@ public class VoiceWakeService extends Service {
             }
             worker = new Thread(() -> {
                 if (model == null) prepareAndListen();
+                else if (transcriptionRequested) transcribeOnce();
                 else listenAgain();
             }, "OBA-Vosk-Wake");
             worker.start();
@@ -115,11 +125,63 @@ public class VoiceWakeService extends Service {
             if (stopping || paused) return;
             updateNotification("آماده؛ بگو «اوبا»");
             model = new Model(modelDir.getAbsolutePath());
-            listenLoop();
+            if (transcriptionRequested) transcribeOnce();
+            else listenLoop();
         } catch (Exception e) {
             updateNotification("مدل تشخیص آماده نشد؛ اینترنت و فضای خالی را بررسی کن");
             scheduleRetry(8000);
         }
+    }
+
+    private void transcribeOnce() {
+        transcriptionRequested = false;
+        final int sampleRate = 16000;
+        int minBuffer = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        if (minBuffer <= 0) minBuffer = 8192;
+        AudioRecord recorder = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, sampleRate,
+            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, Math.max(minBuffer, 8192));
+        audioRecord = recorder;
+        String transcript = "";
+        try {
+            if (recorder.getState() != AudioRecord.STATE_INITIALIZED) throw new IllegalStateException("Microphone unavailable");
+            try (Recognizer speech = new Recognizer(model, sampleRate)) {
+                byte[] buffer = new byte[4096];
+                long deadline = System.currentTimeMillis() + 20000L;
+                long lastSpeechAt = 0L;
+                listening = true;
+                recorder.startRecording();
+                updateNotification("در حال شنیدن گفتار فارسی آفلاین");
+                while (!stopping && !paused && listening && System.currentTimeMillis() < deadline) {
+                    int n = recorder.read(buffer, 0, buffer.length);
+                    if (n <= 0) continue;
+                    if (speech.acceptWaveForm(buffer, n)) {
+                        String segment = new JSONObject(speech.getResult()).optString("text", "").trim();
+                        if (!segment.isEmpty()) {
+                            transcript = (transcript + " " + segment).trim();
+                            lastSpeechAt = System.currentTimeMillis();
+                        }
+                    } else {
+                        String partial = new JSONObject(speech.getPartialResult()).optString("partial", "").trim();
+                        if (!partial.isEmpty()) lastSpeechAt = System.currentTimeMillis();
+                    }
+                    if (!transcript.isEmpty() && lastSpeechAt > 0 && System.currentTimeMillis() - lastSpeechAt > 1800L) break;
+                }
+                String tail = new JSONObject(speech.getFinalResult()).optString("text", "").trim();
+                if (!tail.isEmpty()) transcript = (transcript + " " + tail).trim();
+            }
+        } catch (Exception e) {
+            updateNotification("تشخیص گفتار ناموفق بود؛ دوباره تلاش کن");
+        } finally {
+            listening = false;
+            try { recorder.stop(); } catch (Exception ignored) {}
+            recorder.release();
+            if (audioRecord == recorder) audioRecord = null;
+        }
+        Intent resultIntent = new Intent(ACTION_TRANSCRIPT_RESULT);
+        resultIntent.setPackage(getPackageName());
+        resultIntent.putExtra(EXTRA_TRANSCRIPT, transcript);
+        sendBroadcast(resultIntent);
+        if (!stopping) updateNotification("تشخیص گفتار پایان یافت");
     }
 
     private void listenLoop() {
