@@ -27,7 +27,6 @@ public class VoiceWakeService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private SpeechRecognizer recognizer;
     private TextToSpeech tts;
-    private OfflinePersianTts offlineTts;
     private boolean stopping = false;
     private boolean speaking = false;
     private PowerManager.WakeLock wakeLock;
@@ -40,7 +39,6 @@ public class VoiceWakeService extends Service {
             wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OBA:VoiceWakeService");
             wakeLock.setReferenceCounted(false);
         }
-        offlineTts = new OfflinePersianTts(this);
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS && tts != null) {
                 int language = tts.setLanguage(new Locale("fa", "IR"));
@@ -146,16 +144,9 @@ public class VoiceWakeService extends Service {
                                 handler.postDelayed(() -> beginListening(), 1200);
                             }
                         };
-                        if (offlineTts != null) {
-                            offlineTts.speak("جانا", fallback, () -> {
-                                if (!stopping) {
-                                    speaking = false;
-                                    handler.postDelayed(() -> beginListening(), 700);
-                                }
-                            });
-                        } else {
-                            fallback.run();
-                        }
+                        // Sherpa is intentionally disabled for this diagnostic build.
+                        // Reply with Android's system TTS only.
+                        fallback.run();
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
                     }
@@ -225,10 +216,6 @@ public class VoiceWakeService extends Service {
             tts.stop();
             tts.shutdown();
             tts = null;
-        }
-        if (offlineTts != null) {
-            offlineTts.shutdown();
-            offlineTts = null;
         }
         if (wakeLock != null && wakeLock.isHeld()) {
             try { wakeLock.release(); } catch (Exception ignored) {}
