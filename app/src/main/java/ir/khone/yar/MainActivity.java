@@ -1164,9 +1164,17 @@ public class MainActivity extends Activity {
                     if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                     handleVoice(text);
-                    // Return to hands-free wake-word mode after one command. Say "اوبا" again
-                    // to dictate another command, avoiding a permanent second microphone owner.
-                    if (resumeWakeAfterCommand && !isFinishing() && root != null) {
+                    // A wake-word launch starts a hands-free session: keep listening for
+                    // consecutive commands without requiring another wake word or button.
+                    // Vosk ends its recognizer after each finalized utterance, so start a
+                    // fresh engine after the command has been processed.
+                    if (wakeTriggeredSession && !isFinishing() && root != null) {
+                        root.postDelayed(() -> {
+                            if (!isFinishing() && !isDestroyed() && offlineEngine == null) {
+                                startOfflineVoice("auto", modelDirectory);
+                            }
+                        }, 650);
+                    } else if (resumeWakeAfterCommand && !isFinishing() && root != null) {
                         resumeWakeAfterCommand = false;
                         root.postDelayed(() -> {
                             if (!isFinishing() && !isDestroyed()) ensureWakeServiceEnabled();
@@ -1176,8 +1184,14 @@ public class MainActivity extends Activity {
                 @Override public void onError(String message) {
                     if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText(message + " تلاش برای شنیدن دوباره…");
-                    // If a command session times out, return to the wake-word listener automatically.
-                    if (resumeWakeAfterCommand && !isFinishing() && root != null) {
+                    // Keep a wake-triggered session available after silence/no-match too.
+                    if (wakeTriggeredSession && !isFinishing() && root != null) {
+                        root.postDelayed(() -> {
+                            if (!isFinishing() && !isDestroyed() && offlineEngine == null) {
+                                startOfflineVoice("auto", modelDirectory);
+                            }
+                        }, 700);
+                    } else if (resumeWakeAfterCommand && !isFinishing() && root != null) {
                         resumeWakeAfterCommand = false;
                         root.postDelayed(() -> {
                             if (!isFinishing() && !isDestroyed()) ensureWakeServiceEnabled();
