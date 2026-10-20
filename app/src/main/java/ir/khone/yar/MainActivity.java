@@ -6,6 +6,8 @@ import android.app.AlertDialog;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -51,6 +53,8 @@ public class MainActivity extends Activity {
     private Button wakeButton;
     private TextToSpeech tts;
     private OfflineVoskSpeechEngine offlineEngine;
+    private final Handler voiceUiHandler = new Handler(Looper.getMainLooper());
+    private Runnable voiceReadyRunnable;
     private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
@@ -1138,12 +1142,13 @@ public class MainActivity extends Activity {
                     // engine remains active, ready to receive the next sentence
                     // without requiring another tap on the microphone button.
                     if (status != null) {
-                        status.removeCallbacksAndMessages(null);
-                        status.postDelayed(() -> {
+                        if (voiceReadyRunnable != null) voiceUiHandler.removeCallbacks(voiceReadyRunnable);
+                        voiceReadyRunnable = () -> {
                             if (!isFinishing() && status != null) {
                                 status.setText("🎙 آماده‌ام؛ جملهٔ بعدی را بگو.");
                             }
-                        }, 1800);
+                        };
+                        voiceUiHandler.postDelayed(voiceReadyRunnable, 1800);
                     }
                 }
                 @Override public void onError(String message) {
