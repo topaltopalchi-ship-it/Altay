@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
+    private boolean quietVoiceSession = false;
     private TextToSpeech tts;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
@@ -101,13 +102,15 @@ public class MainActivity extends Activity {
         });
         buildUi();
         wakeTriggeredSession = VoiceWakeService.ACTION_WAKE_DETECTED.equals(getIntent() == null ? null : getIntent().getAction());
+        quietVoiceSession = wakeTriggeredSession;
+        if (quietVoiceSession && status != null) status.setVisibility(View.GONE);
         // Prepare the offline model once, then keep the wake-word service running automatically.
         if (OfflineModelDownloader.getInstalledModelDirectory(this) == null) {
             root.postDelayed(() -> downloadVoskModelAutomatically(), 800);
         } else if (!wakeTriggeredSession) {
             root.postDelayed(() -> ensureWakeServiceEnabled(), 500);
         }
-        if (wakeTriggeredSession) root.postDelayed(() -> startVoice("auto"), 900);
+        if (wakeTriggeredSession) root.postDelayed(() -> startVoice("auto"), 1600);
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
         }
@@ -966,8 +969,8 @@ public class MainActivity extends Activity {
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
         prefs.edit().putBoolean("wake_enabled", true).apply();
         resumeWakeAfterCommand = true;
-        if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
-        Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
+        if (!quietVoiceSession && status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
+        if (!quietVoiceSession) Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
 
         // Give Android a moment to release the microphone from the wake-word service.
         if (root != null) {
@@ -1192,7 +1195,9 @@ public class MainActivity extends Activity {
         setIntent(intent);
         if (intent != null && VoiceWakeService.ACTION_WAKE_DETECTED.equals(intent.getAction())) {
             wakeTriggeredSession = true;
-            root.postDelayed(() -> startVoice("auto"), 900);
+            quietVoiceSession = true;
+            if (status != null) status.setVisibility(View.GONE);
+            root.postDelayed(() -> startVoice("auto"), 1600);
         }
     }
 
@@ -1740,7 +1745,8 @@ public class MainActivity extends Activity {
     }
     private String fmt(long n) { return new DecimalFormat("#,###").format(n); }
     private void say(String s) {
-        // Use Android's built-in TTS for this diagnostic build.
+        // Wake-triggered command sessions stay silent; the only spoken prompt is "می‌شنوم".
+        if (quietVoiceSession) return;
         speakWithSystemTts(s);
     }
     private void speakWithSystemTts(String s) {
