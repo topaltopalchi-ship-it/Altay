@@ -55,6 +55,8 @@ public class MainActivity extends Activity {
     private final ArrayList<String> pendingVoiceExpenses = new ArrayList<>();
     private String unfinishedVoiceExpense = "";
     private boolean correctingNextVoicePhrase = false;
+    private boolean awaitingVoiceConfirmation = false;
+    private String correctionTargetItem = "";
     private String liveVoicePartial = "";
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
@@ -1008,13 +1010,17 @@ public class MainActivity extends Activity {
             continuousExpenseListening = false;
             if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
             if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  فعال‌سازی ثبت صوتی هزینه‌ها");
-            if (status != null) status.setText("ثبت صوتی پیوسته متوقف شد.");
+            awaitingVoiceConfirmation = true;
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ضبط متوقف شد؛ پاسخ صوتی بده");
+            if (status != null) status.setText("فهرست را بررسی کن. با گفتن «بله» همه ثبت می‌شوند؛ با گفتن «اصلاح پنیر» مورد پنیر را اصلاح کن.");
+            updateContinuousTranscript();
+            startVoice("continuous_expense_confirmation");
             return;
         }
+        awaitingVoiceConfirmation = false;
         continuousExpenseListening = true;
-        if (continuousExpenseButton != null) continuousExpenseButton.setText("■  توقف ثبت صوتی هزینه‌ها");
-        if (status != null) status.setText("ثبت صوتی فعال شد؛ هر هزینه را جداگانه بگو، مثلاً «نان، دویست هزار تومان».");
+        if (continuousExpenseButton != null) continuousExpenseButton.setText("■  پایان ضبط و بررسی");
+        if (status != null) status.setText("ثبت صوتی فعال است؛ هر مورد را با مبلغ و کلمهٔ «تومان» تمام کن.");
         startVoice("continuous_expense");
     }
 
@@ -1022,26 +1028,25 @@ public class MainActivity extends Activity {
         String normalized = normalize(raw).trim();
         if (normalized.isEmpty()) return;
 
-        if (normalized.equals("اصلاح") || normalized.equals("اصلاح مورد") || normalized.equals("اصلاح کن")) {
-            correctingNextVoicePhrase = true;
-            if (status != null) status.setText("حالت اصلاح فعال شد؛ متن درستِ همان مورد را کامل بگو و در پایان «تومان» بگو.");
-            updateContinuousTranscript();
+        if (normalized.startsWith("اصلاح")) {
+            String target = normalized.replaceFirst("^اصلاح( مورد)?( کن)?\\s*", "").trim();
+            if (!target.isEmpty() && parseAmount(target) > 0) {
+                replacePendingVoiceExpense(target);
+            } else {
+                correctionTargetItem = target;
+                correctingNextVoicePhrase = true;
+                if (status != null) status.setText(target.isEmpty()
+                    ? "حالت اصلاح فعال شد؛ متن کامل مورد را دوباره بخوان و در پایان «تومان» بگو."
+                    : "مورد «" + target + "» انتخاب شد؛ حالا متن درست آن را کامل بخوان و در پایان «تومان» بگو.");
+                updateContinuousTranscript();
+            }
             return;
         }
 
         liveVoicePartial = "";
         if (correctingNextVoicePhrase) {
             correctingNextVoicePhrase = false;
-            String corrected = normalized;
-            if (!corrected.contains("تومان")) corrected += " تومان";
-            if (pendingVoiceExpenses.isEmpty()) {
-                pendingVoiceExpenses.add(corrected);
-            } else {
-                pendingVoiceExpenses.set(pendingVoiceExpenses.size() - 1, corrected);
-            }
-            unfinishedVoiceExpense = "";
-            if (status != null) status.setText("مورد آخر اصلاح شد؛ برای اصلاح دوباره بگو «اصلاح».");
-            updateContinuousTranscript();
+            replacePendingVoiceExpense(normalized);
             return;
         }
 
@@ -1061,6 +1066,69 @@ public class MainActivity extends Activity {
             if (added) status.setText("مورد به فهرست موقت اضافه شد؛ برای مورد بعدی ادامه بده. برای اصلاح مورد آخر بگو «اصلاح».");
             else status.setText("متن دریافت شد؛ برای جدا شدن هر هزینه، مبلغ را با کلمهٔ «تومان» تمام کن.");
         }
+    }
+
+    private void replacePendingVoiceExpense(String correctedRaw) {
+        String corrected = correctedRaw.trim();
+        if (!corrected.contains("تومان")) corrected += " تومان";
+        String[] parsedCorrection = parseContinuousExpense(corrected);
+        if (parsedCorrection == null) {
+            correctingNextVoicePhrase = false;
+            correctionTargetItem = "";
+            if (status != null) status.setText("مبلغ یا شرح مورد اصلاح‌شده واضح نبود؛ دوباره «اصلاح» بگو و متن را کامل بخوان.");
+            updateContinuousTranscript();
+            return;
+        }
+        String target = correctionTargetItem.trim();
+        if (target.isEmpty()) target = parsedCorrection[0].trim();
+        int found = -1;
+        for (int i = 0; i < pendingVoiceExpenses.size(); i++) {
+            String[] existing = parseContinuousExpense(pendingVoiceExpenses.get(i));
+            if (existing != null && (existing[0].contains(target) || target.contains(existing[0]))) {
+                found = i;
+                break;
+            }
+        }
+        correctingNextVoicePhrase = false;
+        correctionTargetItem = "";
+        unfinishedVoiceExpense = "";
+        if (found >= 0) {
+            pendingVoiceExpenses.set(found, corrected);
+            if (status != null) status.setText("مورد «" + parsedCorrection[0] + "» در ردیف " + (found + 1) + " اصلاح شد. برای پایان ضبط دکمه را بزن.");
+        } else {
+            if (status != null) status.setText("مورد «" + target + "» در فهرست پیدا نشد؛ هیچ ردیفی تغییر نکرد. نام مورد را دقیق‌تر بگو.");
+        }
+        updateContinuousTranscript();
+    }
+
+    private void handleVoiceConfirmation(String raw) {
+        String answer = normalize(raw).trim();
+        if (answer.isEmpty()) {
+            if (status != null) status.setText("لطفاً واضح بگو «بله» یا «اصلاح».");
+            return;
+        }
+        if (answer.contains("بله") || answer.contains("آره") || answer.contains("تایید") || answer.contains("تأیید") || answer.contains("درسته") || answer.contains("درست است")) {
+            awaitingVoiceConfirmation = false;
+            commitPendingVoiceExpenses();
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  فعال‌سازی ثبت صوتی هزینه‌ها");
+            return;
+        }
+        if (answer.startsWith("اصلاح")) {
+            String target = answer.replaceFirst("^اصلاح( مورد)?( کن)?\\s*", "").trim();
+            awaitingVoiceConfirmation = false;
+            correctingNextVoicePhrase = true;
+            correctionTargetItem = target;
+            continuousExpenseListening = true;
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("■  پایان ضبط و بررسی");
+            if (status != null) status.setText(target.isEmpty()
+                ? "اصلاح فعال شد؛ متن کامل مورد را دوباره بخوان و در پایان «تومان» بگو."
+                : "مورد «" + target + "» انتخاب شد؛ متن درست آن را بخوان و در پایان «تومان» بگو.");
+            updateContinuousTranscript();
+            startVoice("continuous_expense");
+            return;
+        }
+        if (status != null) status.setText("پاسخ را متوجه نشدم؛ بگو «بله» برای ثبت یا «اصلاح پنیر» برای اصلاح همان مورد.");
+        startVoice("continuous_expense_confirmation");
     }
 
     private String[] parseContinuousExpense(String raw) {
@@ -1351,7 +1419,8 @@ public class MainActivity extends Activity {
                     } else {
                         if (offlineEngine == activeEngine) offlineEngine = null;
                         if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
-                        handleVoice(text);
+                        if (awaitingVoiceConfirmation) handleVoiceConfirmation(text);
+                        else handleVoice(text);
                     }
                 }
                 @Override public void onPartialText(String text) {
