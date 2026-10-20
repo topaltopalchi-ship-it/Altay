@@ -1347,29 +1347,34 @@ public class MainActivity extends Activity {
     }
 
     private String[] parseContinuousExpense(String raw) {
-        String normalized = normalize(raw);
-        long amount = parseAmount(normalized);
-        String[] numberWords = new String[]{
-            "یک", "یه", "دو", "دوتا", "سه", "چهار", "پنج", "شش", "شیش", "هفت", "هشت", "نه", "ده",
-            "یازده", "دوازده", "سیزده", "چهارده", "پانزده", "شانزده", "هفده", "هجده", "نوزده",
-            "بیست", "سی", "چهل", "پنجاه", "شصت", "هفتاد", "هشتاد", "نود", "صد", "دویست",
-            "سیصد", "چهارصد", "پانصد", "هزار", "میلیون", "تومان", "تومن", "ریال",
-            "هزینه", "خرج", "برای", "ثبت", "کن", "اصلاح"
-        };
-        StringBuilder itemBuilder = new StringBuilder();
-        for (String token : normalized.split("\\s+")) {
-            if (token.matches("[0-9]+")) continue;
-            boolean numberOrFiller = false;
-            for (String numberWord : numberWords) {
-                if (token.equals(numberWord)) { numberOrFiller = true; break; }
-            }
-            if (!numberOrFiller) {
-                if (itemBuilder.length() > 0) itemBuilder.append(' ');
-                itemBuilder.append(token);
-            }
+        String normalized = normalize(raw == null ? "" : raw).trim();
+        if (normalized.isEmpty()) return null;
+
+        // Extract the amount ONLY from a phrase explicitly tied to currency.
+        // Example: "پنج کیلو برنج ۱۰ میلیون تومن" -> amount phrase "۱۰ میلیون تومن".
+        java.util.regex.Pattern currencyPattern = java.util.regex.Pattern.compile(
+            "([0-9][0-9,٬.]*|[\\u0600-\\u06FF]+(?:\\s+[\\u0600-\\u06FF]+){0,3})\\s*(میلیارد|میلیون|هزار)?\\s*(تومان|تومن|ریال)"
+        );
+        java.util.regex.Matcher matcher = currencyPattern.matcher(normalized);
+        String amountPhrase = null;
+        int amountStart = -1;
+        int amountEnd = -1;
+        while (matcher.find()) {
+            amountPhrase = matcher.group();
+            amountStart = matcher.start();
+            amountEnd = matcher.end();
         }
-        String item = itemBuilder.toString().trim();
-        if (amount <= 0 || item.isEmpty()) return null;
+        if (amountPhrase == null) return null;
+
+        long amount = parseAmount(amountPhrase);
+        if (amount <= 0) return null;
+
+        // Preserve the item description and its quantity; remove only the currency phrase.
+        String item = (normalized.substring(0, amountStart) + " " + normalized.substring(amountEnd))
+            .replaceAll("\\s+", " ")
+            .replaceAll("(?<!\\S)(هزینه|خرج|برای|ثبت|کن|ذخیره)(?!\\S)", " ")
+            .replaceAll("\\s+", " ").trim();
+        if (item.isEmpty()) return null;
         return new String[]{item, String.valueOf(amount)};
     }
 
