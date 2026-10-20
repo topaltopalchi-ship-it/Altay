@@ -162,7 +162,7 @@ public class MainActivity extends Activity {
 
         TextView transcriptLabel = text("متن شنیده‌شده و فهرست موقت هزینه‌ها", 15, dark, true);
         content.addView(transcriptLabel, lp(-1, -2, 0, 2, 0, 3));
-        continuousTranscriptView = text("هنوز متنی دریافت نشده است. ضبط را شروع کن؛ هر مورد را همراه مبلغ و کلمهٔ «تومان» بگو.", 14, dark, false);
+        continuousTranscriptView = text("هنوز متنی دریافت نشده است. ضبط را شروع کن؛ هر مورد را همراه مقدار یا وزن، مبلغ و کلمهٔ «تومان» بگو. اگر چیزی اشتباه ثبت شد، بگو «اصلاح پنیر» و بعد متن درست پنیر را بخوان.", 16, dark, false);
         continuousTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
         continuousTranscriptView.setMinHeight(dp(104));
         continuousTranscriptView.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -170,6 +170,8 @@ public class MainActivity extends Activity {
         transcriptBox.setStroke(dp(1), Color.rgb(210, 216, 220));
         continuousTranscriptView.setBackground(transcriptBox);
         continuousTranscriptView.setTextColor(Color.rgb(28, 32, 36));
+        continuousTranscriptView.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        continuousTranscriptView.setLineSpacing(dp(3), 1.08f);
         continuousTranscriptView.setTextIsSelectable(true);
         content.addView(continuousTranscriptView, lp(-1, -2, 0, 0, 0, 5));
 
@@ -1211,7 +1213,7 @@ public class MainActivity extends Activity {
         if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\n");
         if (!liveVoicePartial.isEmpty()) display.append("در حال شنیدن: ").append(liveVoicePartial).append("\n");
         if (correctingNextVoicePhrase) display.append("🎙 منتظر متن اصلاح‌شده…");
-        display.append("\nراهنما: بگو «اصلاح پنیر» و سپس متن درست پنیر را بخوان؛ برای ثبت نهایی بگو «بله».");
+        display.append("\nراهنما: اگر چیزی اشتباه خوانده شد، بگو «اصلاح پنیر» و بعد جملهٔ درست پنیر را بخوان. برای ثبت نهایی بگو «بله».");
         continuousTranscriptView.setText(display.toString());
     }
 
