@@ -6,150 +6,266 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-import android.speech.RecognitionListener;
-import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
-import android.speech.tts.TextToSpeech;
-import android.speech.tts.UtteranceProgressListener;
-import java.util.ArrayList;
+
+import org.json.JSONObject;
+import org.vosk.Model;
+import org.vosk.Recognizer;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class VoiceWakeService extends Service {
     public static final String ACTION_START = "ir.khone.yar.WAKE_START";
     public static final String ACTION_STOP = "ir.khone.yar.WAKE_STOP";
     private static final String CHANNEL_ID = "khoneyar_wake_channel";
     private static final int NOTIFICATION_ID = 7102;
+    private static final String MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.5.zip";
+    private static final String MODEL_DIR_NAME = "vosk-model-fa";
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private SpeechRecognizer recognizer;
-    private TextToSpeech tts;
-    private boolean stopping = false;
-    private boolean speaking = false;
+
+    private volatile boolean stopping = false;
+    private volatile boolean listening = false;
+    private volatile boolean wakeHandled = false;
+    private Thread worker;
+    private AudioRecord audioRecord;
+    private Model model;
 
     @Override public void onCreate() {
         super.onCreate();
         createChannel();
-        tts = new TextToSpeech(this, status -> {
-            if (status == TextToSpeech.SUCCESS && tts != null) {
-                int language = tts.setLanguage(new Locale("fa", "IR"));
-                tts.setSpeechRate(0.92f);
-                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                    @Override public void onStart(String id) {}
-                    @Override public void onDone(String id) {
-                        handler.post(() -> {
-                            speaking = false;
-                            if (!stopping) handler.postDelayed(() -> beginListening(), 700);
-                        });
-                    }
-                    @Override public void onError(String id) {
-                        handler.post(() -> {
-                            speaking = false;
-                            if (!stopping) handler.postDelayed(() -> beginListening(), 700);
-                        });
-                    }
-                });
-            }
-        });
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? ACTION_START : intent.getAction();
         if (ACTION_STOP.equals(action)) {
             stopping = true;
+            stopCapture();
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
+
         stopping = false;
-        startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «اوبا»"));
-        handler.post(() -> beginListening());
+        startForeground(NOTIFICATION_ID, buildNotification("آماده‌سازی تشخیص آفلاین اوبا"));
+        if (worker == null || !worker.isAlive()) {
+            worker = new Thread(this::prepareAndListen, "OBA-Vosk-Wake");
+            worker.start();
+        }
         return START_STICKY;
     }
 
-    private void beginListening() {
-        if (stopping || speaking) return;
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            updateNotification("تشخیص گفتار در دسترس نیست؛ سرویس گفتار فارسی را بررسی کن");
-            handler.postDelayed(() -> beginListening(), 5000);
-            return;
-        }
+    private void prepareAndListen() {
         try {
-            if (recognizer != null) {
-                recognizer.destroy();
-                recognizer = null;
+            File modelDir = new File(getFilesDir(), MODEL_DIR_NAME);
+            if (!isModelReady(modelDir)) {
+                updateNotification("مدل تشخیص اوبا در حال دانلود است");
+                downloadAndExtractModel(modelDir);
             }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new RecognitionListener() {
-                @Override public void onReadyForSpeech(android.os.Bundle params) {
-                    updateNotification("در حال شنیدن؛ بگو «اوبا»");
-                }
-                @Override public void onBeginningOfSpeech() {}
-                @Override public void onRmsChanged(float rmsdB) {}
-                @Override public void onBufferReceived(byte[] buffer) {}
-                @Override public void onEndOfSpeech() {}
-                @Override public void onError(int error) {
-                    if (!stopping && !speaking) handler.postDelayed(() -> beginListening(), 900);
-                }
-                @Override public void onResults(android.os.Bundle results) {
-                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    boolean wake = false;
-                    if (matches != null) {
-                        for (String phrase : matches) {
-                            String normalized = normalize(phrase);
-                            if (normalized.contains("اوبا") || normalized.contains("oba") ||
-                                normalized.contains("خونهیار") || normalized.contains("خانیار") ||
-                                normalized.contains("خونهیار") || normalized.contains("خونیار")) {
-                                wake = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (wake) {
-                        updateNotification("نام OBA شنیده شد؛ برنامه باز می‌شود");
-                        Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
-                        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                        try { startActivity(launch); } catch (Exception ignored) {}
-                        if (tts != null) {
-                            speaking = true;
-                            tts.speak("در خدمتم", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
-                        } else if (!stopping) {
-                            handler.postDelayed(() -> beginListening(), 900);
-                        }
-                    } else if (!stopping) {
-                        handler.postDelayed(() -> beginListening(), 650);
-                    }
-                }
-                @Override public void onPartialResults(android.os.Bundle partialResults) {}
-                @Override public void onEvent(int eventType, android.os.Bundle params) {}
-            });
-            Intent speech = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR");
-            speech.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "fa-IR");
-            speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
-            speech.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
-            recognizer.startListening(speech);
+            if (stopping) return;
+            updateNotification("آماده؛ بگو «اوبا»");
+            model = new Model(modelDir.getAbsolutePath());
+            listenLoop();
         } catch (Exception e) {
-            handler.postDelayed(() -> beginListening(), 1800);
+            updateNotification("مدل تشخیص آماده نشد؛ اینترنت و فضای خالی را بررسی کن");
+            if (!stopping) handler.postDelayed(() -> {
+                if (!stopping && (worker == null || !worker.isAlive())) {
+                    worker = new Thread(this::prepareAndListen, "OBA-Vosk-Wake");
+                    worker.start();
+                }
+            }, 8000);
         }
     }
 
-    private String normalize(String text) {
-        return text.toLowerCase(Locale.ROOT).replace('‌', ' ').replace(" ", "")
-            .replace("‌", "").replace("ئ", "ی").replace("ك", "ک").replace("ي", "ی")
-            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا")
-            .replace("ه", "ه");
+    private void listenLoop() {
+        final int sampleRate = 16000;
+        int minBuffer = AudioRecord.getMinBufferSize(sampleRate,
+            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        if (minBuffer <= 0) minBuffer = 8192;
+        int bufferSize = Math.max(minBuffer, 8192);
+        AudioRecord recorder = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+        audioRecord = recorder;
+        if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
+            recorder.release();
+            audioRecord = null;
+            updateNotification("میکروفون در دسترس نیست؛ اجازهٔ میکروفون را بررسی کن");
+            return;
+        }
+
+        try (Recognizer recognizer = new Recognizer(model, sampleRate)) {
+            byte[] buffer = new byte[4096];
+            wakeHandled = false;
+            listening = true;
+            recorder.startRecording();
+            updateNotification("در حال شنیدن؛ بگو «اوبا»");
+            while (!stopping && listening && !wakeHandled) {
+                int n = recorder.read(buffer, 0, buffer.length);
+                if (n <= 0) continue;
+                boolean finalResult = recognizer.acceptWaveForm(buffer, n);
+                String json = finalResult ? recognizer.getResult() : recognizer.getPartialResult();
+                if (isWakeWord(json)) {
+                    wakeHandled = true;
+                    listening = false;
+                    updateNotification("اوبا شنیده شد؛ برنامه باز می‌شود");
+                    handler.post(this::openApp);
+                }
+            }
+        } catch (Exception e) {
+            if (!stopping) updateNotification("تشخیص اوبا متوقف شد؛ دوباره تلاش می‌کنیم");
+        } finally {
+            listening = false;
+            try { recorder.stop(); } catch (Exception ignored) {}
+            recorder.release();
+            if (audioRecord == recorder) audioRecord = null;
+        }
+    }
+
+    private boolean isWakeWord(String json) {
+        try {
+            JSONObject result = new JSONObject(json);
+            String phrase = result.optString("text", "");
+            String partial = result.optString("partial", "");
+            return containsWakeWord(phrase) || containsWakeWord(partial);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean containsWakeWord(String text) {
+        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT)
+            .replace(" ", "").replace("‌", "")
+            .replace("ي", "ی").replace("ك", "ک")
+            .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا");
+        return normalized.contains("اوبا") || normalized.contains("اوبا") ||
+            normalized.contains("oba") || normalized.contains("اوبا");
+    }
+
+    private void openApp() {
+        if (stopping) return;
+        Intent launch = new Intent(this, MainActivity.class);
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP |
+            Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        try {
+            startActivity(launch);
+        } catch (Exception ignored) {
+            updateNotification("اوبا شنیده شد؛ برای بازکردن برنامه اعلان را لمس کن");
+        }
+        // Keep the service/model alive, but release the microphone briefly so the app can open.
+        handler.postDelayed(() -> {
+            if (!stopping && !listening && (worker == null || !worker.isAlive())) {
+                worker = new Thread(this::listenAgain, "OBA-Vosk-Wake");
+                worker.start();
+            }
+        }, 1800);
+    }
+
+    private void listenAgain() {
+        try {
+            if (model != null && !stopping) listenLoop();
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isModelReady(File dir) {
+        return dir.isDirectory() && new File(dir, "am").isDirectory()
+            && new File(dir, "conf").isDirectory() && new File(dir, "graph").isDirectory();
+    }
+
+    private void downloadAndExtractModel(File targetDir) throws Exception {
+        File zipFile = new File(getCacheDir(), "vosk-model-small-fa-0.5.zip");
+        HttpURLConnection connection = (HttpURLConnection) new URL(MODEL_URL).openConnection();
+        connection.setConnectTimeout(20000);
+        connection.setReadTimeout(45000);
+        connection.setInstanceFollowRedirects(true);
+        connection.connect();
+        int response = connection.getResponseCode();
+        if (response < 200 || response >= 300) {
+            connection.disconnect();
+            throw new IllegalStateException("Model download HTTP " + response);
+        }
+        try (InputStream in = new BufferedInputStream(connection.getInputStream());
+             FileOutputStream out = new FileOutputStream(zipFile)) {
+            byte[] buffer = new byte[16384];
+            int count;
+            while (!stopping && (count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+        } finally {
+            connection.disconnect();
+        }
+        if (stopping) return;
+
+        File tempDir = new File(getFilesDir(), MODEL_DIR_NAME + "-extracting");
+        deleteRecursively(tempDir);
+        if (!tempDir.mkdirs() && !tempDir.isDirectory()) throw new IllegalStateException("Cannot create model directory");
+        try (ZipInputStream zip = new ZipInputStream(new BufferedInputStream(new java.io.FileInputStream(zipFile)))) {
+            ZipEntry entry;
+            byte[] buffer = new byte[16384];
+            while (!stopping && (entry = zip.getNextEntry()) != null) {
+                String name = entry.getName().replace('\\', '/');
+                String[] parts = name.split("/", 2);
+                if (parts.length < 2 || parts[1].isEmpty()) {
+                    zip.closeEntry();
+                    continue;
+                }
+                String relative = parts[1];
+                File output = new File(tempDir, relative);
+                String rootPath = tempDir.getCanonicalPath() + File.separator;
+                if (!output.getCanonicalPath().startsWith(rootPath)) throw new SecurityException("Invalid model archive path");
+                if (entry.isDirectory()) {
+                    if (!output.exists() && !output.mkdirs()) throw new IllegalStateException("Cannot create model folder");
+                } else {
+                    File parent = output.getParentFile();
+                    if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IllegalStateException("Cannot create model folder");
+                    try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(output))) {
+                        int count;
+                        while ((count = zip.read(buffer)) != -1) out.write(buffer, 0, count);
+                    }
+                }
+                zip.closeEntry();
+            }
+        }
+        if (stopping) return;
+        if (!isModelReady(tempDir)) throw new IllegalStateException("Downloaded archive does not contain a valid model");
+        deleteRecursively(targetDir);
+        if (!tempDir.renameTo(targetDir)) throw new IllegalStateException("Cannot install model");
+        // The archive is no longer needed after successful extraction.
+        //noinspection ResultOfMethodCallIgnored
+        zipFile.delete();
+    }
+
+    private void deleteRecursively(File file) {
+        if (file == null || !file.exists()) return;
+        File[] children = file.listFiles();
+        if (children != null) for (File child : children) deleteRecursively(child);
+        //noinspection ResultOfMethodCallIgnored
+        file.delete();
+    }
+
+    private void stopCapture() {
+        listening = false;
+        AudioRecord current = audioRecord;
+        if (current != null) {
+            try { current.stop(); } catch (Exception ignored) {}
+        }
     }
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "شنیدن نام OBA", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("اعلان دائمی برای سرویس شنیدن نام OBA");
+            channel.setDescription("اعلان سرویس تشخیص آفلاین نام OBA");
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) manager.createNotificationChannel(channel);
         }
@@ -178,15 +294,10 @@ public class VoiceWakeService extends Service {
     @Override public void onDestroy() {
         stopping = true;
         handler.removeCallbacksAndMessages(null);
-        if (recognizer != null) {
-            recognizer.cancel();
-            recognizer.destroy();
-            recognizer = null;
-        }
-        if (tts != null) {
-            tts.stop();
-            tts.shutdown();
-            tts = null;
+        stopCapture();
+        if (model != null) {
+            model.close();
+            model = null;
         }
         super.onDestroy();
     }
