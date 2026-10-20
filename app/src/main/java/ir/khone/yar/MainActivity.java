@@ -541,30 +541,58 @@ public class MainActivity extends Activity {
                         detailsByCategory.get(category).add((subgroup.isEmpty() ? "" : subgroup + " — ") + item + " : " + fmt(amount) + " تومان");
                     } catch (Exception ignored) {}
                 }
-                StringBuilder report = new StringBuilder("مجموع مخارج: " + fmt(dayTotal) + " تومان\\n\\n");
+                LinearLayout reportPanel = new LinearLayout(this);
+                reportPanel.setOrientation(LinearLayout.VERTICAL);
+                reportPanel.setPadding(dp(16), dp(8), dp(16), dp(8));
+                reportPanel.setBackgroundColor(Color.rgb(246, 249, 255));
+                TextView totalCard = new TextView(this);
+                totalCard.setText("مجموع مخارج این روز\n" + fmt(dayTotal) + " تومان");
+                totalCard.setTextSize(21);
+                totalCard.setTypeface(null, android.graphics.Typeface.BOLD);
+                totalCard.setTextColor(Color.rgb(22, 45, 83));
+                totalCard.setGravity(Gravity.CENTER);
+                totalCard.setPadding(dp(12), dp(16), dp(12), dp(16));
+                totalCard.setBackgroundColor(Color.rgb(225, 234, 249));
+                reportPanel.addView(totalCard, lp(-1, -2, 0, 0, 0, 12));
                 for (String category : categories) {
-                    report.append("● ").append(category).append(": ").append(fmt(totalsByCategory.get(category))).append(" تومان\\n");
-                    for (String detail : detailsByCategory.get(category)) report.append("   • ").append(detail).append("\\n");
-                    report.append("\\n");
+                    LinearLayout row = new LinearLayout(this);
+                    row.setOrientation(LinearLayout.VERTICAL);
+                    row.setPadding(dp(12), dp(10), dp(12), dp(10));
+                    row.setBackgroundColor(Color.WHITE);
+                    TextView heading = new TextView(this);
+                    heading.setText(category + "     |     " + fmt(totalsByCategory.get(category)) + " تومان");
+                    heading.setTextSize(17);
+                    heading.setTypeface(null, android.graphics.Typeface.BOLD);
+                    heading.setTextColor(Color.rgb(30, 55, 91));
+                    heading.setGravity(Gravity.RIGHT);
+                    row.addView(heading);
+                    for (String detail : detailsByCategory.get(category)) {
+                        TextView item = new TextView(this);
+                        item.setText(detail.replace("•", "").replace("\\n", " ").trim());
+                        item.setTextSize(15);
+                        item.setTextColor(Color.rgb(65, 72, 84));
+                        item.setGravity(Gravity.RIGHT);
+                        item.setPadding(0, dp(6), 0, 0);
+                        row.addView(item);
+                    }
+                    reportPanel.addView(row, lp(-1, -2, 0, 0, 0, 6));
                 }
-                if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-                report.append("\n\nمتن‌های صوتی ثبت‌شده در این روز:\n");
-                String voiceHistory = prefs.getString("oba_voice_calendar_v1", "");
-                int voiceCount = 0;
-                if (!voiceHistory.trim().isEmpty()) for (String row : voiceHistory.split("\\n")) {
-                    String[] parts = row.split("\\t", 2);
-                    if (parts.length < 2) continue;
-                    try {
-                        long timestamp = Long.parseLong(parts[0]);
-                        if (timestamp < start || timestamp >= end) continue;
-                        String spoken = parts[1].replace("\r", " ").replace("\n", " ").trim();
-                        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(timestamp));
-                        report.append("• ").append(time).append(" — ").append(spoken).append("\n");
-                        voiceCount++;
-                    } catch (Exception ignored) {}
+                if (dayTotal == 0) {
+                    TextView empty = new TextView(this);
+                    empty.setText("برای این روز هزینه‌ای ثبت نشده است.");
+                    empty.setTextSize(15);
+                    empty.setGravity(Gravity.CENTER);
+                    empty.setPadding(dp(8), dp(12), dp(8), dp(12));
+                    reportPanel.addView(empty);
                 }
-                if (voiceCount == 0) report.append("برای این روز متن گفتاری ثبت نشده است.");
-                new AlertDialog.Builder(this).setTitle("تقویم " + jalaliDateText(jy, jm, jd)).setMessage(report.toString().trim()).setPositiveButton("باشه", null).setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar()).show();
+                ScrollView reportScroll = new ScrollView(this);
+                reportScroll.addView(reportPanel);
+                new AlertDialog.Builder(this)
+                    .setTitle("تقویم " + jalaliDateText(jy, jm, jd))
+                    .setView(reportScroll)
+                    .setPositiveButton("باشه", null)
+                    .setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar())
+                    .show();
             }).show();
     }
 
@@ -1132,7 +1160,7 @@ public class MainActivity extends Activity {
                 }
                 @Override public void onText(String text) {
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
-                    recordVoiceCalendar(text);
+                    // Handle voice commands immediately; do not save raw transcripts.
                     handleVoice(text);
                 }
                 @Override public void onError(String message) {
