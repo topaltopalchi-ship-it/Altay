@@ -82,9 +82,6 @@ public class MainActivity extends Activity {
         tts = new TextToSpeech(this, result -> { if (tts != null) tts.setLanguage(new Locale("fa", "IR")); });
         buildUi();
         registerVoiceResultReceiver();
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
-        }
     }
 
     private void buildUi() {
