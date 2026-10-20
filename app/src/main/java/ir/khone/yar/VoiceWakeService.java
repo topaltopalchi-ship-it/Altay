@@ -33,6 +33,9 @@ public class VoiceWakeService extends Service {
     public static final String ACTION_START = "ir.khone.yar.WAKE_START";
     public static final String ACTION_STOP = "ir.khone.yar.WAKE_STOP";
     public static final String ACTION_PAUSE = "ir.khone.yar.WAKE_PAUSE";
+    public static final String ACTION_TRANSCRIBE = "ir.khone.yar.WAKE_TRANSCRIBE";
+    public static final String ACTION_TRANSCRIPT_RESULT = "ir.khone.yar.WAKE_TRANSCRIPT_RESULT";
+    public static final String EXTRA_TRANSCRIPT = "transcript";
     private static final String CHANNEL_ID = "khoneyar_wake_channel";
     private static final String WAKE_ALERT_CHANNEL_ID = "khoneyar_wake_alert_channel";
     private static final int WAKE_ALERT_NOTIFICATION_ID = 7104;
