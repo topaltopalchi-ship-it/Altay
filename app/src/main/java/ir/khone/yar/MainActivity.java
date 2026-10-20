@@ -548,18 +548,18 @@ public class MainActivity extends Activity {
                     report.append("\\n");
                 }
                 if (dayTotal == 0) report.append("برای این روز هزینه‌ای در آرشیو ثبت نشده است.");
-                report.append("\\n\\nمتن‌های صوتی ثبت‌شده در این روز:\\n");
+                report.append("\n\nمتن‌های صوتی ثبت‌شده در این روز:\n");
                 String voiceHistory = prefs.getString("oba_voice_calendar_v1", "");
                 int voiceCount = 0;
-                if (!voiceHistory.trim().isEmpty()) for (String row : voiceHistory.split("\\\\n")) {
-                    String[] parts = row.split("\\\\t", 2);
+                if (!voiceHistory.trim().isEmpty()) for (String row : voiceHistory.split("\\n")) {
+                    String[] parts = row.split("\\t", 2);
                     if (parts.length < 2) continue;
                     try {
                         long timestamp = Long.parseLong(parts[0]);
                         if (timestamp < start || timestamp >= end) continue;
-                        String spoken = parts[1].replace("\\\\r", " ").replace("\\\\n", " ").trim();
+                        String spoken = parts[1].replace("\r", " ").replace("\n", " ").trim();
                         String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(timestamp));
-                        report.append("• ").append(time).append(" — ").append(spoken).append("\\n");
+                        report.append("• ").append(time).append(" — ").append(spoken).append("\n");
                         voiceCount++;
                     } catch (Exception ignored) {}
                 }
@@ -1650,15 +1650,15 @@ public class MainActivity extends Activity {
     private boolean contains(String s, String... words) { for(String w:words) if(s.contains(w)) return true; return false; }
     private void recordVoiceCalendar(String spokenText) {
         if (spokenText == null || spokenText.trim().isEmpty()) return;
-        String safeText = spokenText.trim().replace("\\t", " ").replace("\\r", " ").replace("\\n", " ");
+        String safeText = spokenText.trim().replace("\t", " ").replace("\r", " ").replace("\n", " ");
         long timestamp = System.currentTimeMillis();
-        String row = timestamp + "\\t" + safeText;
+        String row = timestamp + "\t" + safeText;
         String old = prefs.getString("oba_voice_calendar_v1", "");
-        String combined = row + (old.isEmpty() ? "" : "\\n" + old);
-        String[] rows = combined.split("\\\\n");
+        String combined = row + (old.isEmpty() ? "" : "\n" + old);
+        String[] rows = combined.split("\\n");
         StringBuilder kept = new StringBuilder();
         for (int i = 0; i < Math.min(rows.length, 500); i++) {
-            if (i > 0) kept.append("\\n");
+            if (i > 0) kept.append("\n");
             kept.append(rows[i]);
         }
         prefs.edit().putString("oba_voice_calendar_v1", kept.toString()).apply();
