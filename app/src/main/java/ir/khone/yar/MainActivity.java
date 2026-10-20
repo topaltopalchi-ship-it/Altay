@@ -952,16 +952,14 @@ public class MainActivity extends Activity {
     }
 
     private void startVoice(String mode) {
-        pendingMode = mode;
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
-            return;
+        // DIAGNOSTIC TEST ONLY: deliberately do not initialize Vosk,
+        // Sherpa, Android SpeechRecognizer, or access the microphone.
+        // If tapping the button still crashes, investigate the UI/activity path.
+        Toast.makeText(this, "آزمایش: میکروفون موقتاً غیرفعال است", Toast.LENGTH_LONG).show();
+        if (status != null) {
+            status.setText("آزمایش عیب‌یابی: موتورهای صوتی اجرا نشدند.");
         }
-
-        // DIAGNOSTIC TEST: bypass Vosk initialization entirely.
-        // Keep Sherpa offline TTS unchanged; use Android's platform speech service
-        // for recognition to determine whether the crash is specific to Vosk.
-        startPlatformVoice(mode);
+        return;
     }
 
     private void startPlatformVoice(String mode) {
