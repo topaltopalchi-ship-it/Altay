@@ -1144,6 +1144,17 @@ public class MainActivity extends Activity {
                 @Override public void onText(String text) {
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                     handleVoice(text);
+                    // Vosk's current engine instance stops after one finalized utterance.
+                    // Recreate it after handling the command so the user can dictate
+                    // the next expense without tapping the voice button again.
+                    if (!isFinishing() && root != null) {
+                        root.postDelayed(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            if (offlineEngine == null) {
+                                startOfflineVoice(pendingMode, modelDirectory);
+                            }
+                        }, 2200);
+                    }
                 }
                 @Override public void onError(String message) {
                     if (status != null && !isFinishing()) status.setText(message);
