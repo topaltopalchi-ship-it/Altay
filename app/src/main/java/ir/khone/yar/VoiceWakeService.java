@@ -73,11 +73,22 @@ public class VoiceWakeService extends Service {
             return START_NOT_STICKY;
         }
         stopping = false;
-        startForeground(NOTIFICATION_ID, buildNotification("فعال؛ بگو «اوبا»"));
+        try {
+            // Android 14+ can reject microphone foreground services when runtime
+            // permission or while-in-use eligibility is missing. Never let that
+            // exception terminate the app process.
+            startForeground(NOTIFICATION_ID, buildNotification("در حال آماده‌سازی شنیدن نام اوبا…"));
+        } catch (Throwable e) {
+            stopping = true;
+            stopSelf(startId);
+            return START_NOT_STICKY;
+        }
         if (wakeLock != null && !wakeLock.isHeld()) {
             try { wakeLock.acquire(); } catch (Exception ignored) {}
         }
-        handler.post(() -> beginListening());
+        handler.post(() -> {
+            if (!stopping) beginListening();
+        });
         return START_STICKY;
     }
 
@@ -159,8 +170,10 @@ public class VoiceWakeService extends Service {
             speech.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
             speech.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
             recognizer.startListening(speech);
-        } catch (Exception e) {
-            handler.postDelayed(() -> beginListening(), 1800);
+        } catch (Throwable e) {
+            // Speech service providers and native recognizers can throw runtime
+            // or linkage errors on some devices. Keep the service alive and retry.
+            if (!stopping) handler.postDelayed(() -> beginListening(), 2500);
         }
     }
 
