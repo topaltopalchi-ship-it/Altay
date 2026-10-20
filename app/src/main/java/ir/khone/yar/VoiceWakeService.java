@@ -135,24 +135,17 @@ public class VoiceWakeService extends Service {
                         }
                     }
                     if (wake) {
-                        updateNotification("نام OBA شنیده شد؛ برنامه باز می‌شود");
+                        updateNotification("نام اوبا شنیده شد؛ میکروفون فرمان فعال می‌شود");
                         Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
                         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                             | Intent.FLAG_ACTIVITY_CLEAR_TOP
                             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                        launch.putExtra("ir.khone.yar.START_VOICE_AFTER_WAKE", true);
+                        // Release the wake-word microphone before MainActivity starts command capture.
+                        stopping = true;
+                        handler.removeCallbacksAndMessages(null);
                         try { startActivity(launch); } catch (Exception ignored) {}
-                        speaking = true;
-                        Runnable fallback = () -> {
-                            if (tts != null) {
-                                tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "khoneyar_wake_reply");
-                            } else if (!stopping) {
-                                speaking = false;
-                                handler.postDelayed(() -> beginListening(), 1200);
-                            }
-                        };
-                        // Sherpa is intentionally disabled for this diagnostic build.
-                        // Reply with Android's system TTS only.
-                        fallback.run();
+                        stopSelf();
                     } else if (!stopping) {
                         handler.postDelayed(() -> beginListening(), 650);
                     }
