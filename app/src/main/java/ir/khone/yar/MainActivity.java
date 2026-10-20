@@ -1077,16 +1077,36 @@ public class MainActivity extends Activity {
     }
 
     private void showEntryMethodDialog(String category, String subgroup) {
-        // Expense entry is centralized on the dashboard. Subgroups are archive-only.
+        // Keep subgroup entry and its archive connected to the same expense history.
+        LinearLayout options = new LinearLayout(this);
+        options.setOrientation(LinearLayout.VERTICAL);
+        options.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        Button register = button("✍️  ثبت هزینه", Color.WHITE, Color.WHITE, 17);
+        register.setMinHeight(dp(54));
+        register.setOnClickListener(v -> {
+            // Close the subgroup chooser before opening the actual registration form.
+            ((AlertDialog) v.getTag()).dismiss();
+            showCategoryExpenseForm(category, subgroup);
+        });
+
         Button archive = button("🗂️  آرشیو خریدها", Color.WHITE, Color.WHITE, 17);
         archive.setMinHeight(dp(54));
-        archive.setOnClickListener(v -> showSubgroupPurchaseArchive(category, subgroup));
+        archive.setOnClickListener(v -> {
+            ((AlertDialog) v.getTag()).dismiss();
+            showSubgroupPurchaseArchive(category, subgroup);
+        });
 
-        new AlertDialog.Builder(this)
+        options.addView(register, lp(-1, -2, 0, 0, 0, 8));
+        options.addView(archive, lp(-1, -2, 0, 0, 0, 0));
+        AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
-            .setView(archive)
+            .setView(options)
             .setNegativeButton("بستن", null)
-            .show();
+            .create();
+        register.setTag(dialog);
+        archive.setTag(dialog);
+        dialog.show();
     }
 
     private void showSubgroupPurchaseArchive(String category, String subgroup) {
