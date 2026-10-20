@@ -2,13 +2,6 @@ name: OBA Android APK (latest source)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'app/**'
-      - '*.gradle'
-      - 'settings.gradle'
-      - '.github/workflows/oba-apk.yml'
 
 permissions:
   contents: read
