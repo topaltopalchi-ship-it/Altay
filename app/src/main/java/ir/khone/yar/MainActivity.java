@@ -214,6 +214,8 @@ public class MainActivity extends Activity {
         // Compact access to the archive and existing utilities, without changing the category layout.
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button remindersBtn = button("🔔 یادآوری‌ها", Color.rgb(255, 239, 205), dark, 10);
+        remindersBtn.setOnClickListener(v -> startReminderDraft());
         Button archiveBtn = button("📚 آرشیو", Color.WHITE, dark, 10);
         archiveBtn.setOnClickListener(v -> showExpenseArchive());
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 10);
@@ -224,7 +226,7 @@ public class MainActivity extends Activity {
         backupBtn.setOnClickListener(v -> showBackupOptions());
         Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 10);
         chartBtn.setOnClickListener(v -> showExpenseCharts());
-        for (Button b : new Button[]{archiveBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
+        for (Button b : new Button[]{remindersBtn, archiveBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
             bp.setMargins(dp(2), dp(2), dp(2), dp(2));
             b.setMinHeight(dp(54));
@@ -1809,6 +1811,20 @@ public class MainActivity extends Activity {
         if (tryRegisterCategorizedExpense(raw, s)) return;
 
         String mode = pendingMode;
+        if (mode.equals("reminder_draft")) {
+            if (contains(s, "ذخیره کن", "ذخیره یادآوری", "ثبت یادآوری")) {
+                saveReminderDraft();
+            } else {
+                String draft = prefs.getString("oba_reminder_draft", "");
+                String next = draft.isEmpty() ? raw : draft + "\n" + raw;
+                prefs.edit().putString("oba_reminder_draft", next).apply();
+                if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\n\nبرای افزودن مورد بعدی دوباره صحبت کن؛ در پایان بگو «ذخیره کن».");
+                status.setText("یادآوری به متن موقت اضافه شد. برای ادامه صحبت کن یا بگو «ذخیره کن».");
+                say("مورد موقت شد. مورد بعدی را بگو یا بگو ذخیره کن");
+                root.postDelayed(() -> startVoice("reminder_draft"), 900);
+            }
+            return;
+        }
         if (mode.equals("subgroup_purchase")) {
             long amount = parseAmount(s);
             if (amount <= 0) { status.setText("مبلغ را هم بگو؛ مثلاً ۲ کیلو گوشت ۱۲۰۰۰۰۰ تومان."); say("لطفاً مبلغ خرید را هم بگو"); return; }
@@ -1992,6 +2008,55 @@ public class MainActivity extends Activity {
             out.append(row.substring(row.indexOf("|")+1));
         }
         remindersView.setText(out.length() == 0 ? "هنوز یادآوری زمان‌بندی‌شده‌ای ثبت نشده است. با صدا بگو: «یادآوری قسط فردا ساعت ۹ صبح»." : out.toString());
+    }
+
+    private void startReminderDraft() {
+        String draft = prefs.getString("oba_reminder_draft", "");
+        if (continuousTranscriptView != null) {
+            continuousTranscriptView.setText((draft.isEmpty() ? "قالب هر یادآوری: تاریخ، ساعت، کاری که باید انجام شود.\nمثال: فردا، ساعت ۹ صبح، پرداخت قبض" : draft)
+                + "\n\nهر یادآوری را جداگانه بگو؛ در پایان بگو «ذخیره کن».");
+        }
+        pendingMode = "reminder_draft";
+        startVoice("reminder_draft");
+    }
+
+    private void saveReminderDraft() {
+        String draft = prefs.getString("oba_reminder_draft", "").trim();
+        if (draft.isEmpty()) {
+            status.setText("هنوز یادآوری‌ای وارد نشده؛ اول تاریخ، ساعت و کار را بگو.");
+            say("اول یادآوری را بگو");
+            return;
+        }
+        String[] lines = draft.split("\\n");
+        int savedCount = 0;
+        for (String line : lines) {
+            String item = line.trim();
+            if (item.isEmpty()) continue;
+            item = item.replace("یادآوری اول", "").replace("یادآوری دوم", "").replace("یادآوری سوم", "").replace("یادآوری چهارم", "").trim();
+            java.util.regex.Matcher tm = java.util.regex.Pattern.compile("ساعت\\s*([0-9۰-۹]{1,2})(?:[:٫.]([0-9۰-۹]{2}))?").matcher(item);
+            if (!tm.find()) continue;
+            String timePhrase = tm.group();
+            String datePhrase = item.substring(0, tm.start()).replaceAll("[،,؛;\\s]+$", "").trim();
+            String task = item.substring(tm.end()).replaceFirst("^[،,؛;\\s]+", "").trim();
+            if (task.isEmpty()) continue;
+            String command = "یادآوری " + task + " " + datePhrase + " " + timePhrase;
+            int beforeCount = countReminderRecords();
+            handleReminderVoice(command, normalize(command));
+            if (countReminderRecords() > beforeCount) savedCount++;
+        }
+        prefs.edit().remove("oba_reminder_draft").apply();
+        if (continuousTranscriptView != null) continuousTranscriptView.setText("یادآوری‌های ثبت‌شده: " + savedCount);
+        pendingMode = "auto";
+        String msg = savedCount > 0 ? savedCount + " یادآوری ذخیره شد." : "یادآوری ذخیره نشد؛ هر مورد باید تاریخ، ساعت و شرح کار داشته باشد. تاریخ‌هایی مثل امروز، فردا یا پس‌فردا را واضح بگو.";
+        status.setText(msg);
+        say(msg);
+        refreshReminders();
+    }
+
+    private int countReminderRecords() {
+        int count = 0;
+        for (String key : prefs.getAll().keySet()) if (key.startsWith("reminder_")) count++;
+        return count;
     }
 
     private void handleReminderVoice(String raw, String s) {
