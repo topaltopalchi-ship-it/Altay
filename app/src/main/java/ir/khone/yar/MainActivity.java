@@ -946,6 +946,11 @@ public class MainActivity extends Activity {
         });
         choices.addView(voice, lp(-1, -2, 0, 0, 0, 4));
 
+        Button archive = button("🗂️  آرشیو خریدها", Color.WHITE, Color.WHITE, 17);
+        archive.setMinHeight(dp(54));
+        archive.setOnClickListener(v -> showSubgroupPurchaseArchive(category, subgroup));
+        choices.addView(archive, lp(-1, -2, 0, 4, 0, 4));
+
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
             .setView(choices)
