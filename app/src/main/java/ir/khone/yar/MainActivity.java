@@ -1136,30 +1136,42 @@ public class MainActivity extends Activity {
         try {
             if (recognizer != null) { recognizer.destroy(); recognizer = null; }
             if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
-            offlineEngine = new OfflineVoskSpeechEngine();
-            offlineEngine.start(this, modelDirectory, new OfflineVoskSpeechEngine.Listener() {
+            // Keep a stable reference to this recognition session. Vosk stops its
+            // SpeechService after a finalized utterance, but the field used to keep
+            // pointing at the stopped engine; that prevented the next session starting.
+            OfflineVoskSpeechEngine activeEngine = new OfflineVoskSpeechEngine();
+            offlineEngine = activeEngine;
+            activeEngine.start(this, modelDirectory, new OfflineVoskSpeechEngine.Listener() {
                 @Override public void onStatus(String message) {
                     if (status != null && !isFinishing()) status.setText(message);
                 }
                 @Override public void onText(String text) {
+                    if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText("شنیدم: «" + text + "»");
                     handleVoice(text);
-                    // Vosk's current engine instance stops after one finalized utterance.
-                    // Recreate it after handling the command so the user can dictate
-                    // the next expense without tapping the voice button again.
+                    // Restart recognition after each completed command so expenses can
+                    // be dictated one after another without touching the voice button.
                     if (!isFinishing() && root != null) {
                         root.postDelayed(() -> {
                             if (isFinishing() || isDestroyed()) return;
                             if (offlineEngine == null) {
                                 startOfflineVoice(pendingMode, modelDirectory);
                             }
-                        }, 2200);
+                        }, 1800);
                     }
                 }
                 @Override public void onError(String message) {
-                    if (status != null && !isFinishing()) status.setText(message);
-                    if (!isFinishing()) Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
-                    if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
+                    if (offlineEngine == activeEngine) offlineEngine = null;
+                    if (status != null && !isFinishing()) status.setText(message + " تلاش برای شنیدن دوباره…");
+                    // Recover automatically from silence / transient microphone errors.
+                    if (!isFinishing() && root != null) {
+                        root.postDelayed(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            if (offlineEngine == null) {
+                                startOfflineVoice(pendingMode, modelDirectory);
+                            }
+                        }, 1500);
+                    }
                 }
             });
         } catch (Exception e) {
