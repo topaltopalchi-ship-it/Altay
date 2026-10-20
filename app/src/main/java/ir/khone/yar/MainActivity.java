@@ -164,7 +164,11 @@ public class MainActivity extends Activity {
         continuousTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
         continuousTranscriptView.setMinHeight(dp(104));
         continuousTranscriptView.setPadding(dp(12), dp(10), dp(12), dp(10));
-        continuousTranscriptView.setBackground(round(Color.WHITE, 12));
+        GradientDrawable transcriptBox = round(Color.WHITE, 12);
+        transcriptBox.setStroke(dp(1), Color.rgb(210, 216, 220));
+        continuousTranscriptView.setBackground(transcriptBox);
+        continuousTranscriptView.setTextColor(Color.rgb(28, 32, 36));
+        continuousTranscriptView.setTextIsSelectable(true);
         content.addView(continuousTranscriptView, lp(-1, -2, 0, 0, 0, 5));
 
         LinearLayout voiceReviewRow = new LinearLayout(this);
