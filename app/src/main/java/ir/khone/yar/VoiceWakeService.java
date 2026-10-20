@@ -32,6 +32,7 @@ import java.util.zip.ZipInputStream;
 public class VoiceWakeService extends Service {
     public static final String ACTION_START = "ir.khone.yar.WAKE_START";
     public static final String ACTION_STOP = "ir.khone.yar.WAKE_STOP";
+    public static final String ACTION_PAUSE = "ir.khone.yar.WAKE_PAUSE";
     private static final String CHANNEL_ID = "khoneyar_wake_channel";
     private static final int NOTIFICATION_ID = 7102;
     private static final String MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.5.zip";
@@ -59,14 +60,27 @@ public class VoiceWakeService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_PAUSE.equals(action)) {
+            stopCapture();
+            updateNotification("مکث هنگام استفاده از برنامه");
+            return START_STICKY;
+        }
 
         stopping = false;
         startForeground(NOTIFICATION_ID, buildNotification("آماده‌سازی تشخیص آفلاین اوبا"));
-        if (worker == null || !worker.isAlive()) {
-            worker = new Thread(this::prepareAndListen, "OBA-Vosk-Wake");
-            worker.start();
-        }
+        ensureWorkerAfterPause();
         return START_STICKY;
+    }
+
+    private void ensureWorkerAfterPause() {
+        handler.postDelayed(() -> {
+            if (stopping || listening || (worker != null && worker.isAlive())) return;
+            worker = new Thread(() -> {
+                if (model == null) prepareAndListen();
+                else listenAgain();
+            }, "OBA-Vosk-Wake");
+            worker.start();
+        }, 500);
     }
 
     private void prepareAndListen() {
@@ -151,8 +165,7 @@ public class VoiceWakeService extends Service {
             .replace(" ", "").replace("‌", "")
             .replace("ي", "ی").replace("ك", "ک")
             .replace("آ", "ا").replace("أ", "ا").replace("إ", "ا");
-        return normalized.contains("اوبا") || normalized.contains("اوبا") ||
-            normalized.contains("oba") || normalized.contains("اوبا");
+        return normalized.contains("اوبا") || normalized.contains("oba");
     }
 
     private void openApp() {
@@ -165,13 +178,8 @@ public class VoiceWakeService extends Service {
         } catch (Exception ignored) {
             updateNotification("اوبا شنیده شد؛ برای بازکردن برنامه اعلان را لمس کن");
         }
-        // Keep the service/model alive, but release the microphone briefly so the app can open.
-        handler.postDelayed(() -> {
-            if (!stopping && !listening && (worker == null || !worker.isAlive())) {
-                worker = new Thread(this::listenAgain, "OBA-Vosk-Wake");
-                worker.start();
-            }
-        }, 1800);
+        // Do not restart microphone capture while MainActivity is foreground.
+        // MainActivity resumes wake listening when it leaves the foreground.
     }
 
     private void listenAgain() {
