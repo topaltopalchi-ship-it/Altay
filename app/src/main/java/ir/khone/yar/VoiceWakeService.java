@@ -19,6 +19,7 @@ import java.util.Locale;
 
 public class VoiceWakeService extends Service {
     public static final String ACTION_START = "ir.khone.yar.WAKE_START";
+    public static final String ACTION_WAKE_DETECTED = "ir.khone.yar.WAKE_DETECTED";
     public static final String ACTION_STOP = "ir.khone.yar.WAKE_STOP";
     private static final String CHANNEL_ID = "khoneyar_wake_channel";
     private static final int NOTIFICATION_ID = 7102;
@@ -160,6 +161,7 @@ public class VoiceWakeService extends Service {
         if (stopping) return;
         updateNotification("کلمهٔ اوبا شنیده شد؛ در حال باز کردن برنامه…");
         Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
+        launch.setAction(ACTION_WAKE_DETECTED);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         try { startActivity(launch); } catch (Throwable e) {
@@ -167,7 +169,7 @@ public class VoiceWakeService extends Service {
         }
         speaking = true;
         if (tts != null) {
-            tts.speak("جانا", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
+            tts.speak("جانم", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
         } else {
             speaking = false;
             handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1200);
