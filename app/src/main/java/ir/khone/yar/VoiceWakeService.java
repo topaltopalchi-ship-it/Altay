@@ -83,7 +83,7 @@ public class VoiceWakeService extends Service {
     }
 
     private void prepareAndListen() {
-        if (stopping || speaking || preparingModel || engine != null) return;
+        if (stopping || speaking || wakeDetected || preparingModel || engine != null) return;
         File model = OfflineModelDownloader.getInstalledModelDirectory(this);
         if (model == null) {
             preparingModel = true;
@@ -159,7 +159,7 @@ public class VoiceWakeService extends Service {
 
     private void handleWakeWord() {
         if (stopping) return;
-        updateNotification("کلمهٔ اوبا شنیده شد؛ در حال باز کردن برنامه…");
+        updateNotification("در حال شنیدن فرمان صوتی…");
         Intent launch = new Intent(VoiceWakeService.this, MainActivity.class);
         launch.setAction(ACTION_WAKE_DETECTED);
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -169,17 +169,19 @@ public class VoiceWakeService extends Service {
         }
         speaking = true;
         if (tts != null) {
-            tts.speak("جانم", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
+            tts.speak("می‌شنوم", TextToSpeech.QUEUE_FLUSH, null, "oba_wake_reply");
         } else {
             speaking = false;
-            handler.postDelayed(VoiceWakeService.this::prepareAndListen, 1200);
+            // MainActivity now owns the next command session. Do not reopen the mic here.
         }
     }
 
     private void resumeAfterSpeech() {
         handler.post(() -> {
             speaking = false;
-            if (!stopping) {
+            // Once the wake word has fired, MainActivity owns the microphone for the command.
+            // It will restart this service when command recognition finishes.
+            if (!stopping && !wakeDetected) {
                 updateNotification("در حال شنیدن؛ بگو «اوبا»");
                 handler.postDelayed(this::prepareAndListen, 700);
             }
