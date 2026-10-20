@@ -19,6 +19,7 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     public interface Listener {
         void onStatus(String status);
         void onText(String text);
+        default void onPartialText(String text) {}
         void onError(String message);
     }
 
@@ -80,7 +81,12 @@ public final class OfflineVoskSpeechEngine implements RecognitionListener {
     @Override public void onPartialResult(String hypothesis) {
         if (stopped) return;
         String text = extractText(hypothesis, "partial");
-        if (!text.isEmpty()) postStatus("شنیدم: " + text);
+        if (!text.isEmpty()) {
+            Listener callback = listener;
+            if (callback != null) main.post(() -> {
+                if (!stopped) callback.onPartialText(text);
+            });
+        }
     }
 
     @Override public void onResult(String hypothesis) {
