@@ -1329,7 +1329,7 @@ public class MainActivity extends Activity {
         if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\n");
         if (!liveVoicePartial.isEmpty()) display.append("در حال شنیدن: ").append(liveVoicePartial).append("\n");
         if (correctingNextVoicePhrase) display.append("🎙 منتظر متن اصلاح‌شده…");
-        display.append("\nراهنما: اگر چیزی اشتباه خوانده شد، بگو «اصلاح پنیر» و بعد جملهٔ درست پنیر را بخوان. برای ذخیره هزینه‌ها بگو: ذخیره کن");
+        display.append("\nراهنما: اگر مقدار یا اسم چیزی اشتباه خوانده شد، مثلاً ۳ کیلو پنیر، بگو «اصلاح پنیر» و بعد جملهٔ درست پنیر را دوباره بخوان. برای ذخیره هزینه‌ها بگو: ذخیره کن");
         continuousTranscriptView.setText(display.toString());
     }
 
