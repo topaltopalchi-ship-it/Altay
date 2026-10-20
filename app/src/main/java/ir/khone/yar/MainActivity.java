@@ -48,7 +48,6 @@ public class MainActivity extends Activity {
     private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
-    private Button wakeButton;
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
     private TextToSpeech tts;
@@ -108,7 +107,7 @@ public class MainActivity extends Activity {
         } else if (!wakeTriggeredSession) {
             root.postDelayed(() -> ensureWakeServiceEnabled(), 500);
         }
-        if (wakeTriggeredSession) root.postDelayed(() -> startVoice("auto"), 650);
+        if (wakeTriggeredSession) root.postDelayed(() -> startVoice("auto"), 900);
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             status.setText("تشخیص گفتار روی این گوشی در دسترس نیست. سرویس گفتار فارسی گوشی را فعال کنید.");
         }
@@ -1193,7 +1192,7 @@ public class MainActivity extends Activity {
         setIntent(intent);
         if (intent != null && VoiceWakeService.ACTION_WAKE_DETECTED.equals(intent.getAction())) {
             wakeTriggeredSession = true;
-            root.postDelayed(() -> startVoice("auto"), 350);
+            root.postDelayed(() -> startVoice("auto"), 900);
         }
     }
 
@@ -1222,7 +1221,6 @@ public class MainActivity extends Activity {
             else startService(service);
             prefs.edit().putBoolean("wake_enabled", true).apply();
             status.setText("شنیدن خودکار اوبا فعال است. بگو «اوبا» و سپس فرمانت را بیان کن.");
-            say("OBA آماده شنیدن نامش است");
         } catch (Exception e) {
             prefs.edit().putBoolean("wake_enabled", false).apply();
             status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
