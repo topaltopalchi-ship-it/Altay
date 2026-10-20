@@ -55,6 +55,7 @@ public class MainActivity extends Activity {
     private final ArrayList<String> pendingVoiceExpenses = new ArrayList<>();
     private String unfinishedVoiceExpense = "";
     private boolean correctingNextVoicePhrase = false;
+    private String liveVoicePartial = "";
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
     private boolean quietVoiceSession = false;
@@ -1028,6 +1029,7 @@ public class MainActivity extends Activity {
             return;
         }
 
+        liveVoicePartial = "";
         if (correctingNextVoicePhrase) {
             correctingNextVoicePhrase = false;
             String corrected = normalized;
@@ -1107,6 +1109,7 @@ public class MainActivity extends Activity {
         pendingVoiceExpenses.clear();
         unfinishedVoiceExpense = "";
         correctingNextVoicePhrase = false;
+        liveVoicePartial = "";
         updateContinuousTranscript();
         if (status != null) status.setText("فهرست موقت پاک شد؛ چیزی از این فهرست ثبت نشد.");
     }
@@ -1132,6 +1135,7 @@ public class MainActivity extends Activity {
         }
         pendingVoiceExpenses.clear();
         correctingNextVoicePhrase = false;
+        liveVoicePartial = "";
         updateContinuousTranscript();
         refresh();
         if (status != null) status.setText(saved + " مورد ثبت شد." + (rejected.length() > 0 ? " این موارد به‌دلیل نامشخص بودن شرح یا مبلغ ثبت نشدند: " + rejected : ""));
@@ -1350,8 +1354,10 @@ public class MainActivity extends Activity {
                     }
                 }
                 @Override public void onPartialText(String text) {
-                    if (continuousExpenseListening && status != null && !isFinishing()) {
-                        status.setText("در حال شنیدن: «" + text + "»");
+                    if (continuousExpenseListening && !isFinishing()) {
+                        liveVoicePartial = text;
+                        updateContinuousTranscript();
+                        if (status != null) status.setText("در حال شنیدن…");
                     }
                 }
                 @Override public void onError(String message) {
