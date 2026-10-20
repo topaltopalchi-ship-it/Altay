@@ -1292,9 +1292,32 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    private boolean tryOpenJalaliReportByVoice(String raw, String normalized) {
+        if (!contains(normalized, "گزارش", "هزینه", "مخارج", "تقویم")) return false;
+        String digits = raw.replace("۰","0").replace("۱","1").replace("۲","2").replace("۳","3").replace("۴","4").replace("۵","5").replace("۶","6").replace("۷","7").replace("۸","8").replace("۹","9");
+        String[] months = {"فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"};
+        String n = normalize(digits); int month = -1;
+        for (int i=0;i<months.length;i++) if (n.contains(normalize(months[i]))) { month=i+1; break; }
+        if (month < 0) return false;
+        java.util.regex.Matcher dm = java.util.regex.Pattern.compile("(^|\\\\D)([0-9]{1,2})(?=\\\\D|$)").matcher(digits);
+        int day=-1; while(dm.find()) { try { int v=Integer.parseInt(dm.group(2)); if(v>=1 && v<=31){day=v;break;} } catch(Exception ignored){} }
+        Calendar now=Calendar.getInstance(); int[] jt=gregorianToJalali(now.get(Calendar.YEAR),now.get(Calendar.MONTH)+1,now.get(Calendar.DAY_OF_MONTH));
+        java.util.regex.Matcher ym=java.util.regex.Pattern.compile("(13[0-9]{2}|14[0-9]{2}|15[0-9]{2})").matcher(digits); int year=jt[0]; if(ym.find()) year=Integer.parseInt(ym.group(1));
+        if(day<1 || day>jalaliMonthLength(year,month)){ status.setText("تاریخ گفته‌شده معتبر نیست."); say("تاریخ گفته‌شده معتبر نیست."); return true; }
+        Calendar probe=Calendar.getInstance(); probe.set(year+621,month-1,day,0,0,0); probe.set(Calendar.MILLISECOND,0); Calendar selected=null;
+        for(int off=-220;off<=220;off++){ Calendar c=(Calendar)probe.clone(); c.add(Calendar.DAY_OF_MONTH,off); int[] j=gregorianToJalali(c.get(Calendar.YEAR),c.get(Calendar.MONTH)+1,c.get(Calendar.DAY_OF_MONTH)); if(j[0]==year&&j[1]==month&&j[2]==day){selected=c;break;} }
+        if(selected==null){say("تاریخ پیدا نشد.");return true;} selected.set(Calendar.HOUR_OF_DAY,0);selected.set(Calendar.MINUTE,0);selected.set(Calendar.SECOND,0);selected.set(Calendar.MILLISECOND,0); long start=selected.getTimeInMillis();selected.add(Calendar.DAY_OF_MONTH,1);long end=selected.getTimeInMillis();
+        java.util.LinkedHashMap<String,Long> totals=new java.util.LinkedHashMap<>(); String[] cats={"مدرسه","خانه","ماشین","مغازه","سلامت","سایر"};for(String c:cats)totals.put(c,0L);
+        StringBuilder report=new StringBuilder();long total=0;String hist=prefs.getString("oba_expense_history","");
+        for(String row:hist.split("\\n")){String[] p=row.split("\\t",-1);if(p.length<5)continue;try{long ts=Long.parseLong(p[0]),amount=Long.parseLong(p[4]);if(ts<start||ts>=end||amount<=0)continue;String cat=p[1].trim();if(!totals.containsKey(cat))cat="سایر";totals.put(cat,totals.get(cat)+amount);total+=amount;report.append(cat).append(" — ").append(p[3]).append(": ").append(fmt(amount)).append(" تومان\\n");}catch(Exception ignored){}}
+        String date=day+" "+months[month-1]+" "+year;StringBuilder out=new StringBuilder("گزارش روز ").append(date).append("\\n\\n");for(String c:cats)out.append(c).append(": ").append(fmt(totals.get(c))).append(" تومان\\n");out.append("\\n").append(report).append("\\nجمع کل: ").append(fmt(total)).append(" تومان");
+        status.setText("گزارش "+date+" باز شد. جمع کل "+fmt(total)+" تومان");new AlertDialog.Builder(this).setTitle("گزارش روز "+date).setMessage(out.toString()).setPositiveButton("باشه",null).show();say("گزارش "+date+" باز شد. جمع کل "+fmt(total)+" تومان است.");return true;
+    }
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
+
+        if (tryOpenJalaliReportByVoice(raw, s)) return;
 
         // Accept a complete spoken expense command, including category and subgroup,
         // in one utterance: "خانه، لوازم خانه، پنج میلیون، خرید ماشین ظرف‌شویی".
