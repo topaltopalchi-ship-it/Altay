@@ -519,6 +519,11 @@ public class MainActivity extends Activity {
         return j[2] + " " + months[j[1]-1] + " " + j[0];
     }
 
+    private String jalaliDatePartsText(int jy, int jm, int jd) {
+        String[] months = {"فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"};
+        return jd + " " + months[jm - 1] + " " + jy;
+    }
+
     private void showExpenseCalendar() {
         Calendar today = Calendar.getInstance();
         int[] jToday = gregorianToJalali(today.get(Calendar.YEAR), today.get(Calendar.MONTH)+1, today.get(Calendar.DAY_OF_MONTH));
@@ -662,7 +667,7 @@ public class MainActivity extends Activity {
                 ScrollView reportScroll = new ScrollView(this);
                 reportScroll.addView(reportCards);
                 new AlertDialog.Builder(this)
-                    .setTitle("مخارج " + jalaliDateText(jy, jm, jd))
+                    .setTitle("مخارج " + jalaliDatePartsText(jy, jm, jd))
                     .setView(reportScroll)
                     .setPositiveButton("باشه", null)
                     .setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar())
