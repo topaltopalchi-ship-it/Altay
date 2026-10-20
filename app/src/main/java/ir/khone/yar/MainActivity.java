@@ -1165,12 +1165,12 @@ public class MainActivity extends Activity {
             display.append("هنوز متنی دریافت نشده است.");
         }
         for (int i = 0; i < pendingVoiceExpenses.size(); i++) {
-            display.append(i + 1).append(") ").append(pendingVoiceExpenses.get(i)).append("\\n");
+            display.append(i + 1).append(") ").append(pendingVoiceExpenses.get(i)).append("\n");
         }
-        if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\\n");
+        if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\n");
         if (!liveVoicePartial.isEmpty()) display.append("در حال شنیدن: ").append(liveVoicePartial).append("\n");
         if (correctingNextVoicePhrase) display.append("🎙 منتظر متن اصلاح‌شده…");
-        display.append("\\nراهنما: بگو «اصلاح پنیر» و سپس متن درست پنیر را بخوان؛ برای ثبت نهایی بگو «بله».");
+        display.append("\nراهنما: بگو «اصلاح پنیر» و سپس متن درست پنیر را بخوان؛ برای ثبت نهایی بگو «بله».");
         continuousTranscriptView.setText(display.toString());
     }
 
@@ -1193,7 +1193,7 @@ public class MainActivity extends Activity {
         for (String raw : new ArrayList<>(pendingVoiceExpenses)) {
             String[] parsed = parseContinuousExpense(raw);
             if (parsed == null) {
-                rejected.append("• ").append(raw).append("\\n");
+                rejected.append("• ").append(raw).append("\n");
                 continue;
             }
             long amount = Long.parseLong(parsed[1]);
