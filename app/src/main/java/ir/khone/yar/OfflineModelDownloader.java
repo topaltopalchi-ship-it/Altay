@@ -42,8 +42,13 @@ public final class OfflineModelDownloader {
 
     public static File getInstalledModelDirectory(Context context) {
         File model = new File(context.getFilesDir(), MODEL_DIRECTORY);
-        return new File(model, "am").isDirectory()
-                && new File(model, "conf").isDirectory() ? model : null;
+        // Check real model files, not just directories: a previously interrupted
+        // extraction can leave am/ and conf/ behind and incorrectly skip downloading.
+        File acousticModel = new File(model, "am/final.mdl");
+        File modelConfig = new File(model, "conf/model.conf");
+        File featureConfig = new File(model, "conf/mfcc.conf");
+        return acousticModel.isFile() && acousticModel.length() > 0
+                && modelConfig.isFile() && featureConfig.isFile() ? model : null;
     }
 
     /** Call only after the user explicitly approves downloading the offline model. */
