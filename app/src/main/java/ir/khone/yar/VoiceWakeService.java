@@ -78,6 +78,16 @@ public class VoiceWakeService extends Service {
             return START_STICKY;
         }
         if (ACTION_PAUSE.equals(action)) {
+            // Do not interrupt the first model download or a voice command requested
+            // by the foreground activity. onResume() may send PAUSE immediately after
+            // the user taps the voice button.
+            if (transcriptionRequested) {
+                paused = false;
+                updateNotification(model == null
+                    ? "مدل Vosk در حال آماده‌سازی/دانلود است"
+                    : "تشخیص گفتار آفلاین در حال آماده‌سازی است");
+                return START_STICKY;
+            }
             paused = true;
             stopCapture();
             updateNotification("مکث هنگام استفاده از برنامه");
@@ -122,7 +132,7 @@ public class VoiceWakeService extends Service {
                 updateNotification("مدل تشخیص اوبا در حال دانلود است");
                 downloadAndExtractModel(modelDir);
             }
-            if (stopping || paused) return;
+            if (stopping || (paused && !transcriptionRequested)) return;
             updateNotification("آماده؛ بگو «اوبا»");
             model = new Model(modelDir.getAbsolutePath());
             if (transcriptionRequested) transcribeOnce();
@@ -134,7 +144,6 @@ public class VoiceWakeService extends Service {
     }
 
     private void transcribeOnce() {
-        transcriptionRequested = false;
         final int sampleRate = 16000;
         int minBuffer = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
         if (minBuffer <= 0) minBuffer = 8192;
@@ -181,6 +190,7 @@ public class VoiceWakeService extends Service {
         resultIntent.setPackage(getPackageName());
         resultIntent.putExtra(EXTRA_TRANSCRIPT, transcript);
         sendBroadcast(resultIntent);
+        transcriptionRequested = false;
         if (!stopping) updateNotification("تشخیص گفتار پایان یافت");
     }
 
