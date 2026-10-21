@@ -2448,14 +2448,30 @@ public class MainActivity extends Activity {
         prefs.edit().putString("entries",b.toString()).apply();
     }
     private void recordExpenseHistory(String type, String title, long amount) {
-        String[] parts = title.split(" — ", 2);
-        // Dashboard/voice entries often arrive without a subgroup prefix.
-        // Give these records a stable archive bucket instead of leaving subgroup blank,
-        // which made them invisible in subgroup archives even though the calendar stored them.
-        String subgroup = parts.length > 1 ? parts[0].trim() : "خریدهای روزانه";
-        String item = (parts.length > 1 ? parts[1] : parts[0]).trim();
+        String archiveCategory = type == null ? "سایر" : type.trim();
+        String archiveSubgroup = "";
+        // Some category/subgroup screens pass a combined label such as
+        // "هزینه • خانه • لبنیات". Normalize it so calendar and subgroup archive
+        // use the same category and subgroup keys.
+        if (archiveCategory.startsWith("هزینه • ")) {
+            String[] typeParts = archiveCategory.split(" • ");
+            if (typeParts.length >= 3) {
+                archiveCategory = typeParts[1].trim();
+                archiveSubgroup = typeParts[2].trim();
+            }
+        }
+        String[] parts = (title == null ? "" : title).split(" — ", 2);
+        // Every calendar expense is stored in a subgroup archive with its timestamp.
+        // Preserve an explicitly selected subgroup; use a daily-purchases bucket when
+        // an expense was recorded without a subgroup.
+        String subgroup = !archiveSubgroup.isEmpty() ? archiveSubgroup
+            : (parts.length > 1 ? parts[0].trim() : "خریدهای روزانه");
+        String item = !archiveSubgroup.isEmpty() ? (title == null ? "" : title).trim()
+            : (parts.length > 1 ? parts[1] : parts[0]).trim();
+        String[] validCategories = {"خانه", "مدرسه", "ماشین", "مغازه", "سلامت", "سایر"};
+        if (!java.util.Arrays.asList(validCategories).contains(archiveCategory)) archiveCategory = "سایر";
         long timestamp = System.currentTimeMillis();
-        String row = timestamp + "\t" + type.replace('\t', ' ') + "\t" + subgroup.replace('\t', ' ') + "\t" + item.replace('\t', ' ') + "\t" + amount;
+        String row = timestamp + "\t" + archiveCategory.replace('\t', ' ') + "\t" + subgroup.replace('\t', ' ') + "\t" + item.replace('\t', ' ') + "\t" + amount;
         String old = prefs.getString("oba_expense_history", "");
         String combined = row + (old.isEmpty() ? "" : "\n" + old);
         String[] rows = combined.split("\n");
