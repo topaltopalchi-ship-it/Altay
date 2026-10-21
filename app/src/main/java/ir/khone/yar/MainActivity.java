@@ -238,6 +238,11 @@ public class MainActivity extends Activity {
         voiceReviewRow.addView(clearContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         content.addView(voiceReviewRow, lp(-1, -2, 0, 0, 0, 10));
 
+        Button shoppingListButton = button("🛒 لیست خرید", Color.rgb(221, 245, 232), dark, 17);
+        shoppingListButton.setMinHeight(dp(50));
+        shoppingListButton.setOnClickListener(v -> showShoppingList());
+        content.addView(shoppingListButton, lp(-1, -2, 0, 2, 0, 8));
+
         TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 18, dark, true);
         content.addView(categoryTitle, lp(-1,-2,0,2,0,4));
         String[][] categoryButtons = {
@@ -302,6 +307,72 @@ public class MainActivity extends Activity {
 
 
 
+
+    private void showShoppingList() {
+        String savedList = prefs.getString("oba_shopping_list", "").trim();
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        TextView current = text(savedList.isEmpty()
+                ? "هنوز چیزی در لیست خرید نیست."
+                : "🛒 فهرست فعلی:\\n" + savedList, 16, dark, false);
+        current.setGravity(Gravity.RIGHT | Gravity.TOP);
+        current.setPadding(dp(10), dp(10), dp(10), dp(10));
+        current.setBackground(round(Color.rgb(245, 249, 246), 10));
+        panel.addView(current, lp(-1, -2, 0, 0, 0, 8));
+
+        EditText itemInput = new EditText(this);
+        itemInput.setTextSize(16);
+        itemInput.setGravity(Gravity.RIGHT | Gravity.TOP);
+        itemInput.setHint("متن خرید را بنویس؛ هر قلم در یک خط");
+        itemInput.setMinLines(2);
+        itemInput.setMaxLines(5);
+        itemInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        panel.addView(itemInput, lp(-1, -2, 0, 0, 0, 8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("🛒 لیست خرید")
+                .setView(panel)
+                .setPositiveButton("ثبت متن", (d, which) -> {
+                    String entered = itemInput.getText().toString().trim();
+                    if (!entered.isEmpty()) {
+                        String existing = prefs.getString("oba_shopping_list", "").trim();
+                        String updated = existing.isEmpty() ? entered : existing + "\\n" + entered;
+                        prefs.edit().putString("oba_shopping_list", updated).apply();
+                        Toast.makeText(this, "اقلام به لیست خرید اضافه شد.", Toast.LENGTH_SHORT).show();
+                    }
+                    showShoppingList();
+                })
+                .setNeutralButton("🎙 افزودن با صدا", (d, which) -> startVoice("shopping_list_voice"))
+                .setNegativeButton("بستن", null)
+                .create();
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextSize(13);
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextSize(13);
+        });
+        dialog.show();
+    }
+
+    private void handleShoppingListVoice(String spoken) {
+        String item = spoken == null ? "" : spoken.trim();
+        item = item.replaceAll("^[،,؛;\\s]+|[،,؛;\\s]+$", "");
+        String compact = normalize(item).replace("‌", "").replace(" ", "")
+                .replace("ي", "ی").replace("ك", "ک");
+        if (item.isEmpty() || compact.equals("لیستخرید") || compact.equals("خرید")) {
+            status.setText("نام کالا را واضح بگو؛ مثلاً «نان، شیر و تخم‌مرغ».");
+            showShoppingList();
+            return;
+        }
+        String existing = prefs.getString("oba_shopping_list", "").trim();
+        String updated = existing.isEmpty() ? item : existing + "\\n" + item;
+        prefs.edit().putString("oba_shopping_list", updated).apply();
+        status.setText("به لیست خرید اضافه شد: " + item);
+        Toast.makeText(this, "به لیست خرید اضافه شد.", Toast.LENGTH_SHORT).show();
+        showShoppingList();
+    }
 
     private static final int[] CHART_COLORS = new int[]{Color.rgb(52,152,219), Color.rgb(46,204,113), Color.rgb(243,156,18), Color.rgb(155,89,182), Color.rgb(231,76,60), Color.rgb(26,188,156), Color.rgb(241,196,15)};
 
@@ -2383,6 +2454,11 @@ public class MainActivity extends Activity {
         if (tryRegisterCategorizedExpense(raw, s)) return;
 
         String mode = pendingMode;
+        if (mode.equals("shopping_list_voice")) {
+            pendingMode = "auto";
+            handleShoppingListVoice(raw);
+            return;
+        }
         if (mode.equals("reminder_draft")) {
             String reminderCommand = normalize(raw).replace("‌", "").replace(" ", "")
                 .replace("ي", "ی").replace("ك", "ک")
