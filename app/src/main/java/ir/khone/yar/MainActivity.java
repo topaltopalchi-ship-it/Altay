@@ -252,9 +252,9 @@ public class MainActivity extends Activity {
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 1, 0, 2));
-        Button calendarBtn = button("🗓️ تقویم مخارج روزانه", Color.rgb(224, 240, 255), dark, 15);
+        Button calendarBtn = button("🗓️ تقویم و آرشیو خریدها", Color.rgb(224, 240, 255), dark, 15);
         calendarBtn.setMinHeight(dp(48));
-        calendarBtn.setOnClickListener(v -> showExpenseCalendar());
+        calendarBtn.setOnClickListener(v -> showPurchaseCenter());
         content.addView(calendarBtn, lp(-1, -2, 0, 2, 0, 6));
         Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
         smartBtn.setMinHeight(dp(44));
@@ -1199,16 +1199,80 @@ public class MainActivity extends Activity {
     }
 
     private void showEntryMethodDialog(String category, String subgroup) {
-        // Subgroups remain archive-only; expense entry is handled on the dashboard.
-        Button archive = button("🗂️  آرشیو خریدها", Color.WHITE, Color.WHITE, 17);
-        archive.setMinHeight(dp(54));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setPadding(dp(12), dp(8), dp(12), dp(8));
+        Button add = button("➕ ثبت خرید در این زیرمجموعه", Color.rgb(224, 240, 255), dark, 16);
+        add.setMinHeight(dp(52));
+        add.setOnClickListener(v -> showCategoryExpenseForm(category, subgroup));
+        Button archive = button("🗂️ آرشیو خریدهای همین زیرمجموعه", Color.WHITE, dark, 16);
+        archive.setMinHeight(dp(52));
         archive.setOnClickListener(v -> showSubgroupPurchaseArchive(category, subgroup));
-
+        actions.addView(add, lp(-1, -2, 0, 0, 0, 8));
+        actions.addView(archive, lp(-1, -2, 0, 0, 0, 0));
         new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
-            .setView(archive)
+            .setView(actions)
             .setNegativeButton("بستن", null)
             .show();
+    }
+
+    private void showPurchaseCenter() {
+        new AlertDialog.Builder(this)
+            .setTitle("🛒 خریدها و تقویم هزینه‌ها")
+            .setItems(new String[]{"🗓️ خریدهای روزانه و تقویم", "🗂️ خریدهای دسته‌بندی‌شده", "➕ ثبت خرید با انتخاب دسته"}, (dialog, which) -> {
+                if (which == 0) showExpenseCalendar();
+                else if (which == 1) showDailyPurchaseArchive();
+                else showPurchaseCategoryPicker();
+            })
+            .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private void showPurchaseCategoryPicker() {
+        String[] categories = {"خانه", "مدرسه", "ماشین", "مغازه", "سلامت", "سایر"};
+        new AlertDialog.Builder(this)
+            .setTitle("خرید را برای کدام بخش ثبت می‌کنی؟")
+            .setItems(categories, (dialog, which) -> showCategorySubgroups(categories[which]))
+            .setNegativeButton("بازگشت", null)
+            .show();
+    }
+
+    private void showDailyPurchaseArchive() {
+        String history = prefs.getString("oba_expense_history", "");
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<String> details = new ArrayList<>();
+        long total = 0L;
+        if (!history.trim().isEmpty()) {
+            for (String row : history.split("\\n")) {
+                String[] parts = row.split("\\t", -1);
+                if (parts.length < 5 || !"خریدهای روزانه".equals(parts[2].trim())) continue;
+                try {
+                    long timestamp = Long.parseLong(parts[0]);
+                    long amount = Long.parseLong(parts[4]);
+                    String date = formatPersianDate(new Date(timestamp));
+                    labels.add(date + " • " + parts[3].trim() + " • " + fmt(amount) + " تومان");
+                    details.add("بخش: " + parts[1].trim() + "\\nتاریخ: " + date + "\\nشرح: " + parts[3].trim() + "\\nمبلغ: " + fmt(amount) + " تومان");
+                    total += amount;
+                } catch (Exception ignored) {}
+            }
+        }
+        if (labels.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("🗂️ خریدهای روزانه")
+                .setMessage("هنوز خریدی در بخش خریدهای روزانه ثبت نشده است. برای ثبت، از «ثبت خرید با انتخاب دسته» استفاده کن.")
+                .setPositiveButton("ثبت خرید", (d, w) -> showPurchaseCategoryPicker())
+                .setNegativeButton("بستن", null).show();
+            return;
+        }
+        labels.add(0, "مجموع خریدهای روزانه: " + fmt(total) + " تومان");
+        String[] items = labels.toArray(new String[0]);
+        new AlertDialog.Builder(this).setTitle("🗂️ آرشیو خریدهای روزانه")
+            .setItems(items, (d, which) -> {
+                if (which == 0) return;
+                int index = which - 1;
+                new AlertDialog.Builder(this).setTitle("جزئیات خرید روزانه").setMessage(details.get(index))
+                    .setPositiveButton("باشه", null).show();
+            }).setNegativeButton("بستن", null).show();
     }
 
     private void showSubgroupPurchaseArchive(String category, String subgroup) {
