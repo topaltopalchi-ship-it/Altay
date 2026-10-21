@@ -829,7 +829,8 @@ public class MainActivity extends Activity {
             .remove("oba_expense_history")
             .remove("entries")
             .apply();
-        refreshRecent();
+        entries.clear();
+        refresh();
     }
 
     private void clearReminderArchive() {
@@ -2722,11 +2723,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override protected void onDestroy() {
-        stopReminderSoundPreview();
-        super.onDestroy();
-    }
-
     private void refreshReminders() {
         java.util.ArrayList<String> rows = new java.util.ArrayList<>();
         for (String key : prefs.getAll().keySet()) {
@@ -3327,6 +3323,7 @@ public class MainActivity extends Activity {
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
+        stopReminderSoundPreview();
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
         if(tts!=null) tts.shutdown();
