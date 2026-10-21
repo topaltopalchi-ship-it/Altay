@@ -803,11 +803,25 @@ public class MainActivity extends Activity {
                 due.set(Calendar.SECOND, 0);
                 due.set(Calendar.MILLISECOND, 0);
                 long when = due.getTimeInMillis();
-                // Store a real newline so the archive parser can read timestamp and note separately.
-                prefs.edit().putString("reminder_note_" + when + "_" + System.currentTimeMillis(),
-                    when + "\n" + note).apply();
+                if (when <= System.currentTimeMillis()) {
+                    Toast.makeText(this, "زمان یادآوری باید در آینده باشد؛ ساعت را اصلاح کن.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                String title = note.replaceAll("\\s+", " ").trim();
+                int reminderId = (int) (System.currentTimeMillis() & 0x7fffffff);
+                if (reminderId == 0) reminderId = 1;
+                while (prefs.contains("reminder_" + reminderId)) {
+                    reminderId = reminderId == Integer.MAX_VALUE ? 1 : reminderId + 1;
+                }
+                String savedReminder = when + "\nonce\n" + title + "\n-1";
+                // Keep the archive entry and scheduled alarm in sync.
+                prefs.edit()
+                    .putString("reminder_" + reminderId, savedReminder)
+                    .putString("reminder_note_" + when + "_" + reminderId, when + "\n" + note)
+                    .apply();
+                ReminderReceiver.schedule(this, reminderId, when, title, false);
                 refreshReminders();
-                Toast.makeText(this, "یادآوری در آرشیو ذخیره شد.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "یادآوری ذخیره شد؛ آلارم یک ساعت قبل پخش می‌شود.", Toast.LENGTH_LONG).show();
                 showExpenseCalendar();
             }).show();
     }
