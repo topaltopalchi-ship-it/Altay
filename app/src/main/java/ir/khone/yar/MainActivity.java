@@ -238,6 +238,21 @@ public class MainActivity extends Activity {
         voiceReviewRow.addView(clearContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         content.addView(voiceReviewRow, lp(-1, -2, 0, 0, 0, 10));
 
+        // Budget control: bright coral-pink button with cumulative budget tracking.
+        Button budgetButton = button("💗  بودجه", Color.rgb(244, 91, 130), Color.WHITE, 18);
+        budgetButton.setMinHeight(dp(56));
+        budgetButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        GradientDrawable budgetFace = new GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            new int[]{Color.rgb(255, 105, 145), Color.rgb(226, 45, 103), Color.rgb(196, 35, 91)}
+        );
+        budgetFace.setCornerRadius(dp(18));
+        budgetFace.setStroke(dp(2), Color.rgb(255, 190, 205));
+        budgetButton.setBackground(budgetFace);
+        budgetButton.setElevation(dp(5));
+        budgetButton.setOnClickListener(v -> showBudgetDialog());
+        content.addView(budgetButton, lp(-1, -2, 0, 2, 0, 8));
+
         Button shoppingListButton = button("🛒 لیست خرید", Color.rgb(221, 245, 232), dark, 17);
         shoppingListButton.setMinHeight(dp(50));
         shoppingListButton.setOnClickListener(v -> showShoppingList());
@@ -307,6 +322,80 @@ public class MainActivity extends Activity {
 
 
 
+
+    private void showBudgetDialog() {
+        long currentBudget = Math.max(0L, prefs.getLong("home_budget", 0L));
+        long spent = Math.max(0L, expenseTotal);
+        long remaining = currentBudget - spent;
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(8), dp(4), dp(8), dp(4));
+
+        TextView summary = text("بودجهٔ کل: " + fmt(currentBudget) + " تومان\\nهزینه‌های ثبت‌شده: "
+                + fmt(spent) + " تومان\\nماندهٔ بودجه: " + fmt(remaining) + " تومان",
+                17, dark, true);
+        summary.setGravity(Gravity.RIGHT);
+        summary.setPadding(dp(12), dp(12), dp(12), dp(12));
+        summary.setBackground(round(Color.rgb(255, 239, 244), 12));
+        panel.addView(summary, lp(-1, -2, 0, 0, 0, 10));
+
+        EditText amountInput = new EditText(this);
+        amountInput.setSingleLine(true);
+        amountInput.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        amountInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        amountInput.setHint("مبلغ جدید به تومان");
+        panel.addView(amountInput, lp(-1, -2, 0, 0, 0, 4));
+
+        new AlertDialog.Builder(this)
+            .setTitle("💗 بودجه")
+            .setMessage("مبلغی وارد کن تا به بودجهٔ فعلی اضافه شود؛ مجموع جدید نمایش داده می‌شود.")
+            .setView(panel)
+            .setNegativeButton("بستن", null)
+            .setNeutralButton("تنظیم از ابتدا", null)
+            .setPositiveButton("افزودن به بودجه", null)
+            .create();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("💗 بودجه")
+            .setMessage("مبلغی وارد کن تا به بودجهٔ فعلی اضافه شود؛ مجموع جدید نمایش داده می‌شود.")
+            .setView(panel)
+            .setNegativeButton("بستن", null)
+            .setNeutralButton("تنظیم از ابتدا", null)
+            .setPositiveButton("افزودن به بودجه", null)
+            .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                long amount;
+                try { amount = Long.parseLong(amountInput.getText().toString().replace(",", "").replace("٬", "").trim()); }
+                catch (Exception ex) { amount = 0L; }
+                long old = Math.max(0L, prefs.getLong("home_budget", 0L));
+                if (amount <= 0L || old > Long.MAX_VALUE - amount) {
+                    amountInput.setError("مبلغ معتبر وارد کن");
+                    return;
+                }
+                long total = old + amount;
+                prefs.edit().putLong("home_budget", total).apply();
+                long balance = total - expenseTotal;
+                String msg = "مبلغ " + fmt(amount) + " تومان به بودجه اضافه شد. بودجهٔ کل: "
+                        + fmt(total) + " تومان؛ مانده: " + fmt(balance) + " تومان.";
+                status.setText(msg);
+                Toast.makeText(this, "بودجهٔ کل: " + fmt(total) + " تومان", Toast.LENGTH_LONG).show();
+                dialog.dismiss();
+                refresh();
+            });
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                long amount;
+                try { amount = Long.parseLong(amountInput.getText().toString().replace(",", "").replace("٬", "").trim()); }
+                catch (Exception ex) { amount = 0L; }
+                if (amount <= 0L) { amountInput.setError("مبلغ معتبر وارد کن"); return; }
+                prefs.edit().putLong("home_budget", amount).apply();
+                status.setText("بودجه از ابتدا روی " + fmt(amount) + " تومان تنظیم شد.");
+                dialog.dismiss();
+                refresh();
+            });
+        });
+        dialog.show();
+    }
 
     private void showShoppingList() {
         String savedList = prefs.getString("oba_shopping_list", "").trim();
@@ -2621,9 +2710,15 @@ public class MainActivity extends Activity {
             status.setText("مبلغ بودجه را بگو؛ مثلاً «بودجه ماهانه خانه پنج میلیون تومان»");
             say("مبلغ بودجه را بگو"); return;
         }
-        prefs.edit().putLong("home_budget", amount).apply();
-        long remaining = amount - expenseTotal;
-        String msg = "بودجه خانه روی " + fmt(amount) + " تومان تنظیم شد. مانده بودجه با احتساب ثبت‌های فعلی " + fmt(remaining) + " تومان است.";
+        long oldBudget = Math.max(0L, prefs.getLong("home_budget", 0L));
+        if (oldBudget > Long.MAX_VALUE - amount) {
+            status.setText("مبلغ بودجه بیش از حد بزرگ است.");
+            say("مبلغ بیش از حد بزرگ است"); return;
+        }
+        long totalBudget = oldBudget + amount;
+        prefs.edit().putLong("home_budget", totalBudget).apply();
+        long remaining = totalBudget - expenseTotal;
+        String msg = "مبلغ " + fmt(amount) + " تومان به بودجه اضافه شد. بودجه کل " + fmt(totalBudget) + " تومان است؛ مانده بودجه " + fmt(remaining) + " تومان است.";
         status.setText(msg); say(msg); refresh();
     }
 
