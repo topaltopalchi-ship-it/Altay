@@ -196,13 +196,6 @@ public class MainActivity extends Activity {
         reminderTranscriptView.setTextIsSelectable(true);
         content.addView(reminderTranscriptView, lp(-1, -2, 0, 0, 0, 5));
 
-        // Visible save action is a reliable fallback when Android speech recognition
-        // does not return the spoken "ذخیره کن" command as a final result.
-        Button saveReminderButton = button("ذخیره کن", Color.WHITE, dark, 14);
-        saveReminderButton.setMinHeight(dp(48));
-        saveReminderButton.setOnClickListener(v -> saveReminderDraft());
-        content.addView(saveReminderButton, lp(-1, -2, 0, 0, 0, 7));
-
         LinearLayout voiceReviewRow = new LinearLayout(this);
         voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
         commitContinuousButton = button("تأیید و ثبت همه", Color.WHITE, dark, 13);
@@ -1559,7 +1552,21 @@ public class MainActivity extends Activity {
                 @Override public void onPartialResults(Bundle partialResults) {
                     if (status == null || isFinishing() || partialResults == null) return;
                     ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (matches != null && !matches.isEmpty()) status.setText("شنیدم: " + matches.get(0));
+                    if (matches != null && !matches.isEmpty()) {
+                        String partial = matches.get(0).trim();
+                        status.setText("شنیدم: " + partial);
+                        String compact = normalize(partial).replace("‌", "").replace(" ", "")
+                            .replace("ي", "ی").replace("ك", "ک")
+                            .replaceAll("[،,؛;.!؟?]+", "");
+                        boolean saveCommand = compact.contains("ذخیرهکن")
+                            || compact.contains("ذخیرهیادآوری")
+                            || compact.contains("ثبتکن");
+                        if ("reminder_draft".equals(pendingMode) && saveCommand
+                                && !prefs.getString("oba_reminder_draft", "").trim().isEmpty()) {
+                            pendingMode = "saving_reminder";
+                            saveReminderDraft();
+                        }
+                    }
                 }
                 @Override public void onEvent(int eventType, Bundle params) {}
             });
