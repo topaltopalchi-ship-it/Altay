@@ -340,7 +340,7 @@ public class MainActivity extends Activity {
                     String entered = itemInput.getText().toString().trim();
                     if (!entered.isEmpty()) {
                         String existing = prefs.getString("oba_shopping_list", "").trim();
-                        String updated = existing.isEmpty() ? entered : existing + "\\n" + entered;
+                        String updated = existing.isEmpty() ? entered : existing + "\n" + entered;
                         prefs.edit().putString("oba_shopping_list", updated).apply();
                         Toast.makeText(this, "اقلام به لیست خرید اضافه شد.", Toast.LENGTH_SHORT).show();
                     }
@@ -367,7 +367,7 @@ public class MainActivity extends Activity {
             return;
         }
         String existing = prefs.getString("oba_shopping_list", "").trim();
-        String updated = existing.isEmpty() ? item : existing + "\\n" + item;
+        String updated = existing.isEmpty() ? item : existing + "\n" + item;
         prefs.edit().putString("oba_shopping_list", updated).apply();
         status.setText("به لیست خرید اضافه شد: " + item);
         Toast.makeText(this, "به لیست خرید اضافه شد.", Toast.LENGTH_SHORT).show();
