@@ -916,7 +916,8 @@ public class MainActivity extends Activity {
                     .putString("reminder_" + reminderId, savedReminder)
                     .putString("reminder_note_" + when + "_" + reminderId, when + "\n" + note)
                     .apply();
-                ReminderReceiver.schedule(this, reminderId, when, title, false);\n                ensureExactAlarmAccess();
+                ReminderReceiver.schedule(this, reminderId, when, title, false);
+                ensureExactAlarmAccess();
                 if (Build.VERSION.SDK_INT >= 33
                         && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
@@ -2765,7 +2766,8 @@ public class MainActivity extends Activity {
             .putString(archiveKey, when + "\n" + text.trim())
             .remove("oba_reminder_text_draft")
             .apply();
-        ReminderReceiver.schedule(this, id, when, title, false);\n        ensureExactAlarmAccess();
+        ReminderReceiver.schedule(this, id, when, title, false);
+        ensureExactAlarmAccess();
         if (reminderDraftDialog != null && reminderDraftDialog.isShowing()) reminderDraftDialog.dismiss();
         reminderDraftDialog = null;
         reminderDraftInput = null;
@@ -3102,7 +3104,8 @@ public class MainActivity extends Activity {
         long when = due.getTimeInMillis();
         String saved = when + "\n" + (monthly ? "monthly" : "once") + "\n" + title + "\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
-        ReminderReceiver.schedule(this, id, when, title, monthly);\n        ensureExactAlarmAccess();
+        ReminderReceiver.schedule(this, id, when, title, monthly);
+        ensureExactAlarmAccess();
         String whenText = formatPersianDateTime(due.getTime());
         String confirmation = "یادآوری «" + title + "» برای " + whenText + (monthly ? " و تکرار ماهانه" : "") + " ثبت شد.";
         addEntry("یادآوری", confirmation, 0);
