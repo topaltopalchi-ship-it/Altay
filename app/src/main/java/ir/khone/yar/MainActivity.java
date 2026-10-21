@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
 
         // Primary dashboard control: explicit opt-in continuous listening for expense entries.
         continuousExpenseButton = new Button(this);
-        continuousExpenseButton.setText("⏹  پایان ثبت");
+        continuousExpenseButton.setText("🎙  شروع ثبت");
         continuousExpenseButton.setTextSize(17);
         continuousExpenseButton.setTextColor(Color.WHITE);
         continuousExpenseButton.setAllCaps(false);
