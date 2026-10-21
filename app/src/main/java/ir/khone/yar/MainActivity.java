@@ -61,6 +61,8 @@ public class MainActivity extends Activity {
     private boolean correctingNextVoicePhrase = false;
     private boolean awaitingVoiceConfirmation = false;
     private String correctionTargetItem = "";
+    private boolean correctingReminderNextPhrase = false;
+    private String reminderCorrectionTarget = "";
     private String liveVoicePartial = "";
     private boolean resumeWakeAfterCommand = true;
     private boolean wakeTriggeredSession = false;
@@ -2033,22 +2035,87 @@ public class MainActivity extends Activity {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
 
+        String compactForReminder = s.replace("‌", "").replace(" ", "")
+            .replace("ي", "ی").replace("ك", "ک").replaceAll("[،,؛;.!؟?]+", "");
+        String currentReminderDraft = prefs.getString("oba_reminder_draft", "").trim();
+
+        // Reminder correction mirrors expense correction: say "اصلاح پنیر", then
+        // speak the corrected full sentence; only the matching draft line is replaced.
+        if ("reminder_draft".equals(pendingMode) && compactForReminder.startsWith("اصلاح")) {
+            reminderCorrectionTarget = raw.trim().replaceFirst("^\\s*اصلاح\\s*", "").trim();
+            correctingReminderNextPhrase = true;
+            if (reminderCorrectionTarget.isEmpty()) {
+                status.setText("بگو «اصلاح» و سپس متن درست جمله را بخوان؛ یا «اصلاح خرید خانه» را بگو.");
+            } else {
+                status.setText("اصلاح فعال شد؛ جملهٔ درستِ «" + reminderCorrectionTarget + "» را کامل دوباره بگو.");
+                say("جمله درست را دوباره بگو");
+            }
+            pendingMode = "reminder_draft";
+            return;
+        }
+        if ("reminder_draft".equals(pendingMode) && correctingReminderNextPhrase) {
+            String correctedPhrase = raw.trim();
+            if (!correctedPhrase.isEmpty() && !compactForReminder.startsWith("اصلاح")
+                    && !compactForReminder.contains("ذخیرهکن")) {
+                String[] draftLines = currentReminderDraft.isEmpty() ? new String[0] : currentReminderDraft.split("\\n");
+                StringBuilder replacedDraft = new StringBuilder();
+                int replaceAt = -1;
+                for (int i = 0; i < draftLines.length; i++) {
+                    if (!reminderCorrectionTarget.isEmpty()
+                            && normalize(draftLines[i]).contains(normalize(reminderCorrectionTarget))) {
+                        replaceAt = i;
+                        break;
+                    }
+                }
+                if (replaceAt < 0 && draftLines.length > 0) replaceAt = draftLines.length - 1;
+                for (int i = 0; i < draftLines.length; i++) {
+                    if (i > 0) replacedDraft.append("\\n");
+                    replacedDraft.append(i == replaceAt ? correctedPhrase : draftLines[i]);
+                }
+                if (replaceAt < 0) replacedDraft.append(correctedPhrase);
+                String corrected = replacedDraft.toString().trim();
+                prefs.edit().putString("oba_reminder_draft", corrected).apply();
+                if (reminderTranscriptView != null) reminderTranscriptView.setText(corrected + "\\n\\n✏️ جمله اصلاح شد؛ برای ذخیره بگو «ذخیره کن».");
+                status.setText("جمله اصلاح شد. اگر درست است، بگو «ذخیره کن».");
+                say("جمله اصلاح شد");
+            }
+            correctingReminderNextPhrase = false;
+            reminderCorrectionTarget = "";
+            pendingMode = "reminder_draft";
+            if (root != null) root.postDelayed(() -> {
+                if ("reminder_draft".equals(pendingMode) && !isFinishing()) startVoice("reminder_draft");
+            }, 350);
+            return;
+        }
+
         // Unified voice capture: utterances containing explicit future-date words
         // are saved as reminders; other utterances continue through expense parsing.
         String dateRoute = s.replace("‌", " ");
+        String compactDateRoute = dateRoute.replace(" ", "").replace("ي", "ی").replace("ك", "ک")
+            .replaceAll("[،,؛;.!؟?]+", "");
         boolean hasReminderDate = dateRoute.contains("فردا")
             || dateRoute.contains("پس فردا") || dateRoute.contains("پسفردا")
             || dateRoute.contains("هفته آینده") || dateRoute.contains("ماه آینده")
+            || dateRoute.contains("شنبه") || dateRoute.contains("یکشنبه")
+            || dateRoute.contains("دوشنبه") || dateRoute.contains("سه شنبه")
+            || dateRoute.contains("چهارشنبه") || dateRoute.contains("پنجشنبه")
+            || dateRoute.contains("جمعه")
             || dateRoute.matches(".*(?:\\\\b[0-9۰-۹]{1,2}[./-][0-9۰-۹]{1,2}(?:[./-][0-9۰-۹]{2,4})?\\\\b).*");
-        if (hasReminderDate && !dateRoute.contains("ذخیره کن")) {
-            String item = raw.trim();
+        boolean dateRouteSaveCommand = compactDateRoute.contains("ذخیرهکن")
+            || compactDateRoute.contains("ذخیرهیادآوری") || compactDateRoute.contains("ثبتکن");
+        if (hasReminderDate) {
+            String item = raw.trim().replaceAll("(?iu)[،,;؛.!؟?\\\\s]*(?:لطفاً\\\\s*)?(?:ذخیره\\\\s*(?:کن|کنید)|ذخیره\\\\s*یادآوری|ثبت\\\\s*کن)\\\\s*[،,;؛.!؟?]*$", "").trim();
             if (!item.isEmpty()) {
                 long now = System.currentTimeMillis();
-                prefs.edit().putString("reminder_note_" + now + "_0", now + "\n" + item).apply();
+                prefs.edit().putString("reminder_note_" + now + "_0", now + "\\n" + item).apply();
                 if (reminderTranscriptView != null) reminderTranscriptView.setText(item);
                 refreshReminders();
-                status.setText("یادآوری در آرشیو یادآوری‌ها ثبت شد.");
+                status.setText(dateRouteSaveCommand
+                    ? "فرمان «ذخیره کن» اجرا شد؛ یادآوری در آرشیو ثبت شد."
+                    : "یادآوری در آرشیو یادآوری‌ها ثبت شد.");
                 say("یادآوری ذخیره شد");
+            } else {
+                status.setText("متن یادآوری خالی بود؛ جمله را دوباره بگو.");
             }
             return;
         }
