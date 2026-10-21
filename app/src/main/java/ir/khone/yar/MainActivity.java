@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.AlarmManager;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.app.PendingIntent;
 import android.os.Build;
 import android.provider.Settings;
@@ -2316,10 +2318,10 @@ public class MainActivity extends Activity {
     private void showReminderList() {
         new AlertDialog.Builder(this)
             .setTitle("🔔 یادآوری‌ها")
-            .setItems(new String[]{"🗂️ آرشیو یادآوری‌ها", "✍️ نوشتن پیام یادآوری", "🎙 ثبت صوتی یادآوری"}, (dialog, which) -> {
-                if (which == 0) showReminderArchive();
-                else if (which == 1) showReminderTextEntry();
-                else startReminderDraft();
+            .setItems(new String[]{"✍️ ثبت متنی یادآوری + انتخاب آلارم", "🗂️ آرشیو یادآوری‌ها", "🎵 انتخاب صدای آلارم"}, (dialog, which) -> {
+                if (which == 0) showReminderTextEntry();
+                else if (which == 1) showReminderArchive();
+                else pickReminderAlarmSound();
             })
             .setNegativeButton("بستن", null)
             .show();
@@ -2346,7 +2348,7 @@ public class MainActivity extends Activity {
 
     private void showReminderTextEntry() {
         reminderDraftInput = new EditText(this);
-        reminderDraftInput.setHint("متن پیام را بنویس…");
+        reminderDraftInput.setHint("متن یادآوری را بنویس…");
         reminderDraftInput.setTextDirection(View.TEXT_DIRECTION_RTL);
         reminderDraftInput.setGravity(Gravity.RIGHT | Gravity.TOP);
         reminderDraftInput.setMinLines(4);
@@ -2355,9 +2357,10 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(reminderDraftInput, new ScrollView.LayoutParams(-1, -2));
         reminderDraftDialog = new AlertDialog.Builder(this)
-            .setTitle("✍️ نوشتن پیام یادآوری")
+            .setTitle("ثبت متنی یادآوری و آلارم")
+            .setMessage("متن را بنویس؛ سپس حتماً تاریخ و ساعت آلارم را انتخاب کن.")
             .setView(scroll)
-            .setPositiveButton("پیام ذخیره کن", null)
+            .setPositiveButton("انتخاب تاریخ و ساعت آلارم", null)
             .setNegativeButton("انصراف", (dialog, which) -> {
                 String text = reminderDraftInput == null ? "" : reminderDraftInput.getText().toString();
                 prefs.edit().putString("oba_reminder_text_draft", text).apply();
@@ -2366,21 +2369,62 @@ public class MainActivity extends Activity {
         reminderDraftDialog.setOnShowListener(dialog -> reminderDraftDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String text = reminderDraftInput == null ? "" : reminderDraftInput.getText().toString().trim();
             if (text.isEmpty()) {
-                reminderDraftInput.setError("اول متن پیام را بنویس");
+                reminderDraftInput.setError("اول متن یادآوری را بنویس");
                 return;
             }
-            if (!saveReminderTextToArchive(text)) {
-                reminderDraftInput.setError("اول متن پیام را بنویس");
-                return;
-            }
-            reminderDraftDialog.dismiss();
-            reminderDraftDialog = null;
-            reminderDraftInput = null;
-            refreshReminders();
-            status.setText("پیام در آرشیو یادآوری‌ها ذخیره شد.");
-            Toast.makeText(this, "پیام در آرشیو یادآوری‌ها ذخیره شد.", Toast.LENGTH_LONG).show();
+            Calendar initial = Calendar.getInstance();
+            initial.add(Calendar.DAY_OF_MONTH, 1);
+            DatePickerDialog datePicker = new DatePickerDialog(this, (view, year, month, day) -> {
+                Calendar selected = Calendar.getInstance();
+                selected.set(Calendar.YEAR, year);
+                selected.set(Calendar.MONTH, month);
+                selected.set(Calendar.DAY_OF_MONTH, day);
+                TimePickerDialog timePicker = new TimePickerDialog(this, (timeView, hour, minute) -> {
+                    selected.set(Calendar.HOUR_OF_DAY, hour);
+                    selected.set(Calendar.MINUTE, minute);
+                    selected.set(Calendar.SECOND, 0);
+                    selected.set(Calendar.MILLISECOND, 0);
+                    long when = selected.getTimeInMillis();
+                    if (when <= System.currentTimeMillis()) {
+                        Toast.makeText(this, "زمان آلارم باید در آینده باشد؛ دوباره تاریخ و ساعت را انتخاب کن.", Toast.LENGTH_LONG).show();
+                        showReminderTextEntry();
+                        return;
+                    }
+                    saveTypedReminderWithAlarm(text, when);
+                }, 9, 0, false);
+                timePicker.setTitle("ساعت آلارم را انتخاب کن");
+                timePicker.show();
+            }, initial.get(Calendar.YEAR), initial.get(Calendar.MONTH), initial.get(Calendar.DAY_OF_MONTH));
+            datePicker.setTitle("تاریخ آلارم را انتخاب کن");
+            datePicker.getDatePicker().setMinDate(System.currentTimeMillis() - 1000);
+            datePicker.show();
         }));
         reminderDraftDialog.show();
+    }
+
+    private void saveTypedReminderWithAlarm(String text, long when) {
+        String title = text.replaceAll("\\s+", " ").trim();
+        if (title.isEmpty()) {
+            Toast.makeText(this, "متن یادآوری خالی است.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        int id = (int) (System.currentTimeMillis() & 0x7fffffff);
+        if (id == 0) id = 1;
+        String saved = when + "\\nonce\\n" + title + "\\n-1";
+        String archiveKey = "reminder_note_" + when + "_" + id;
+        prefs.edit()
+            .putString("reminder_" + id, saved)
+            .putString(archiveKey, when + "\\n" + text.trim())
+            .remove("oba_reminder_text_draft")
+            .apply();
+        ReminderReceiver.schedule(this, id, when, title, false);
+        if (reminderDraftDialog != null && reminderDraftDialog.isShowing()) reminderDraftDialog.dismiss();
+        reminderDraftDialog = null;
+        reminderDraftInput = null;
+        refreshReminders();
+        String confirmation = "یادآوری متنی در آرشیو ذخیره شد و آلارم برای " + formatPersianDateTime(new Date(when)) + " تنظیم شد.";
+        status.setText(confirmation);
+        Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
     }
 
     private void showReminderArchive() {
