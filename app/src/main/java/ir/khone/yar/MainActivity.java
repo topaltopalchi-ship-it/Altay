@@ -1171,7 +1171,7 @@ public class MainActivity extends Activity {
             if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
             if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
             awaitingVoiceConfirmation = true;
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ضبط متوقف شد؛ پاسخ صوتی بده");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
             if (status != null) status.setText("فهرست را بررسی کن. با گفتن «بله» همه ثبت می‌شوند؛ با گفتن «اصلاح پنیر» مورد پنیر را اصلاح کن.");
             updateContinuousTranscript();
             startVoice("continuous_expense_confirmation");
