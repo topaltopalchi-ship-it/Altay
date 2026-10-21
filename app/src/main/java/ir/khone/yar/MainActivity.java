@@ -11,6 +11,7 @@ import android.os.Build;
 import android.provider.Settings;
 import android.content.Intent;
 import android.net.Uri;
+import android.media.MediaPlayer;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -52,6 +53,7 @@ public class MainActivity extends Activity {
     private EditText reminderDraftInput;
     private AlertDialog reminderDraftDialog;
     private SharedPreferences prefs;
+    private MediaPlayer reminderPreviewPlayer;
     private SpeechRecognizer recognizer;
     private boolean continuousExpenseListening = false;
     private Button continuousExpenseButton;
@@ -1004,7 +1006,7 @@ public class MainActivity extends Activity {
                 Uri selected = data.getData();
                 try { getContentResolver().takePersistableUriPermission(selected, data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
                 prefs.edit().putString("reminder_alarm_sound_uri", selected.toString()).apply();
-                Toast.makeText(this, "آهنگ آلارم ذخیره شد؛ از هشدار بعدی استفاده می‌شود.", Toast.LENGTH_LONG).show();
+                showReminderSoundPreview(selected);
             }
             return;
         }
@@ -2644,6 +2646,48 @@ public class MainActivity extends Activity {
         picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         try { startActivityForResult(picker, REMINDER_SOUND_PICKER); }
         catch (Exception e) { Toast.makeText(this, "انتخاب فایل صوتی در گوشی در دسترس نیست.", Toast.LENGTH_LONG).show(); }
+    }
+
+    private void showReminderSoundPreview(Uri soundUri) {
+        new AlertDialog.Builder(this)
+            .setTitle("🎵 پیش‌شنوی آهنگ آلارم")
+            .setMessage("برای شنیدن آهنگ انتخاب‌شده، «پخش آهنگ» را بزن. می‌توانی آهنگ دیگری هم انتخاب کنی.")
+            .setPositiveButton("▶ پخش آهنگ", (dialog, which) -> playReminderSoundPreview(soundUri))
+            .setNeutralButton("انتخاب آهنگ دیگر", (dialog, which) -> pickReminderAlarmSound())
+            .setNegativeButton("تمام", (dialog, which) -> Toast.makeText(this, "آهنگ آلارم ذخیره شد.", Toast.LENGTH_SHORT).show())
+            .show();
+    }
+
+    private void playReminderSoundPreview(Uri soundUri) {
+        stopReminderSoundPreview();
+        try {
+            reminderPreviewPlayer = new MediaPlayer();
+            reminderPreviewPlayer.setDataSource(this, soundUri);
+            reminderPreviewPlayer.setOnPreparedListener(player -> player.start());
+            reminderPreviewPlayer.setOnCompletionListener(player -> stopReminderSoundPreview());
+            reminderPreviewPlayer.setOnErrorListener((player, what, extra) -> {
+                stopReminderSoundPreview();
+                Toast.makeText(this, "پخش این فایل ممکن نیست؛ یک فایل صوتی دیگر انتخاب کن.", Toast.LENGTH_LONG).show();
+                return true;
+            });
+            reminderPreviewPlayer.prepareAsync();
+        } catch (Exception e) {
+            stopReminderSoundPreview();
+            Toast.makeText(this, "پخش آهنگ انجام نشد؛ دسترسی فایل صوتی را بررسی کن.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void stopReminderSoundPreview() {
+        if (reminderPreviewPlayer != null) {
+            try { if (reminderPreviewPlayer.isPlaying()) reminderPreviewPlayer.stop(); } catch (Exception ignored) {}
+            try { reminderPreviewPlayer.release(); } catch (Exception ignored) {}
+            reminderPreviewPlayer = null;
+        }
+    }
+
+    @Override protected void onDestroy() {
+        stopReminderSoundPreview();
+        super.onDestroy();
     }
 
     private void refreshReminders() {
