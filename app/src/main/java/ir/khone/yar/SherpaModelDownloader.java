@@ -49,18 +49,18 @@ public final class SherpaModelDownloader {
                     return;
                 }
                 if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory()) {
-                    throw new IllegalStateException("فضای ذخیره‌سازی مدل شرپا آماده نشد.");
+                    throw new IllegalStateException("فضای ذخیره‌سازی صدای فارسی آماده نشد.");
                 }
                 downloadFile(new URL(BASE_URL + MODEL_NAME + "?download=true"),
                         new File(dir, MODEL_NAME), MODEL_NAME, callback);
                 downloadFile(new URL(BASE_URL + MODEL_NAME + ".json?download=true"),
                         new File(dir, MODEL_NAME + ".json"), MODEL_NAME + ".json", callback);
                 installed = getInstalledModelDirectory(app);
-                if (installed == null) throw new IllegalStateException("فایل‌های مدل شرپا کامل دریافت نشدند.");
+                if (installed == null) throw new IllegalStateException("فایل‌های صدای فارسی کامل دریافت نشدند.");
                 File ready = installed;
                 MAIN.post(() -> callback.onInstalled(ready));
             } catch (Exception e) {
-                String message = e.getMessage() == null ? "دانلود مدل شرپا ناموفق بود." : e.getMessage();
+                String message = e.getMessage() == null ? "دریافت صدای فارسی ناموفق بود." : e.getMessage();
                 MAIN.post(() -> callback.onError(message));
             }
         });
