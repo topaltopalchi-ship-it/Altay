@@ -771,18 +771,27 @@ public class MainActivity extends Activity {
                 }
                 Calendar due = Calendar.getInstance();
                 due.setTimeInMillis(dayStart);
-                String time = timeInput.getText().toString().trim();
+                String time = timeInput.getText().toString().trim()
+                    .replace('۰','0').replace('۱','1').replace('۲','2').replace('۳','3')
+                    .replace('۴','4').replace('۵','5').replace('۶','6').replace('۷','7')
+                    .replace('۸','8').replace('۹','9');
                 if (!time.isEmpty()) {
                     try {
-                        String[] hm = time.split(":");
-                        if (hm.length != 2) throw new IllegalArgumentException();
+                        String[] hm;
+                        if (time.matches("[0-9]{4}")) {
+                            hm = new String[]{time.substring(0, 2), time.substring(2, 4)};
+                        } else {
+                            hm = time.split(":");
+                        }
+                        if (hm.length != 2 || hm[0].trim().length() < 1 || hm[0].trim().length() > 2
+                                || hm[1].trim().length() < 1 || hm[1].trim().length() > 2) throw new IllegalArgumentException();
                         int hour = Integer.parseInt(hm[0].trim());
                         int minute = Integer.parseInt(hm[1].trim());
                         if (hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new IllegalArgumentException();
                         due.set(Calendar.HOUR_OF_DAY, hour);
                         due.set(Calendar.MINUTE, minute);
                     } catch (Exception ex) {
-                        Toast.makeText(this, "ساعت را به فرمت 00:00 وارد کن (مثلاً 09:05).", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "ساعت را به شکل 00:00 وارد کن؛ مثلاً 20:30 یا 2030.", Toast.LENGTH_LONG).show();
                         return;
                     }
                 } else {
@@ -792,8 +801,9 @@ public class MainActivity extends Activity {
                 due.set(Calendar.SECOND, 0);
                 due.set(Calendar.MILLISECOND, 0);
                 long when = due.getTimeInMillis();
+                // Store a real newline so the archive parser can read timestamp and note separately.
                 prefs.edit().putString("reminder_note_" + when + "_" + System.currentTimeMillis(),
-                    when + "\\n" + note).apply();
+                    when + "\n" + note).apply();
                 refreshReminders();
                 Toast.makeText(this, "یادآوری در آرشیو ذخیره شد.", Toast.LENGTH_LONG).show();
                 showExpenseCalendar();
