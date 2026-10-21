@@ -1675,8 +1675,13 @@ public class MainActivity extends Activity {
                         updateContinuousTranscript();
                         if (status != null) status.setText("در حال شنیدن…");
                     } else if ("reminder_draft".equals(mode) && continuousTranscriptView != null) {
-                        String saved = prefs.getString("oba_reminder_draft", "").trim();
-                        continuousTranscriptView.setText((saved.isEmpty() ? "" : saved + "\n") + text
+                        String recognized = cleanReminderTranscript(text);
+                        // Save each partial speech result immediately. The blue box is only
+                        // presentation; SharedPreferences is the durable draft source.
+                        if (!recognized.isEmpty()) {
+                            prefs.edit().putString("oba_reminder_draft", recognized).apply();
+                        }
+                        continuousTranscriptView.setText((recognized.isEmpty() ? "" : recognized)
                             + "\n\n🎙 در حال شنیدن… در پایان بگو «ذخیره کن».");
                     }
                 }
@@ -2243,7 +2248,7 @@ public class MainActivity extends Activity {
                     || item.contains("متن دریافت شد") || item.contains("ادامه بده")
                     || item.contains("در حال ثبت یادآوری") || item.contains("برای ذخیره در آرشیو")) continue;
             if (item.startsWith("🎙")) continue;
-            if (clean.length() > 0) clean.append("\\n");
+            if (clean.length() > 0) clean.append("\n");
             clean.append(item);
         }
         return clean.toString().trim();
@@ -2253,8 +2258,11 @@ public class MainActivity extends Activity {
         String draft = prefs.getString("oba_reminder_draft", "").trim();
         // Fallback to the actual blue transcript text if recognition updated the UI
         // but its final callback did not persist the text into SharedPreferences.
-        if (draft.isEmpty() && continuousTranscriptView != null) {
-            draft = cleanReminderTranscript(continuousTranscriptView.getText().toString());
+        if (continuousTranscriptView != null) {
+            String visibleDraft = cleanReminderTranscript(continuousTranscriptView.getText().toString());
+            if (!visibleDraft.isEmpty() && (draft.isEmpty() || visibleDraft.length() > draft.length())) {
+                draft = visibleDraft;
+            }
         }
         if (draft.isEmpty()) {
             status.setText("هنوز متنی برای یادآوری گفته نشده است.");
