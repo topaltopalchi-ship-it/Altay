@@ -183,7 +183,7 @@ public class MainActivity extends Activity {
 
         TextView reminderTranscriptLabel = text("متن یادآوری‌ها", 15, dark, true);
         content.addView(reminderTranscriptLabel, lp(-1, -2, 0, 2, 0, 3));
-        reminderTranscriptView = text("برای ثبت یادآوری، کلید «ثبت صوتی یادآوری» را بزن. متن این بخش جدا از هزینه‌ها ذخیره می‌شود؛ در پایان بگو «ذخیره یادآوری».", 16, Color.WHITE, false);
+        reminderTranscriptView = text("برای ثبت یادآوری، کلید «ثبت صوتی یادآوری» را بزن. متن این بخش جدا از هزینه‌ها ذخیره می‌شود؛ در پایان بگو «ذخیره کن».", 16, Color.WHITE, false);
         reminderTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
         reminderTranscriptView.setMinHeight(dp(84));
         reminderTranscriptView.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -1407,7 +1407,7 @@ public class MainActivity extends Activity {
         if (!unfinishedVoiceExpense.isEmpty()) display.append("در حال دریافت: ").append(unfinishedVoiceExpense).append("\n");
         if (!liveVoicePartial.isEmpty()) display.append("در حال شنیدن: ").append(liveVoicePartial).append("\n");
         if (correctingNextVoicePhrase) display.append("🎙 منتظر متن اصلاح‌شده…");
-        display.append("\nراهنما: اگر مقدار یا اسم چیزی اشتباه خوانده شد، مثلاً ۳ کیلو پنیر، بگو «اصلاح پنیر» و بعد جملهٔ درست پنیر را دوباره بخوان. برای ذخیره هزینه‌ها بگو: «ذخیره هزینه».");
+        display.append("\nراهنما: اگر مقدار یا اسم چیزی اشتباه خوانده شد، مثلاً ۳ کیلو پنیر، بگو «اصلاح پنیر» و بعد جملهٔ درست پنیر را دوباره بخوان. برای ذخیره هزینه‌ها بگو: «ذخیره کن».");
         continuousTranscriptView.setText(display.toString());
     }
 
@@ -1986,7 +1986,7 @@ public class MainActivity extends Activity {
                 if (!phrase.isEmpty() && !compact.equals("ذخیرهکن") && !compact.equals("ذخیرهیادآوری")) {
                     String next = draft.isEmpty() ? phrase : draft + "\n" + phrase;
                     prefs.edit().putString("oba_reminder_draft", next).apply();
-                    if (reminderTranscriptView != null) reminderTranscriptView.setText(next + "\n\n🎙 متن یادآوری دریافت شد؛ برای ذخیره در آرشیو بگو «ذخیره یادآوری».");
+                    if (reminderTranscriptView != null) reminderTranscriptView.setText(next + "\n\n🎙 متن یادآوری دریافت شد؛ برای ذخیره در آرشیو بگو «ذخیره کن».");
                 }
                 status.setText("متن یادآوری دریافت شد؛ برای ذخیره در آرشیو و پایان ضبط، بگو «ذخیره یادآوری».");
                 pendingMode = "reminder_draft";
@@ -2241,8 +2241,8 @@ public class MainActivity extends Activity {
         String existing = prefs.getString("oba_reminder_draft", "").trim();
         if (reminderTranscriptView != null) {
             reminderTranscriptView.setText(existing.isEmpty()
-                ? "🎙 در حال ثبت یادآوری… صحبت کن. در پایان بگو «ذخیره یادآوری»."
-                : existing + "\n\nادامه بده؛ در پایان بگو «ذخیره یادآوری».");
+                ? "🎙 در حال ثبت یادآوری… صحبت کن. در پایان بگو «ذخیره کن»."
+                : existing + "\n\nادامه بده؛ در پایان بگو «ذخیره کن».");
             reminderTranscriptView.setTextColor(Color.WHITE);
             reminderTranscriptView.setVisibility(View.VISIBLE);
             View parent = (View) reminderTranscriptView.getParent();
