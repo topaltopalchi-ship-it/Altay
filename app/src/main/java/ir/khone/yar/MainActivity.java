@@ -12,6 +12,12 @@ import android.provider.Settings;
 import android.content.Intent;
 import android.net.Uri;
 import android.media.MediaPlayer;
+import android.media.AudioAttributes;
+import com.k2fsa.sherpa.onnx.OfflineTts;
+import com.k2fsa.sherpa.onnx.OfflineTtsConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig;
+import com.k2fsa.sherpa.onnx.GenerationConfig;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -70,6 +76,10 @@ public class MainActivity extends Activity {
     private boolean wakeTriggeredSession = false;
     private boolean quietVoiceSession = false;
     private TextToSpeech tts;
+    private OfflineTts localPersianTts;
+    private final java.util.concurrent.ExecutorService ttsExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private MediaPlayer generatedSpeechPlayer;
+    private volatile boolean generatingSpeech = false;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
@@ -214,6 +224,10 @@ public class MainActivity extends Activity {
         continuousTranscriptView.setLineSpacing(dp(3), 1.08f);
         continuousTranscriptView.setTextIsSelectable(true);
         content.addView(continuousTranscriptView, lp(-1, -2, 0, 0, 0, 5));
+        Button readTextButton = button("🔊 خواندن متن", Color.WHITE, dark, 16);
+        readTextButton.setMinHeight(dp(48));
+        readTextButton.setOnClickListener(v -> readPersianText(continuousTranscriptView == null ? "" : continuousTranscriptView.getText().toString()));
+        content.addView(readTextButton, lp(-1, -2, 0, 2, 0, 8));
 
         // Reminder transcript is intentionally hidden: voice input is unified in the
         // main expense capture box and classified by date words versus amount/quantity.
@@ -2098,7 +2112,7 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File modelDirectory) {
                 downloadingSherpaModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("فایل‌های صدای فارسی دریافت شدند. برای خواندن متن، اتصال موتور پخش لازم است.");
+                    status.setText("صدای فارسی آمادهٔ خواندن متن است.");
                 }
             }
             @Override public void onError(String message) {
@@ -3477,6 +3491,51 @@ public class MainActivity extends Activity {
         if (quietVoiceSession) return;
         speakWithSystemTts(s);
     }
+    private void readPersianText(String textToRead) {
+        final String clean = textToRead == null ? "" : textToRead.trim();
+        if (clean.isEmpty() || clean.startsWith("هنوز متنی")) {
+            Toast.makeText(this, "متنی برای خواندن وجود ندارد.", Toast.LENGTH_SHORT).show(); return;
+        }
+        if (generatingSpeech) { Toast.makeText(this, "در حال آماده‌سازی صدا هستم؛ کمی صبر کنید.", Toast.LENGTH_SHORT).show(); return; }
+        File modelDir = SherpaModelDownloader.getInstalledModelDirectory(this);
+        if (modelDir == null) { Toast.makeText(this, "فایل‌های صدای فارسی هنوز کامل آماده نشده‌اند.", Toast.LENGTH_LONG).show(); downloadSherpaModelAutomatically(); return; }
+        generatingSpeech = true;
+        Toast.makeText(this, "در حال آماده‌سازی خواندن فارسی…", Toast.LENGTH_SHORT).show();
+        ttsExecutor.execute(() -> {
+            try {
+                if (localPersianTts == null) {
+                    OfflineTtsVitsModelConfig vits = new OfflineTtsVitsModelConfig();
+                    vits.setModel(new File(modelDir, "fa_IR-amir-medium.onnx").getAbsolutePath());
+                    vits.setTokens(new File(modelDir, "tokens.txt").getAbsolutePath());
+                    vits.setDataDir(new File(modelDir, "espeak-ng-data").getAbsolutePath());
+                    OfflineTtsModelConfig model = new OfflineTtsModelConfig();
+                    model.setVits(vits); model.setNumThreads(2); model.setDebug(false);
+                    OfflineTtsConfig config = new OfflineTtsConfig();
+                    config.setModel(model); config.setMaxNumSentences(1);
+                    localPersianTts = new OfflineTts(config);
+                }
+                GenerationConfig generation = new GenerationConfig();
+                generation.setSid(0); generation.setSpeed(1.0f); generation.setSilenceScale(0.2f);
+                String normalized = clean.replace("•", "، ").replace('\n', ' ');
+                com.k2fsa.sherpa.onnx.GeneratedAudio audio = localPersianTts.generateWithConfigAndCallback(normalized, generation, samples -> 1);
+                File wav = new File(getCacheDir(), "oba-persian-reading.wav");
+                if (audio == null || !audio.save(wav.getAbsolutePath())) throw new IllegalStateException("ساخت فایل صوتی انجام نشد.");
+                runOnUiThread(() -> {
+                    try {
+                        if (generatedSpeechPlayer != null) { generatedSpeechPlayer.release(); generatedSpeechPlayer = null; }
+                        generatedSpeechPlayer = new MediaPlayer();
+                        generatedSpeechPlayer.setDataSource(wav.getAbsolutePath());
+                        generatedSpeechPlayer.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+                        generatedSpeechPlayer.setOnCompletionListener(player -> { player.release(); if (generatedSpeechPlayer == player) generatedSpeechPlayer = null; });
+                        generatedSpeechPlayer.setOnErrorListener((player, what, extra) -> { player.release(); if (generatedSpeechPlayer == player) generatedSpeechPlayer = null; Toast.makeText(this, "پخش صدای فارسی ناموفق بود.", Toast.LENGTH_LONG).show(); return true; });
+                        generatedSpeechPlayer.prepare(); generatedSpeechPlayer.start();
+                    } catch (Exception e) { Toast.makeText(this, "پخش صدای فارسی ناموفق بود.", Toast.LENGTH_LONG).show(); }
+                    finally { generatingSpeech = false; }
+                });
+            } catch (Exception e) { runOnUiThread(() -> { generatingSpeech = false; Toast.makeText(this, "خواندن فارسی آماده نشد؛ فایل‌های مدل را بررسی کنید.", Toast.LENGTH_LONG).show(); }); }
+        });
+    }
+
     private void speakWithSystemTts(String s) {
         if (tts != null) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "khoneyar");
     }
@@ -3534,6 +3593,9 @@ public class MainActivity extends Activity {
         stopReminderSoundPreview();
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
+        if (generatedSpeechPlayer != null) { try { generatedSpeechPlayer.release(); } catch (Exception ignored) {} generatedSpeechPlayer = null; }
+        if (localPersianTts != null) { try { localPersianTts.release(); } catch (Exception ignored) {} localPersianTts = null; }
+        ttsExecutor.shutdownNow();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
     }
