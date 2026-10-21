@@ -2065,6 +2065,25 @@ public class MainActivity extends Activity {
             existingReminderDraft = cleanReminderTranscript(reminderTranscriptView.getText().toString());
         }
         boolean hasReminderDraft = !existingReminderDraft.isEmpty();
+        boolean explicitTextSaveCommand = compactCommand.contains("پیامذخیرهکن")
+            || compactCommand.contains("پیامذخیره")
+            || compactCommand.equals("ذخیرهپیام");
+        if (explicitTextSaveCommand) {
+            String typedText = reminderDraftInput != null
+                ? reminderDraftInput.getText().toString()
+                : prefs.getString("oba_reminder_text_draft", "");
+            if (saveReminderTextToArchive(typedText)) {
+                if (reminderDraftDialog != null && reminderDraftDialog.isShowing()) reminderDraftDialog.dismiss();
+                reminderDraftDialog = null;
+                reminderDraftInput = null;
+                status.setText("پیام در آرشیو یادآوری‌ها ذخیره شد.");
+                Toast.makeText(this, "پیام در آرشیو یادآوری‌ها ذخیره شد.", Toast.LENGTH_LONG).show();
+            } else {
+                status.setText("متنی برای ذخیره پیدا نشد؛ اول متن پیام را بنویس.");
+                say("اول متن پیام را بنویس");
+            }
+            return;
+        }
         boolean reminderSaveShortcut = hasReminderDraft
             && (compactCommand.contains("ذخیرهیادآوری")
                 || compactCommand.contains("ذخیرهیادآوریها")
@@ -2304,6 +2323,25 @@ public class MainActivity extends Activity {
             .show();
     }
 
+    private boolean saveReminderTextToArchive(String text) {
+        if (text == null || text.trim().isEmpty()) return false;
+        String[] lines = text.trim().split("\\n");
+        long now = System.currentTimeMillis();
+        int saved = 0;
+        android.content.SharedPreferences.Editor editor = prefs.edit();
+        for (String line : lines) {
+            String item = line.trim();
+            if (item.isEmpty()) continue;
+            editor.putString("reminder_note_" + now + "_" + saved, now + "\n" + item);
+            saved++;
+        }
+        if (saved == 0) return false;
+        editor.remove("oba_reminder_text_draft");
+        editor.apply();
+        refreshReminders();
+        return true;
+    }
+
     private void showReminderTextEntry() {
         reminderDraftInput = new EditText(this);
         reminderDraftInput.setHint("متن پیام را بنویس…");
@@ -2329,18 +2367,10 @@ public class MainActivity extends Activity {
                 reminderDraftInput.setError("اول متن پیام را بنویس");
                 return;
             }
-            String[] lines = text.split("\\n");
-            long now = System.currentTimeMillis();
-            int saved = 0;
-            android.content.SharedPreferences.Editor editor = prefs.edit();
-            for (String line : lines) {
-                String item = line.trim();
-                if (item.isEmpty()) continue;
-                editor.putString("reminder_note_" + now + "_" + saved, now + "\\n" + item);
-                saved++;
+            if (!saveReminderTextToArchive(text)) {
+                reminderDraftInput.setError("اول متن پیام را بنویس");
+                return;
             }
-            editor.remove("oba_reminder_text_draft");
-            editor.apply();
             reminderDraftDialog.dismiss();
             reminderDraftDialog = null;
             reminderDraftInput = null;
