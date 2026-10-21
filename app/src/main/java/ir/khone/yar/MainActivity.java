@@ -137,6 +137,10 @@ public class MainActivity extends Activity {
             if (status != null) status.setText("در حال آماده‌سازی و دانلود خودکار مدل گفتار فارسی…");
             if (root != null) root.postDelayed(this::downloadVoskModelAutomatically, 800);
             else downloadVoskModelAutomatically();
+        } else {
+            // Vosk is already installed, so prepare the Persian Sherpa voice model too.
+            if (root != null) root.postDelayed(this::downloadSherpaModelAutomatically, 800);
+            else downloadSherpaModelAutomatically();
         }
     }
 
@@ -2048,8 +2052,9 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("بستهٔ تشخیص گفتار فارسی آماده شد؛ تشخیص گفتار آفلاین فعال است.");
+                    status.setText("مدل Vosk آماده شد؛ اکنون دانلود مدل صدای فارسی Sherpa شروع می‌شود…");
                 }
+                if (!isFinishing() && !isDestroyed()) downloadSherpaModelAutomatically();
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
@@ -2068,6 +2073,43 @@ public class MainActivity extends Activity {
                         }
                     }, retryDelayMs);
                 }
+            }
+        });
+    }
+
+    private boolean downloadingSherpaModel = false;
+
+    private void downloadSherpaModelAutomatically() {
+        if (isFinishing() || isDestroyed()
+                || SherpaModelDownloader.getInstalledModelDirectory(this) != null
+                || downloadingSherpaModel) return;
+        downloadingSherpaModel = true;
+        if (status != null) status.setText("مدل Vosk آماده است؛ در حال دانلود صدای فارسی Sherpa…");
+        SherpaModelDownloader.downloadModel(this, new SherpaModelDownloader.Callback() {
+            @Override public void onProgress(String fileName, long downloadedBytes, long totalBytes) {
+                if (status == null || isFinishing()) return;
+                if (totalBytes > 0) {
+                    int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
+                    status.setText("دانلود صدای Sherpa (" + fileName + "): " + percent + "%");
+                } else {
+                    status.setText("در حال دانلود صدای فارسی Sherpa (" + fileName + ")…");
+                }
+            }
+            @Override public void onInstalled(File modelDirectory) {
+                downloadingSherpaModel = false;
+                if (!isFinishing() && status != null) {
+                    status.setText("فایل‌های صدای فارسی Sherpa دانلود شدند. برای خواندن متن با Sherpa، اتصال موتور پخش لازم است.");
+                }
+            }
+            @Override public void onError(String message) {
+                downloadingSherpaModel = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (status != null) status.setText("دانلود صدای Sherpa انجام نشد؛ بعداً دوباره تلاش می‌کنیم. " + message);
+                if (root != null) root.postDelayed(() -> {
+                    if (!isFinishing() && !isDestroyed()
+                            && SherpaModelDownloader.getInstalledModelDirectory(MainActivity.this) == null
+                            && !downloadingSherpaModel) downloadSherpaModelAutomatically();
+                }, 30000L);
             }
         });
     }
