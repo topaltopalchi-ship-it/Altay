@@ -1917,7 +1917,10 @@ public class MainActivity extends Activity {
 
         String mode = pendingMode;
         if (mode.equals("reminder_draft")) {
-            if (contains(s, "ذخیره کن", "ذخیره یادآوری", "ثبت یادآوری")) {
+            String reminderCommand = normalize(s).replace("‌", "").replace(" ", "").replace("ي", "ی").replace("ك", "ک");
+            if (contains(s, "ذخیره کن", "ذخیره یادآوری", "ثبت یادآوری") ||
+                reminderCommand.contains("ذخیرهکن") || reminderCommand.contains("ذخیرهیادآوری") ||
+                reminderCommand.contains("ثبتکن") || reminderCommand.equals("ذخیره")) {
                 saveReminderDraft();
             } else {
                 String draft = prefs.getString("oba_reminder_draft", "").trim();
@@ -2132,7 +2135,6 @@ public class MainActivity extends Activity {
             .setView(scroll)
             .setNegativeButton("بستن", null)
             .setNeutralButton("🎵 انتخاب آهنگ آلارم", (dialog, which) -> pickReminderAlarmSound())
-            .setPositiveButton("🎙 ثبت صوتی", (dialog, which) -> startReminderDraft())
             .show();
     }
 
