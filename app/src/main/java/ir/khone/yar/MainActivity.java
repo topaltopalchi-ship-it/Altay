@@ -1287,8 +1287,14 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.addView(list);
+        // A clear in-page back button makes it easier to return to the dashboard.
+        Button backButton = button("⬅ برگشت به صفحه قبل", Color.rgb(232, 238, 250), Color.rgb(24, 37, 105), 15);
+        backButton.setAllCaps(false);
+        backButton.setMinHeight(dp(48));
+        list.addView(backButton, lp(-1, -2, 0, 2, 0, 8));
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setView(scroll).setNegativeButton("انصراف", null).create();
+            .setView(scroll).setNegativeButton("بستن", null).create();
+        backButton.setOnClickListener(v -> dialog.dismiss());
         for (String option : groups) {
             Button item = button(option, Color.WHITE, Color.rgb(24, 37, 105), 16);
             item.setAllCaps(false);
@@ -1351,9 +1357,18 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.addView(list);
+        // Back from nested items to the category's previous subgroup page.
+        Button backButton = button("⬅ برگشت به صفحه قبل", Color.rgb(232, 238, 250), Color.rgb(24, 37, 105), 15);
+        backButton.setAllCaps(false);
+        backButton.setMinHeight(dp(48));
+        list.addView(backButton, lp(-1, -2, 0, 2, 0, 8));
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("زیرمجموعهٔ «" + parent + "»")
-            .setView(scroll).setNegativeButton("بازگشت", null).create();
+            .setView(scroll).setNegativeButton("بستن", null).create();
+        backButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            showCategorySubgroups(category);
+        });
         for (String child : children) {
             Button item = button(child, Color.WHITE, Color.rgb(24, 37, 105), 16);
             item.setAllCaps(false);
