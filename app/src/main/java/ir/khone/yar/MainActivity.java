@@ -356,6 +356,20 @@ public class MainActivity extends Activity {
         });
         panel.addView(clearAmountButton, lp(-1, -2, 0, 2, 0, 4));
 
+        Button deleteBudgetButton = button("🗑 پاک‌کردن کامل بودجهٔ ثبت‌شده", Color.rgb(190, 25, 75), Color.WHITE, 14);
+        deleteBudgetButton.setMinHeight(dp(46));
+        deleteBudgetButton.setOnClickListener(v -> new AlertDialog.Builder(this)
+            .setTitle("حذف کامل بودجه")
+            .setMessage("آیا مطمئنی می‌خواهی بودجهٔ قبلی به‌طور کامل پاک شود؟ این کار هزینه‌های ثبت‌شده را حذف نمی‌کند.")
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("بله، پاک کن", (confirmDialog, which) -> {
+                prefs.edit().putLong("home_budget", 0L).apply();
+                status.setText("بودجهٔ ثبت‌شده پاک شد. هزینه‌های قبلی همچنان محفوظ هستند.");
+                Toast.makeText(this, "بودجهٔ قبلی پاک شد.", Toast.LENGTH_LONG).show();
+                dialogRefreshAfterBudgetDelete();
+            }).show());
+        panel.addView(deleteBudgetButton, lp(-1, -2, 0, 2, 0, 4));
+
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("💗 بودجه")
             .setMessage("مبلغی وارد کن تا به بودجهٔ فعلی اضافه شود؛ مجموع جدید نمایش داده می‌شود.")
@@ -396,6 +410,10 @@ public class MainActivity extends Activity {
             });
         });
         dialog.show();
+    }
+
+    private void dialogRefreshAfterBudgetDelete() {
+        refresh();
     }
 
     private void showShoppingList() {
