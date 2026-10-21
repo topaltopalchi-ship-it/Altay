@@ -1224,13 +1224,118 @@ public class MainActivity extends Activity {
     private void showPurchaseCenter() {
         new AlertDialog.Builder(this)
             .setTitle("🛒 خریدها و تقویم هزینه‌ها")
-            .setItems(new String[]{"🗓️ تقویم مخارج روزانه", "🗂️ آرشیو خریدهای روزانه", "📚 آرشیو خریدهای دسته‌بندی‌شده", "➕ ثبت خرید با انتخاب دسته"}, (dialog, which) -> {
+            .setItems(new String[]{"🗓️ تقویم مخارج روزانه", "🗂️ آرشیو خریدهای روزانه", "📚 آرشیو خریدهای دسته‌بندی‌شده", "🔎 گزارش ماهانهٔ کالا (مثلاً گوشت)", "➕ ثبت خرید با انتخاب دسته"}, (dialog, which) -> {
                 if (which == 0) showExpenseCalendar();
                 else if (which == 1) showDailyPurchaseArchive();
                 else if (which == 2) showPurchaseCategoryPicker();
+                else if (which == 3) showMonthlyItemReport();
                 else showPurchaseCategoryPicker();
             })
             .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private void showMonthlyItemReport() {
+        int[] today = gregorianToJalali(Calendar.getInstance().get(Calendar.YEAR),
+            Calendar.getInstance().get(Calendar.MONTH) + 1,
+            Calendar.getInstance().get(Calendar.DAY_OF_MONTH));
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+
+        EditText itemInput = new EditText(this);
+        itemInput.setHint("نام کالا؛ مثلاً گوشت");
+        itemInput.setSingleLine(true);
+        itemInput.setTextDirection(View.TEXT_DIRECTION_RTL);
+        form.addView(itemInput, lp(-1, -2, 0, 0, 0, 8));
+
+        EditText yearInput = new EditText(this);
+        yearInput.setHint("سال شمسی؛ مثلاً " + today[0]);
+        yearInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        yearInput.setText(String.valueOf(today[0]));
+        form.addView(yearInput, lp(-1, -2, 0, 0, 0, 8));
+
+        String[] months = {"فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+            "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"};
+        android.widget.Spinner monthSpinner = new android.widget.Spinner(this);
+        monthSpinner.setAdapter(new android.widget.ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item, months));
+        monthSpinner.setSelection(Math.max(0, Math.min(11, today[1] - 1)));
+        form.addView(monthSpinner, lp(-1, -2, 0, 0, 0, 8));
+
+        String[] categories = {"همهٔ بخش‌ها", "خانه", "مدرسه", "ماشین", "مغازه", "سلامت", "سایر"};
+        android.widget.Spinner categorySpinner = new android.widget.Spinner(this);
+        categorySpinner.setAdapter(new android.widget.ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item, categories));
+        form.addView(categorySpinner, lp(-1, -2, 0, 0, 0, 4));
+
+        new AlertDialog.Builder(this).setTitle("🔎 جست‌وجوی کالا در یک ماه")
+            .setMessage("نام کالا، ماه و سال را انتخاب کن. برنامه تعداد دفعات و مجموع مبلغ را محاسبه می‌کند.")
+            .setView(form).setNegativeButton("انصراف", null)
+            .setPositiveButton("نمایش گزارش", (dialog, which) -> {
+                String query = itemInput.getText().toString().trim().replace('ي', 'ی').replace('ك', 'ک');
+                if (query.isEmpty()) {
+                    Toast.makeText(this, "نام کالا را وارد کن؛ مثلاً گوشت.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                int year;
+                try { year = Integer.parseInt(yearInput.getText().toString().trim()); }
+                catch (Exception e) {
+                    Toast.makeText(this, "سال شمسی معتبر وارد کن.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                int month = monthSpinner.getSelectedItemPosition() + 1;
+                String categoryFilter = categories[categorySpinner.getSelectedItemPosition()];
+                showMonthlyItemReportResults(query, year, month, categoryFilter);
+            }).show();
+    }
+
+    private void showMonthlyItemReportResults(String query, int jalaliYear, int jalaliMonth, String categoryFilter) {
+        String history = prefs.getString("oba_expense_history", "");
+        ArrayList<String> details = new ArrayList<>();
+        long total = 0L;
+        int count = 0;
+        String normalizedQuery = query.replace('ي', 'ی').replace('ك', 'ک').toLowerCase(Locale.ROOT);
+        if (!history.trim().isEmpty()) {
+            for (String row : history.split("\\n")) {
+                String[] parts = row.split("\\t", -1);
+                if (parts.length < 5) continue;
+                try {
+                    long timestamp = Long.parseLong(parts[0]);
+                    String category = parts[1].trim();
+                    String item = parts[3].trim();
+                    String normalizedItem = item.replace('ي', 'ی').replace('ك', 'ک').toLowerCase(Locale.ROOT);
+                    if (!normalizedItem.contains(normalizedQuery)) continue;
+                    if (!"همهٔ بخش‌ها".equals(categoryFilter) && !categoryFilter.equals(category)) continue;
+                    Calendar date = Calendar.getInstance();
+                    date.setTimeInMillis(timestamp);
+                    int[] jalali = gregorianToJalali(date.get(Calendar.YEAR), date.get(Calendar.MONTH) + 1, date.get(Calendar.DAY_OF_MONTH));
+                    if (jalali[0] != jalaliYear || jalali[1] != jalaliMonth) continue;
+                    long amount = Long.parseLong(parts[4]);
+                    total += amount;
+                    count++;
+                    details.add(formatPersianDate(new Date(timestamp)) + " • " + category + " • " + item + " • " + fmt(amount) + " تومان");
+                } catch (Exception ignored) {}
+            }
+        }
+        String[] monthNames = {"فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+            "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"};
+        String title = "گزارش " + query + " — " + monthNames[jalaliMonth - 1] + " " + jalaliYear;
+        if (details.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle(title)
+                .setMessage("در این ماه خریدی با این نام در سوابق ثبت‌شده پیدا نشد. اگر کالا با نام دیگری ثبت شده، همان نام را هم امتحان کن.")
+                .setPositiveButton("جست‌وجوی دیگر", (d, w) -> showMonthlyItemReport())
+                .setNegativeButton("بستن", null).show();
+            return;
+        }
+        StringBuilder report = new StringBuilder();
+        report.append("تعداد دفعات خرید: ").append(count).append("\\n");
+        report.append("مجموع هزینه: ").append(fmt(total)).append(" تومان\\n\\n");
+        report.append("ریز خریدها:\\n");
+        for (String detail : details) report.append("• ").append(detail).append("\\n");
+        new AlertDialog.Builder(this).setTitle(title).setMessage(report.toString())
+            .setPositiveButton("باشه", null)
+            .setNeutralButton("جست‌وجوی دیگر", (d, w) -> showMonthlyItemReport())
             .show();
     }
 
