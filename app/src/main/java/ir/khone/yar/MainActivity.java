@@ -46,6 +46,8 @@ import org.json.JSONException;
 public class MainActivity extends Activity {
     private LinearLayout root, cards;
     private TextView status, recent, remindersView, inventoryView;
+    private EditText reminderDraftInput;
+    private AlertDialog reminderDraftDialog;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
     private boolean continuousExpenseListening = false;
@@ -1882,10 +1884,11 @@ public class MainActivity extends Activity {
                 String draft = prefs.getString("oba_reminder_draft", "");
                 String next = draft.isEmpty() ? raw : draft + "\n" + raw;
                 prefs.edit().putString("oba_reminder_draft", next).apply();
-                if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\n\nبرای افزودن مورد بعدی دوباره صحبت کن؛ در پایان بگو «ذخیره کن».");
-                status.setText("یادآوری به متن موقت اضافه شد. برای ادامه صحبت کن یا بگو «ذخیره کن».");
-                say("مورد موقت شد. مورد بعدی را بگو یا بگو ذخیره کن");
-                root.postDelayed(() -> startVoice("reminder_draft"), 900);
+                if (reminderDraftInput != null) reminderDraftInput.setText(next);
+                if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\n\nبرای افزودن مورد بعدی دوباره دکمهٔ ورود صوتی را بزن؛ در پایان بگو «ذخیره کن».");
+                status.setText("یادآوری به متن فرم اضافه شد. برای ادامه، دکمهٔ ورود صوتی را بزن یا بگو «ذخیره کن».");
+                say("یادآوری به فرم اضافه شد. مورد بعدی را بگو یا ذخیره کن");
+                pendingMode = "auto";
             }
             return;
         }
@@ -2084,13 +2087,63 @@ public class MainActivity extends Activity {
     }
 
     private void startReminderDraft() {
-        String draft = prefs.getString("oba_reminder_draft", "");
-        if (continuousTranscriptView != null) {
-            continuousTranscriptView.setText((draft.isEmpty() ? "قالب هر یادآوری: تاریخ، ساعت، کاری که باید انجام شود.\nمثال: فردا، ساعت ۹ صبح، پرداخت قبض" : draft)
-                + "\n\nهر یادآوری را جداگانه بگو؛ در پایان بگو «ذخیره کن».");
-        }
-        pendingMode = "reminder_draft";
-        startVoice("reminder_draft");
+        final String savedDraft = prefs.getString("oba_reminder_draft", "");
+        final EditText editor = new EditText(this);
+        reminderDraftInput = editor;
+        editor.setText(savedDraft);
+        editor.setHint("مثال: فردا ساعت ۹ صبح، پرداخت قبض");
+        editor.setTextSize(17);
+        editor.setGravity(Gravity.RIGHT | Gravity.TOP);
+        editor.setTextDirection(View.TEXT_DIRECTION_RTL);
+        editor.setMinLines(4);
+        editor.setMaxLines(8);
+        editor.setPadding(dp(12), dp(10), dp(12), dp(10));
+        editor.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+            | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        editor.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {
+                prefs.edit().putString("oba_reminder_draft", text.toString()).apply();
+                if (continuousTranscriptView != null) continuousTranscriptView.setText(text.toString());
+            }
+            @Override public void afterTextChanged(android.text.Editable text) {}
+        });
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20), dp(8), dp(20), dp(4));
+        TextView instructions = text("هر یادآوری را در یک خط بنویس یا با میکروفون بگو. قالب پیشنهادی: «فردا ساعت ۹ صبح، پرداخت قبض». بعد از ویرایش، ذخیره را بزن؛ می‌توانی با صدا هم بگویی «ذخیره کن».", 14, dark, false);
+        panel.addView(instructions, lp(-1, -2, 0, 0, 0, 8));
+        panel.addView(editor, lp(-1, 170, 0, 0, 0, 8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("🔔 ثبت و ویرایش یادآوری")
+            .setView(panel)
+            .setNegativeButton("بستن", (d, w) -> {
+                prefs.edit().putString("oba_reminder_draft", editor.getText().toString()).apply();
+                pendingMode = "auto";
+            })
+            .setNeutralButton("🎙 ورود صوتی", null)
+            .setPositiveButton("ذخیره یادآوری", null)
+            .create();
+        reminderDraftDialog = dialog;
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                prefs.edit().putString("oba_reminder_draft", editor.getText().toString()).apply();
+                pendingMode = "reminder_draft";
+                status.setText("اکنون یادآوری را بگو؛ متن در فرم اضافه می‌شود. برای ثبت نهایی بگو «ذخیره کن» یا دکمهٔ ذخیره را بزن.");
+                startVoice("reminder_draft");
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                prefs.edit().putString("oba_reminder_draft", editor.getText().toString()).apply();
+                pendingMode = "reminder_draft";
+                saveReminderDraft();
+            });
+        });
+        dialog.show();
+        dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+        pendingMode = "auto";
     }
 
     private void saveReminderDraft() {
@@ -2119,6 +2172,9 @@ public class MainActivity extends Activity {
         }
         prefs.edit().remove("oba_reminder_draft").apply();
         if (continuousTranscriptView != null) continuousTranscriptView.setText("یادآوری‌های ثبت‌شده: " + savedCount);
+        if (reminderDraftDialog != null && reminderDraftDialog.isShowing()) reminderDraftDialog.dismiss();
+        reminderDraftDialog = null;
+        reminderDraftInput = null;
         pendingMode = "auto";
         String msg = savedCount > 0 ? savedCount + " یادآوری ذخیره شد." : "یادآوری ذخیره نشد؛ هر مورد باید تاریخ، ساعت و شرح کار داشته باشد. تاریخ‌هایی مثل امروز، فردا یا پس‌فردا را واضح بگو.";
         status.setText(msg);
