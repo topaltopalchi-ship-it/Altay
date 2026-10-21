@@ -2052,7 +2052,7 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("مدل Vosk آماده شد؛ اکنون دانلود مدل صدای فارسی Sherpa شروع می‌شود…");
+                    status.setText("مدل گفتار فارسی آماده شد؛ اکنون دریافت صدای فارسی شروع می‌شود…");
                 }
                 if (!isFinishing() && !isDestroyed()) downloadSherpaModelAutomatically();
             }
@@ -2084,27 +2084,27 @@ public class MainActivity extends Activity {
                 || SherpaModelDownloader.getInstalledModelDirectory(this) != null
                 || downloadingSherpaModel) return;
         downloadingSherpaModel = true;
-        if (status != null) status.setText("مدل Vosk آماده است؛ در حال دانلود صدای فارسی Sherpa…");
+        if (status != null) status.setText("مدل گفتار فارسی آماده است؛ در حال دریافت صدای فارسی…");
         SherpaModelDownloader.downloadModel(this, new SherpaModelDownloader.Callback() {
             @Override public void onProgress(String fileName, long downloadedBytes, long totalBytes) {
                 if (status == null || isFinishing()) return;
                 if (totalBytes > 0) {
                     int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
-                    status.setText("دانلود صدای Sherpa (" + fileName + "): " + percent + "%");
+                    status.setText("دریافت فایل صوتی (" + fileName + "): " + percent + "%");
                 } else {
-                    status.setText("در حال دانلود صدای فارسی Sherpa (" + fileName + ")…");
+                    status.setText("در حال دریافت فایل صوتی (" + fileName + ")…");
                 }
             }
             @Override public void onInstalled(File modelDirectory) {
                 downloadingSherpaModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("فایل‌های صدای فارسی Sherpa دانلود شدند. برای خواندن متن با Sherpa، اتصال موتور پخش لازم است.");
+                    status.setText("فایل‌های صدای فارسی دریافت شدند. برای خواندن متن، اتصال موتور پخش لازم است.");
                 }
             }
             @Override public void onError(String message) {
                 downloadingSherpaModel = false;
                 if (isFinishing() || isDestroyed()) return;
-                if (status != null) status.setText("دانلود صدای Sherpa انجام نشد؛ بعداً دوباره تلاش می‌کنیم. " + message);
+                if (status != null) status.setText("دریافت صدای فارسی انجام نشد؛ بعداً دوباره تلاش می‌کنیم. " + message);
                 if (root != null) root.postDelayed(() -> {
                     if (!isFinishing() && !isDestroyed()
                             && SherpaModelDownloader.getInstalledModelDirectory(MainActivity.this) == null
