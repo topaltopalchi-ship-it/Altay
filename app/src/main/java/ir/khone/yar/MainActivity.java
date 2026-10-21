@@ -1179,7 +1179,7 @@ public class MainActivity extends Activity {
         }
         awaitingVoiceConfirmation = false;
         continuousExpenseListening = true;
-        if (continuousExpenseButton != null) continuousExpenseButton.setText("⏹  پایان ثبت");
+        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
         if (status != null) status.setText("ثبت صوتی فعال است؛ هر مورد را با مبلغ و کلمهٔ «تومان» تمام کن.");
         startVoice("continuous_expense");
     }
@@ -1295,7 +1295,7 @@ public class MainActivity extends Activity {
             correctingNextVoicePhrase = true;
             correctionTargetItem = target;
             continuousExpenseListening = true;
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("⏹  پایان ثبت");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
             if (status != null) status.setText(target.isEmpty()
                 ? "اصلاح فعال شد؛ متن کامل مورد را دوباره بخوان و در پایان «تومان» بگو."
                 : "مورد «" + target + "» انتخاب شد؛ متن درست آن را بخوان و در پایان «تومان» بگو.");
