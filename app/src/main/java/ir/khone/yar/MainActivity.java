@@ -2033,14 +2033,16 @@ public class MainActivity extends Activity {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
 
-        // Unified voice capture: utterances containing explicit future-date words
-        // are saved as reminders; other utterances continue through expense parsing.
-        String dateRoute = s.replace("‌", " ");
-        boolean hasReminderDate = dateRoute.contains("فردا")
-            || dateRoute.contains("پس فردا") || dateRoute.contains("پسفردا")
-            || dateRoute.contains("هفته آینده") || dateRoute.contains("ماه آینده")
-            || dateRoute.matches(".*(?:\\\\b[0-9۰-۹]{1,2}[./-][0-9۰-۹]{1,2}(?:[./-][0-9۰-۹]{2,4})?\\\\b).*");
-        if (hasReminderDate && !dateRoute.contains("ذخیره کن")) {
+        // Route only messages that START with a date/day/time phrase to reminders.
+        // Messages starting with a number continue to the expense/calendar parser.
+        String dateRoute = s.replace("‌", " ").trim().replaceAll("\\s+", " ");
+        boolean startsWithReminderDate = dateRoute.matches(
+            "^(?:(?:پس\\s*فردا|فردا|امروز|پریروز|دیروز|"
+            + "شنبه|یکشنبه|دوشنبه|سه\\s*شنبه|چهارشنبه|پنجشنبه|جمعه|"
+            + "شنبه\\s*آینده|یکشنبه\\s*آینده|دوشنبه\\s*آینده|سه\\s*شنبه\\s*آینده|"
+            + "چهارشنبه\\s*آینده|پنجشنبه\\s*آینده|جمعه\\s*آینده|"
+            + "هفته\\s*آینده|ماه\\s*آینده|ساعت)\\b.*)$");
+        if (startsWithReminderDate && !dateRoute.contains("ذخیره کن")) {
             String item = raw.trim();
             if (!item.isEmpty()) {
                 long now = System.currentTimeMillis();
