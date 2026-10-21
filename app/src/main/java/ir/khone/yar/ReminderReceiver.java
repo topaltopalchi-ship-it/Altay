@@ -105,6 +105,7 @@ public class ReminderReceiver extends BroadcastReceiver {
                     .setAutoCancel(true)
                     .setContentIntent(contentIntent)
                     .setCategory(Notification.CATEGORY_ALARM)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
                 builder.setPriority(Notification.PRIORITY_MAX);
