@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
 
         TextView transcriptLabel = text("متن شنیده‌شده و فهرست موقت هزینه‌ها", 15, dark, true);
         content.addView(transcriptLabel, lp(-1, -2, 0, 2, 0, 3));
-        continuousTranscriptView = text("هنوز متنی دریافت نشده است. ضبط را شروع کن؛ هر مورد را همراه مقدار یا وزن، مبلغ و کلمهٔ «تومان» بگو. اگر چیزی اشتباه ثبت شد، بگو «اصلاح پنیر» و بعد متن درست پنیر را بخوان.", 16, dark, false);
+        continuousTranscriptView = text("هنوز متنی دریافت نشده است. برای یادآوری، «ثبت صوتی یادآوری» را بزن و صحبت کن.", 16, dark, false);
         continuousTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
         continuousTranscriptView.setMinHeight(dp(104));
         continuousTranscriptView.setPadding(dp(12), dp(10), dp(12), dp(10));
@@ -1607,6 +1607,12 @@ public class MainActivity extends Activity {
             startOfflineVoice(mode, modelDirectory);
             return;
         }
+        // Do not leave reminder recording apparently inactive while the offline model downloads.
+        // Use Android's speech service immediately as a fallback for this explicit button.
+        if ("reminder_draft".equals(mode)) {
+            startPlatformVoice(mode);
+            return;
+        }
         if (downloadingVoskModel) {
             if (status != null) status.setText("دریافت بستهٔ گفتار در حال انجام است؛ کمی صبر کن…");
             return;
@@ -1663,15 +1669,24 @@ public class MainActivity extends Activity {
                     }
                 }
                 @Override public void onPartialText(String text) {
-                    if (continuousExpenseListening && !isFinishing()) {
+                    if (isFinishing()) return;
+                    if (continuousExpenseListening) {
                         liveVoicePartial = text;
                         updateContinuousTranscript();
                         if (status != null) status.setText("در حال شنیدن…");
+                    } else if ("reminder_draft".equals(mode) && continuousTranscriptView != null) {
+                        String saved = prefs.getString("oba_reminder_draft", "").trim();
+                        continuousTranscriptView.setText((saved.isEmpty() ? "" : saved + "\n") + text
+                            + "\n\n🎙 در حال شنیدن… در پایان بگو «ذخیره کن».");
                     }
                 }
                 @Override public void onError(String message) {
                     if (offlineEngine == activeEngine) offlineEngine = null;
                     if (status != null && !isFinishing()) status.setText(message);
+                    if ("reminder_draft".equals(mode) && !isFinishing()) {
+                        startPlatformVoice(mode);
+                        return;
+                    }
                     if (continuousExpenseListening) {
                         continuousExpenseListening = false;
                         if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
@@ -2163,16 +2178,23 @@ public class MainActivity extends Activity {
     }
 
     private void startReminderDraft() {
-        // Start listening directly from the home screen and show recognized text in the blue transcript box.
+        // Voice reminders use the same blue transcript box visible on the home screen.
         String existing = prefs.getString("oba_reminder_draft", "").trim();
-        if (existing.isEmpty()) {
-            prefs.edit().putString("oba_reminder_draft", "").apply();
-            if (continuousTranscriptView != null) continuousTranscriptView.setText("🎙 در حال ثبت یادآوری… صحبت کن. در پایان بگو «ذخیره کن».");
-        } else if (continuousTranscriptView != null) {
-            continuousTranscriptView.setText(existing + "\n\nادامه بده؛ در پایان بگو «ذخیره کن».");
+        if (continuousTranscriptView != null) {
+            continuousTranscriptView.setText(existing.isEmpty()
+                ? "🎙 در حال ثبت یادآوری… صحبت کن. در پایان بگو «ذخیره کن»."
+                : existing + "\n\nادامه بده؛ در پایان بگو «ذخیره کن».");
+            continuousTranscriptView.setTextColor(Color.WHITE);
+            continuousTranscriptView.setVisibility(View.VISIBLE);
+            View parent = (View) continuousTranscriptView.getParent();
+            while (parent != null && !(parent instanceof ScrollView)) parent = (View) parent.getParent();
+            if (parent instanceof ScrollView) {
+                final ScrollView scroll = (ScrollView) parent;
+                scroll.post(() -> scroll.smoothScrollTo(0, continuousTranscriptView.getTop()));
+            }
         }
         pendingMode = "reminder_draft";
-        status.setText("🎙 ثبت صوتی یادآوری فعال است؛ صحبت کن. برای ذخیره و بستن بگو «ذخیره کن».");
+        status.setText("🎙 میکروفون در حال فعال‌شدن است؛ اگر درخواست اجازه آمد، اجازه بده. صحبت کن و در پایان بگو «ذخیره کن».");
         startVoice("reminder_draft");
     }
 
