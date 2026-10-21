@@ -233,16 +233,6 @@ public class MainActivity extends Activity {
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
 
-        // Put the two reminder actions together in their own full-width row.
-        LinearLayout reminderActionsRow = new LinearLayout(this);
-        reminderActionsRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button remindersBtn = button("🗂️ آرشیو یادآوری", Color.rgb(255, 239, 205), dark, 12);
-        remindersBtn.setOnClickListener(v -> showReminderArchive());
-        remindersBtn.setMinHeight(dp(54));
-        remindersBtn.setPadding(dp(4), dp(2), dp(4), dp(2));
-        reminderActionsRow.addView(remindersBtn, new LinearLayout.LayoutParams(-1, dp(54)));
-        content.addView(reminderActionsRow, lp(-1, -2, 0, 2, 0, 1));
-
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 11);
@@ -693,6 +683,50 @@ public class MainActivity extends Activity {
                     empty.setGravity(Gravity.CENTER);
                     reportCards.addView(empty);
                 }
+
+                // Daily reminders live inside the selected calendar day.
+                TextView reminderHeading = new TextView(this);
+                reminderHeading.setText("🔔 یادآوری‌های این روز");
+                reminderHeading.setTextSize(19);
+                reminderHeading.setTypeface(null, Typeface.BOLD);
+                reminderHeading.setTextColor(Color.rgb(25, 55, 110));
+                reminderHeading.setPadding(0, dp(12), 0, dp(6));
+                reportCards.addView(reminderHeading);
+                java.util.ArrayList<String> dayReminderRows = new java.util.ArrayList<>();
+                for (String key : prefs.getAll().keySet()) {
+                    if (!key.startsWith("reminder_note_")) continue;
+                    try {
+                        String value = prefs.getString(key, "");
+                        String[] noteParts = value.split("\\n", 2);
+                        if (noteParts.length < 2) continue;
+                        long noteWhen = Long.parseLong(noteParts[0]);
+                        if (noteWhen >= start && noteWhen < end)
+                            dayReminderRows.add(formatPersianDateTime(new Date(noteWhen)) + " — " + noteParts[1].trim());
+                    } catch (Exception ignored) {}
+                }
+                if (dayReminderRows.isEmpty()) {
+                    TextView noReminder = new TextView(this);
+                    noReminder.setText("برای این روز یادآوری ثبت نشده است.");
+                    noReminder.setTextSize(15);
+                    noReminder.setTextColor(Color.DKGRAY);
+                    reportCards.addView(noReminder);
+                } else {
+                    for (String reminderText : dayReminderRows) {
+                        TextView reminderLine = new TextView(this);
+                        reminderLine.setText("• " + reminderText);
+                        reminderLine.setTextSize(15);
+                        reminderLine.setTextColor(Color.DKGRAY);
+                        reminderLine.setPadding(0, dp(5), 0, dp(5));
+                        reportCards.addView(reminderLine);
+                    }
+                }
+                Button addReminderButton = button("＋ افزودن یادآوری برای این روز", Color.rgb(255, 239, 205), dark, 14);
+                addReminderButton.setOnClickListener(v -> showAddCalendarReminder(jy, jm, jd, start));
+                reportCards.addView(addReminderButton, lp(-1, dp(48), 0, dp(8), 0, dp(8)));
+                Button soundButton = button("🎵 انتخاب آهنگ آلارم", Color.WHITE, dark, 13);
+                soundButton.setOnClickListener(v -> pickReminderAlarmSound());
+                reportCards.addView(soundButton, lp(-1, dp(44), 0, 0, 0, dp(8)));
+
                 ScrollView reportScroll = new ScrollView(this);
                 reportScroll.addView(reportCards);
                 new AlertDialog.Builder(this)
@@ -701,6 +735,54 @@ public class MainActivity extends Activity {
                     .setPositiveButton("باشه", null)
                     .setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar())
                     .show();
+            }).show();
+    }
+
+    private void showAddCalendarReminder(int jy, int jm, int jd, long dayStart) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        android.widget.EditText noteInput = new android.widget.EditText(this);
+        noteInput.setHint("متن یادآوری");
+        noteInput.setMinLines(2);
+        form.addView(noteInput, lp(-1, -2, 0, 0, 0, dp(8)));
+        android.widget.EditText timeInput = new android.widget.EditText(this);
+        timeInput.setHint("ساعت (مثلاً 10:30)");
+        timeInput.setSingleLine(true);
+        timeInput.setInputType(android.text.InputType.TYPE_CLASS_DATETIME);
+        form.addView(timeInput, lp(-1, -2, 0, 0, 0, dp(8)));
+        new AlertDialog.Builder(this).setTitle("یادآوری " + jalaliDatePartsText(jy, jm, jd))
+            .setView(form).setNegativeButton("انصراف", null)
+            .setPositiveButton("ذخیره", (d,w) -> {
+                String note = noteInput.getText().toString().trim();
+                if (note.isEmpty()) {
+                    Toast.makeText(this, "متن یادآوری را وارد کن.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                Calendar due = Calendar.getInstance();
+                due.setTimeInMillis(dayStart);
+                String time = timeInput.getText().toString().trim();
+                if (!time.isEmpty()) {
+                    try {
+                        String[] hm = time.split(":");
+                        due.set(Calendar.HOUR_OF_DAY, Integer.parseInt(hm[0].trim()));
+                        due.set(Calendar.MINUTE, Integer.parseInt(hm[1].trim()));
+                    } catch (Exception ex) {
+                        Toast.makeText(this, "ساعت را مانند 10:30 وارد کن.", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                } else {
+                    due.set(Calendar.HOUR_OF_DAY, 9);
+                    due.set(Calendar.MINUTE, 0);
+                }
+                due.set(Calendar.SECOND, 0);
+                due.set(Calendar.MILLISECOND, 0);
+                long when = due.getTimeInMillis();
+                prefs.edit().putString("reminder_note_" + when + "_" + System.currentTimeMillis(),
+                    when + "\\n" + note).apply();
+                refreshReminders();
+                Toast.makeText(this, "یادآوری در آرشیو ذخیره شد.", Toast.LENGTH_LONG).show();
+                showExpenseCalendar();
             }).show();
     }
 
