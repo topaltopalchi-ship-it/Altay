@@ -1561,8 +1561,14 @@ public class MainActivity extends Activity {
                         boolean saveCommand = compact.contains("ذخیرهکن")
                             || compact.contains("ذخیرهیادآوری")
                             || compact.contains("ثبتکن");
-                        if ("reminder_draft".equals(pendingMode) && saveCommand
-                                && !prefs.getString("oba_reminder_draft", "").trim().isEmpty()) {
+                        // The recognizer can change modes or deliver the save phrase
+                        // while the expense panel is active. If a reminder draft exists,
+                        // honor the spoken save command regardless of the current panel mode.
+                        String savedReminderDraft = prefs.getString("oba_reminder_draft", "").trim();
+                        String visibleReminderDraft = reminderTranscriptView == null ? ""
+                            : cleanReminderTranscript(reminderTranscriptView.getText().toString());
+                        if (saveCommand && (!savedReminderDraft.isEmpty() || !visibleReminderDraft.isEmpty())
+                                && !"saving_reminder".equals(pendingMode)) {
                             pendingMode = "saving_reminder";
                             saveReminderDraft();
                         }
