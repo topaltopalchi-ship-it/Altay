@@ -181,8 +181,8 @@ public class MainActivity extends Activity {
         continuousTranscriptView.setTextIsSelectable(true);
         content.addView(continuousTranscriptView, lp(-1, -2, 0, 0, 0, 5));
 
-        TextView reminderTranscriptLabel = text("متن یادآوری‌ها", 15, dark, true);
-        content.addView(reminderTranscriptLabel, lp(-1, -2, 0, 2, 0, 3));
+        // Reminder transcript is intentionally hidden: voice input is unified in the
+        // main expense capture box and classified by date words versus amount/quantity.
         reminderTranscriptView = text("برای ثبت یادآوری، کلید «ثبت صوتی یادآوری» را بزن. متن این بخش جدا از هزینه‌ها ذخیره می‌شود؛ در پایان بگو «ذخیره کن».", 16, Color.WHITE, false);
         reminderTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
         reminderTranscriptView.setMinHeight(dp(84));
@@ -194,7 +194,8 @@ public class MainActivity extends Activity {
         reminderTranscriptView.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         reminderTranscriptView.setLineSpacing(dp(3), 1.08f);
         reminderTranscriptView.setTextIsSelectable(true);
-        content.addView(reminderTranscriptView, lp(-1, -2, 0, 0, 0, 5));
+        reminderTranscriptView.setVisibility(View.GONE);
+        content.addView(reminderTranscriptView, lp(-1, 0, 0, 0, 0, 0));
 
         LinearLayout voiceReviewRow = new LinearLayout(this);
         voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -237,16 +238,9 @@ public class MainActivity extends Activity {
         reminderActionsRow.setOrientation(LinearLayout.HORIZONTAL);
         Button remindersBtn = button("🗂️ آرشیو یادآوری", Color.rgb(255, 239, 205), dark, 12);
         remindersBtn.setOnClickListener(v -> showReminderArchive());
-        Button reminderVoiceBtn = button("🎙 ثبت صوتی یادآوری", Color.WHITE, dark, 12);
-        reminderVoiceBtn.setOnClickListener(v -> startReminderDraft());
-        for (Button b : new Button[]{remindersBtn, reminderVoiceBtn}) {
-            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
-            bp.setMargins(dp(3), dp(2), dp(3), dp(2));
-            b.setMinHeight(dp(54));
-            b.setPadding(dp(4), dp(2), dp(4), dp(2));
-            b.setMaxLines(2);
-            reminderActionsRow.addView(b, bp);
-        }
+        remindersBtn.setMinHeight(dp(54));
+        remindersBtn.setPadding(dp(4), dp(2), dp(4), dp(2));
+        reminderActionsRow.addView(remindersBtn, new LinearLayout.LayoutParams(-1, dp(54)));
         content.addView(reminderActionsRow, lp(-1, -2, 0, 2, 0, 1));
 
         LinearLayout toolsRow = new LinearLayout(this);
@@ -1956,6 +1950,26 @@ public class MainActivity extends Activity {
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
+
+        // Unified voice capture: utterances containing explicit future-date words
+        // are saved as reminders; other utterances continue through expense parsing.
+        String dateRoute = s.replace("‌", " ");
+        boolean hasReminderDate = dateRoute.contains("فردا")
+            || dateRoute.contains("پس فردا") || dateRoute.contains("پسفردا")
+            || dateRoute.contains("هفته آینده") || dateRoute.contains("ماه آینده")
+            || dateRoute.matches(".*(?:\\\\b[0-9۰-۹]{1,2}[./-][0-9۰-۹]{1,2}(?:[./-][0-9۰-۹]{2,4})?\\\\b).*");
+        if (hasReminderDate && !dateRoute.contains("ذخیره کن")) {
+            String item = raw.trim();
+            if (!item.isEmpty()) {
+                long now = System.currentTimeMillis();
+                prefs.edit().putString("reminder_note_" + now + "_0", now + "\\n" + item).apply();
+                if (reminderTranscriptView != null) reminderTranscriptView.setText(item);
+                refreshReminders();
+                status.setText("یادآوری در آرشیو یادآوری‌ها ثبت شد.");
+                say("یادآوری ذخیره شد");
+            }
+            return;
+        }
         String compactCommand = s.replace("‌", "").replace(" ", "")
             .replace("ي", "ی").replace("ك", "ک")
             .replaceAll("[،,؛;.!؟?]+", "");
