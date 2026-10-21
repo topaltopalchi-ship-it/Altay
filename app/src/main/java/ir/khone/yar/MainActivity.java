@@ -722,8 +722,12 @@ public class MainActivity extends Activity {
                         reportCards.addView(reminderLine);
                     }
                 }
+                final int selectedJalaliYear = jy;
+                final int selectedJalaliMonth = jm;
+                final int selectedJalaliDay = jd;
+                final long selectedDayStart = start;
                 Button addReminderButton = button("＋ افزودن یادآوری برای این روز", Color.rgb(255, 239, 205), dark, 14);
-                addReminderButton.setOnClickListener(v -> showAddCalendarReminder(jy, jm, jd, start));
+                addReminderButton.setOnClickListener(v -> showAddCalendarReminder(selectedJalaliYear, selectedJalaliMonth, selectedJalaliDay, selectedDayStart));
                 reportCards.addView(addReminderButton, lp(-1, dp(48), 0, dp(8), 0, dp(8)));
                 Button soundButton = button("🎵 انتخاب آهنگ آلارم", Color.WHITE, dark, 13);
                 soundButton.setOnClickListener(v -> pickReminderAlarmSound());
@@ -1253,7 +1257,7 @@ public class MainActivity extends Activity {
                     long amount = Long.parseLong(parts[4]);
                     String date = formatPersianDate(new Date(timestamp));
                     labels.add(date + " • " + parts[3].trim() + " • " + fmt(amount) + " تومان");
-                    details.add("بخش: " + parts[1].trim() + "\\nتاریخ: " + date + "\\nشرح: " + parts[3].trim() + "\\nمبلغ: " + fmt(amount) + " تومان");
+                    details.add("بخش: " + parts[1].trim() + "\nتاریخ: " + date + "\nشرح: " + parts[3].trim() + "\nمبلغ: " + fmt(amount) + " تومان");
                     total += amount;
                 } catch (Exception ignored) {}
             }
