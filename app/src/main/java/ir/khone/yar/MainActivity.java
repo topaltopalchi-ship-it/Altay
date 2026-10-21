@@ -1329,10 +1329,10 @@ public class MainActivity extends Activity {
             return;
         }
         StringBuilder report = new StringBuilder();
-        report.append("تعداد دفعات خرید: ").append(count).append("\\n");
-        report.append("مجموع هزینه: ").append(fmt(total)).append(" تومان\\n\\n");
-        report.append("ریز خریدها:\\n");
-        for (String detail : details) report.append("• ").append(detail).append("\\n");
+        report.append("تعداد دفعات خرید: ").append(count).append("\n");
+        report.append("مجموع هزینه: ").append(fmt(total)).append(" تومان\n\n");
+        report.append("ریز خریدها:\n");
+        for (String detail : details) report.append("• ").append(detail).append("\n");
         new AlertDialog.Builder(this).setTitle(title).setMessage(report.toString())
             .setPositiveButton("باشه", null)
             .setNeutralButton("جست‌وجوی دیگر", (d, w) -> showMonthlyItemReport())
