@@ -2063,6 +2063,17 @@ public class MainActivity extends Activity {
     }
 
     private void showReminderList() {
+        new AlertDialog.Builder(this)
+            .setTitle("🔔 یادآوری‌ها")
+            .setItems(new String[]{"🗂️ آرشیو یادآوری‌ها", "🎙 ثبت صوتی یادآوری"}, (dialog, which) -> {
+                if (which == 0) showReminderArchive();
+                else startReminderDraft();
+            })
+            .setNegativeButton("بستن", null)
+            .show();
+    }
+
+    private void showReminderArchive() {
         remindersView = new TextView(this);
         remindersView.setTextSize(16);
         remindersView.setTextColor(dark);
@@ -2073,10 +2084,10 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(remindersView, new ScrollView.LayoutParams(-1, -2));
         new AlertDialog.Builder(this)
-            .setTitle("🔔 یادآوری‌های من")
+            .setTitle("🗂️ آرشیو یادآوری‌ها")
             .setView(scroll)
             .setNegativeButton("بستن", null)
-            .setPositiveButton("➕ افزودن یادآوری", (dialog, which) -> startReminderDraft())
+            .setPositiveButton("🎙 ثبت صوتی", (dialog, which) -> startReminderDraft())
             .show();
     }
 
@@ -2142,21 +2153,15 @@ public class MainActivity extends Activity {
                 prefs.edit().putString("oba_reminder_draft", editor.getText().toString()).apply();
                 pendingMode = "auto";
             })
-            .setNeutralButton("🎙 ورود صوتی", null)
-            .setPositiveButton("ذخیره یادآوری", null)
+            .setNeutralButton("🎙 ثبت صوتی", null)
             .create();
         reminderDraftDialog = dialog;
         dialog.setOnShowListener(ignored -> {
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
                 prefs.edit().putString("oba_reminder_draft", editor.getText().toString()).apply();
                 pendingMode = "reminder_draft";
-                status.setText("اکنون یادآوری را بگو؛ متن در فرم اضافه می‌شود. برای ثبت نهایی بگو «ذخیره کن» یا دکمهٔ ذخیره را بزن.");
+                status.setText("اکنون یادآوری را بگو؛ متن در فرم اضافه می‌شود. برای ثبت نهایی با صدا بگو «ذخیره کن».");
                 startVoice("reminder_draft");
-            });
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                prefs.edit().putString("oba_reminder_draft", editor.getText().toString()).apply();
-                pendingMode = "reminder_draft";
-                saveReminderDraft();
             });
         });
         dialog.show();
