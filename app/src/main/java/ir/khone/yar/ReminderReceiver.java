@@ -135,15 +135,17 @@ public class ReminderReceiver extends BroadcastReceiver {
             }
         }
 
-        // Play the selected alarm tone continuously until the user stops it.
-        Intent alarmService = new Intent(context, ReminderAlarmService.class);
-        alarmService.setAction(ReminderAlarmService.ACTION_START);
-        alarmService.putExtra("title", title);
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(alarmService);
-            else context.startService(alarmService);
-        } catch (Exception ignored) {
-            // Keep the regular notification as a fallback if Android blocks service startup.
+        // The one-hour heads-up stays a regular notification; loop the tone only at due time.
+        if (!early) {
+            Intent alarmService = new Intent(context, ReminderAlarmService.class);
+            alarmService.setAction(ReminderAlarmService.ACTION_START);
+            alarmService.putExtra("title", title);
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(alarmService);
+                else context.startService(alarmService);
+            } catch (Exception ignored) {
+                // Keep the regular notification as a fallback if Android blocks service startup.
+            }
         }
 
         speakReminder(context.getApplicationContext(), spokenTitle, goAsync());
