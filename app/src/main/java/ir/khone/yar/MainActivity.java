@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
 
         // Primary dashboard control: explicit opt-in continuous listening for expense entries.
         continuousExpenseButton = new Button(this);
-        continuousExpenseButton.setText("🎙  ثبت هزینه");
+        continuousExpenseButton.setText("⏹  پایان ثبت");
         continuousExpenseButton.setTextSize(17);
         continuousExpenseButton.setTextColor(Color.WHITE);
         continuousExpenseButton.setAllCaps(false);
@@ -1171,7 +1171,7 @@ public class MainActivity extends Activity {
             if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
             if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
             awaitingVoiceConfirmation = true;
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("⏹  پایان ثبت");
             if (status != null) status.setText("فهرست را بررسی کن. با گفتن «بله» همه ثبت می‌شوند؛ با گفتن «اصلاح پنیر» مورد پنیر را اصلاح کن.");
             updateContinuousTranscript();
             startVoice("continuous_expense_confirmation");
@@ -1179,7 +1179,7 @@ public class MainActivity extends Activity {
         }
         awaitingVoiceConfirmation = false;
         continuousExpenseListening = true;
-        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
+        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
         if (status != null) status.setText("ثبت صوتی فعال است؛ هر مورد را با مبلغ و کلمهٔ «تومان» تمام کن.");
         startVoice("continuous_expense");
     }
@@ -1195,7 +1195,7 @@ public class MainActivity extends Activity {
             if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
             if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
             awaitingVoiceConfirmation = false;
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
             if (!unfinishedVoiceExpense.trim().isEmpty()) {
                 if (status != null) status.setText("آخرین مورد هنوز با «تومان» کامل نشده؛ لطفاً مبلغ آن را همراه کلمهٔ تومان بگو، سپس «ذخیره کن» را تکرار کن.");
                 return;
@@ -1286,7 +1286,7 @@ public class MainActivity extends Activity {
         if (answer.contains("بله") || answer.contains("آره") || answer.contains("تایید") || answer.contains("تأیید") || answer.contains("درسته") || answer.contains("درست است")) {
             awaitingVoiceConfirmation = false;
             commitPendingVoiceExpenses();
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
             return;
         }
         if (answer.startsWith("اصلاح")) {
@@ -1295,7 +1295,7 @@ public class MainActivity extends Activity {
             correctingNextVoicePhrase = true;
             correctionTargetItem = target;
             continuousExpenseListening = true;
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("⏹  پایان ثبت");
             if (status != null) status.setText(target.isEmpty()
                 ? "اصلاح فعال شد؛ متن کامل مورد را دوباره بخوان و در پایان «تومان» بگو."
                 : "مورد «" + target + "» انتخاب شد؛ متن درست آن را بخوان و در پایان «تومان» بگو.");
@@ -1635,7 +1635,7 @@ public class MainActivity extends Activity {
                     if (status != null && !isFinishing()) status.setText(message);
                     if (continuousExpenseListening) {
                         continuousExpenseListening = false;
-                        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  ثبت هزینه");
+                        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
                     }
                 }
             }, continuousExpenseListening);
