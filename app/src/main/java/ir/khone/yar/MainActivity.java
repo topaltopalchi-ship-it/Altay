@@ -1690,14 +1690,24 @@ public class MainActivity extends Activity {
                         liveVoicePartial = text;
                         updateContinuousTranscript();
                         if (status != null) status.setText("در حال شنیدن…");
-                    } else if ("reminder_draft".equals(mode) && continuousTranscriptView != null) {
+                    } else if ("reminder_draft".equals(mode) && reminderTranscriptView != null) {
                         String recognized = cleanReminderTranscript(text);
-                        // Save each partial speech result immediately. The blue box is only
-                        // presentation; SharedPreferences is the durable draft source.
-                        if (!recognized.isEmpty()) {
+                        String compact = normalize(recognized).replace("‌", "").replace(" ", "")
+                            .replace("ي", "ی").replace("ك", "ک")
+                            .replaceAll("[،,؛;.!؟?]+", "");
+                        boolean saveCommand = compact.contains("ذخیرهکن")
+                            || compact.contains("ذخیرهیادآوری")
+                            || compact.contains("ثبتکن")
+                            || compact.contains("ثبتیادآوری")
+                            || compact.contains("تمامشد")
+                            || compact.contains("تمومشد");
+                        // Keep reminder speech exclusively in the lower reminder panel.
+                        // Never overwrite the saved draft with the final "ذخیره کن" utterance.
+                        if (!recognized.isEmpty() && !saveCommand) {
                             prefs.edit().putString("oba_reminder_draft", recognized).apply();
                         }
-                        continuousTranscriptView.setText((recognized.isEmpty() ? "" : recognized)
+                        String visibleDraft = prefs.getString("oba_reminder_draft", "").trim();
+                        reminderTranscriptView.setText((visibleDraft.isEmpty() ? "" : visibleDraft)
                             + "\n\n🎙 در حال شنیدن… در پایان بگو «ذخیره کن».");
                     }
                 }
