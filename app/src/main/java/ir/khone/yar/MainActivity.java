@@ -216,17 +216,17 @@ public class MainActivity extends Activity {
         // Compact access to the archive and existing utilities, without changing the category layout.
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button remindersBtn = button("🔔 یادآوری‌ها", Color.rgb(255, 239, 205), dark, 10);
-        remindersBtn.setOnClickListener(v -> showReminderList());
+        Button remindersBtn = button("🗂️ آرشیو یادآوری", Color.rgb(255, 239, 205), dark, 10);
+        remindersBtn.setOnClickListener(v -> showReminderArchive());
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 10);
         docsBtn.setOnClickListener(v -> showHomeDocuments());
-        Button audioBtn = button("🎧 صداها", Color.WHITE, dark, 10);
-        audioBtn.setOnClickListener(v -> showAudioArchive());
+        Button reminderVoiceBtn = button("🎙 ثبت صوتی یادآوری", Color.WHITE, dark, 10);
+        reminderVoiceBtn.setOnClickListener(v -> startReminderDraft());
         Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 10);
         backupBtn.setOnClickListener(v -> showBackupOptions());
         Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 10);
         chartBtn.setOnClickListener(v -> showExpenseCharts());
-        for (Button b : new Button[]{remindersBtn, docsBtn, audioBtn, backupBtn, chartBtn}) {
+        for (Button b : new Button[]{remindersBtn, docsBtn, reminderVoiceBtn, backupBtn, chartBtn}) {
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
             bp.setMargins(dp(2), dp(2), dp(2), dp(2));
             b.setMinHeight(dp(54));
