@@ -2687,12 +2687,42 @@ public class MainActivity extends Activity {
     }
 
     private void showReminderSoundPreview(Uri soundUri) {
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(48, 24, 48, 12);
+
+        Button playButton = new Button(this);
+        playButton.setText("▶ پخش آهنگ");
+        playButton.setOnClickListener(v -> playReminderSoundPreview(soundUri));
+        panel.addView(playButton, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        Button stopButton = new Button(this);
+        stopButton.setText("■ قطع آهنگ");
+        stopButton.setOnClickListener(v -> {
+            stopReminderSoundPreview();
+            Toast.makeText(this, "پخش آهنگ متوقف شد.", Toast.LENGTH_SHORT).show();
+        });
+        panel.addView(stopButton, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        Button chooseButton = new Button(this);
+        chooseButton.setText("انتخاب آهنگ دیگر");
+        chooseButton.setOnClickListener(v -> {
+            stopReminderSoundPreview();
+            pickReminderAlarmSound();
+        });
+        panel.addView(chooseButton, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
         new AlertDialog.Builder(this)
             .setTitle("🎵 پیش‌شنوی آهنگ آلارم")
-            .setMessage("برای شنیدن آهنگ انتخاب‌شده، «پخش آهنگ» را بزن. می‌توانی آهنگ دیگری هم انتخاب کنی.")
-            .setPositiveButton("▶ پخش آهنگ", (dialog, which) -> playReminderSoundPreview(soundUri))
-            .setNeutralButton("انتخاب آهنگ دیگر", (dialog, which) -> pickReminderAlarmSound())
-            .setNegativeButton("تمام", (dialog, which) -> Toast.makeText(this, "آهنگ آلارم ذخیره شد.", Toast.LENGTH_SHORT).show())
+            .setMessage("برای شنیدن آهنگ انتخاب‌شده، پخش را بزن؛ هر زمان خواستی می‌توانی قطعش کنی.")
+            .setView(panel)
+            .setNegativeButton("تمام", (dialog, which) -> {
+                stopReminderSoundPreview();
+                Toast.makeText(this, "آهنگ آلارم ذخیره شد.", Toast.LENGTH_SHORT).show();
+            })
             .show();
     }
 
