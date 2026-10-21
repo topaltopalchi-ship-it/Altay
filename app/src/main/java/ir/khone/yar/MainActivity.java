@@ -2307,6 +2307,23 @@ public class MainActivity extends Activity {
     private long parseAmount(String s) {
         // Normalize Persian/Arabic digits before parsing.
         String normalized = normalize(s == null ? "" : s);
+        // Speech recognition may split a Persian compound amount into a word multiplier
+        // and digits, e.g. "شش ۱۰۰۰۰۰ تومان". Recombine that before the ordinary parser.
+        java.util.regex.Matcher spokenMultiplier = java.util.regex.Pattern
+            .compile("([\\u0600-\\u06FF]+(?:\\s+[\\u0600-\\u06FF]+){0,2})\\s+([0-9]{4,})\\s*(?:تومان|تومن|ریال)")
+            .matcher(normalized);
+        long combinedAmount = -1;
+        while (spokenMultiplier.find()) {
+            long multiplier = wordNumber(spokenMultiplier.group(1).trim());
+            try {
+                long base = Long.parseLong(spokenMultiplier.group(2));
+                if (multiplier > 0 && base > 0 && multiplier <= Long.MAX_VALUE / base) {
+                    combinedAmount = multiplier * base;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (combinedAmount > 0) return combinedAmount;
+
         // Prefer the number immediately associated with the currency amount, not an
         // earlier quantity such as "3 کیلو". Search each amount marker independently.
         java.util.regex.Pattern currencyPattern = java.util.regex.Pattern.compile(
@@ -2388,8 +2405,10 @@ public class MainActivity extends Activity {
             case "چهارده": return 14; case "پانزده": return 15; case "شانزده": return 16; case "هفده": return 17;
             case "هجده": return 18; case "نوزده": return 19; case "بیست": return 20; case "سی": return 30;
             case "چهل": return 40; case "پنجاه": return 50; case "شصت": return 60; case "هفتاد": return 70;
-            case "هشتاد": return 80; case "نود": return 90; case "صد": return 100; case "دویست": return 200;
-            case "سیصد": return 300; case "چهارصد": return 400; case "پانصد": return 500; case "هزار": return 1000;
+            case "هشتاد": return 80; case "نود": return 90; case "صد": case "یکصد": return 100; case "دویست": return 200;
+            case "سیصد": return 300; case "چهارصد": return 400; case "پانصد": return 500;
+            case "ششصد": return 600; case "هفتصد": return 700; case "هشتصد": return 800; case "نهصد": return 900;
+            case "هزار": return 1000;
             case "میلیون": return 1000000; default: return 0;
         }
     }
