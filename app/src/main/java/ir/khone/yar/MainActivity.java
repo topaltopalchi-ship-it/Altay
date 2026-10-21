@@ -121,7 +121,7 @@ public class MainActivity extends Activity {
             }
         });
         buildUi();
-        // Rebuild pending reminder alarms with the current one-hour lead time and selected sound.
+        // Restore scheduled text reminders with vibration notifications.
         ReminderReceiver.restore(this);
         // Voice wake-up by saying "OBA" is disabled; voice commands remain available from other controls.
         wakeTriggeredSession = false;
@@ -841,9 +841,6 @@ public class MainActivity extends Activity {
                 Button addReminderButton = button("＋ افزودن یادآوری برای این روز", Color.rgb(255, 239, 205), dark, 14);
                 addReminderButton.setOnClickListener(v -> showAddCalendarReminder(selectedJalaliYear, selectedJalaliMonth, selectedJalaliDay, selectedDayStart));
                 reportCards.addView(addReminderButton, lp(-1, dp(48), 0, dp(8), 0, dp(8)));
-                Button soundButton = button("🎵 انتخاب آهنگ آلارم", Color.WHITE, dark, 13);
-                soundButton.setOnClickListener(v -> pickReminderAlarmSound());
-                reportCards.addView(soundButton, lp(-1, dp(44), 0, 0, 0, dp(8)));
                 Button reminderArchiveButton = button("🗂️ آرشیو یادآوری‌ها", Color.rgb(224, 240, 255), dark, 13);
                 reminderArchiveButton.setOnClickListener(v -> showReminderArchive());
                 reportCards.addView(reminderArchiveButton, lp(-1, dp(44), 0, 0, 0, dp(8)));
@@ -2810,7 +2807,6 @@ public class MainActivity extends Activity {
             .setTitle("🗂️ آرشیو یادآوری‌ها")
             .setView(scroll)
             .setNegativeButton("بستن", null)
-            .setNeutralButton("🎵 انتخاب آهنگ آلارم", (dialog, which) -> pickReminderAlarmSound())
             .setPositiveButton("پاک کن", (dialog, which) -> confirmClearArchive(
                 "پاک کردن آرشیو یادآوری‌ها",
                 "تمام یادآوری‌های ذخیره‌شده پاک شوند؟ این کار قابل بازگشت نیست.",
