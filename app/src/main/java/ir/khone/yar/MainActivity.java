@@ -1905,7 +1905,23 @@ public class MainActivity extends Activity {
     private void handleVoice(String raw) {
         String s = normalize(raw);
         status.setText("شنیدم: «" + raw + "»");
-        String compactCommand = s.replace("‌", "").replace(" ", "");
+        String compactCommand = s.replace("‌", "").replace(" ", "")
+            .replace("ي", "ی").replace("ك", "ک")
+            .replaceAll("[،,؛;.!؟?]+", "");
+        // Recognize save phrases even if speech recognition adds a prefix such as
+        // "پیام صوتی" or the current mode has unexpectedly fallen back to auto.
+        // Only trigger this global shortcut when a reminder draft already exists.
+        String existingReminderDraft = prefs.getString("oba_reminder_draft", "").trim();
+        boolean reminderSaveShortcut = !existingReminderDraft.isEmpty()
+            && (compactCommand.contains("ذخیرهکن")
+                || compactCommand.contains("ذخیرهیادآوری")
+                || compactCommand.contains("ثبتکن")
+                || compactCommand.contains("ثبتیادآوری"));
+        if (reminderSaveShortcut && !pendingMode.equals("saving_reminder")) {
+            pendingMode = "saving_reminder";
+            saveReminderDraft();
+            return;
+        }
         if (awaitingArchiveCorrection || compactCommand.startsWith("پاککن") || compactCommand.startsWith("حذفکن") || compactCommand.startsWith("اصلاح")) {
             handleArchiveVoiceCommand(raw, s);
             return;
