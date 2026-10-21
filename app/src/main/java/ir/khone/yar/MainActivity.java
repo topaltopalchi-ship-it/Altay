@@ -347,14 +347,15 @@ public class MainActivity extends Activity {
         amountInput.setHint("مبلغ جدید به تومان");
         panel.addView(amountInput, lp(-1, -2, 0, 0, 0, 4));
 
-        new AlertDialog.Builder(this)
-            .setTitle("💗 بودجه")
-            .setMessage("مبلغی وارد کن تا به بودجهٔ فعلی اضافه شود؛ مجموع جدید نمایش داده می‌شود.")
-            .setView(panel)
-            .setNegativeButton("بستن", null)
-            .setNeutralButton("تنظیم از ابتدا", null)
-            .setPositiveButton("افزودن به بودجه", null)
-            .create();
+        Button clearAmountButton = button("پاک‌کردن مبلغ برای اصلاح", Color.rgb(255, 224, 233), Color.rgb(150, 25, 65), 14);
+        clearAmountButton.setMinHeight(dp(44));
+        clearAmountButton.setOnClickListener(v -> {
+            amountInput.setText("");
+            amountInput.setError(null);
+            amountInput.requestFocus();
+        });
+        panel.addView(clearAmountButton, lp(-1, -2, 0, 2, 0, 4));
+
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("💗 بودجه")
             .setMessage("مبلغی وارد کن تا به بودجهٔ فعلی اضافه شود؛ مجموع جدید نمایش داده می‌شود.")
