@@ -213,28 +213,40 @@ public class MainActivity extends Activity {
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
 
-        // Compact access to the archive and existing utilities, without changing the category layout.
+        // Put the two reminder actions together in their own full-width row.
+        LinearLayout reminderActionsRow = new LinearLayout(this);
+        reminderActionsRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button remindersBtn = button("🗂️ آرشیو یادآوری", Color.rgb(255, 239, 205), dark, 12);
+        remindersBtn.setOnClickListener(v -> showReminderArchive());
+        Button reminderVoiceBtn = button("🎙 ثبت صوتی یادآوری", Color.WHITE, dark, 12);
+        reminderVoiceBtn.setOnClickListener(v -> startReminderDraft());
+        for (Button b : new Button[]{remindersBtn, reminderVoiceBtn}) {
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
+            bp.setMargins(dp(3), dp(2), dp(3), dp(2));
+            b.setMinHeight(dp(54));
+            b.setPadding(dp(4), dp(2), dp(4), dp(2));
+            b.setMaxLines(2);
+            reminderActionsRow.addView(b, bp);
+        }
+        content.addView(reminderActionsRow, lp(-1, -2, 0, 2, 0, 1));
+
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button remindersBtn = button("🗂️ آرشیو یادآوری", Color.rgb(255, 239, 205), dark, 10);
-        remindersBtn.setOnClickListener(v -> showReminderArchive());
-        Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 10);
+        Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 11);
         docsBtn.setOnClickListener(v -> showHomeDocuments());
-        Button reminderVoiceBtn = button("🎙 ثبت صوتی یادآوری", Color.WHITE, dark, 10);
-        reminderVoiceBtn.setOnClickListener(v -> startReminderDraft());
-        Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 10);
+        Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 11);
         backupBtn.setOnClickListener(v -> showBackupOptions());
-        Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 10);
+        Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 11);
         chartBtn.setOnClickListener(v -> showExpenseCharts());
-        for (Button b : new Button[]{remindersBtn, docsBtn, reminderVoiceBtn, backupBtn, chartBtn}) {
-            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(54), 1);
-            bp.setMargins(dp(2), dp(2), dp(2), dp(2));
-            b.setMinHeight(dp(54));
-            b.setPadding(dp(2), dp(2), dp(2), dp(2));
+        for (Button b : new Button[]{docsBtn, backupBtn, chartBtn}) {
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(50), 1);
+            bp.setMargins(dp(3), dp(2), dp(3), dp(2));
+            b.setMinHeight(dp(50));
+            b.setPadding(dp(4), dp(2), dp(4), dp(2));
             b.setMaxLines(2);
             toolsRow.addView(b, bp);
         }
-        content.addView(toolsRow, lp(-1, -2, 0, 2, 0, 2));
+        content.addView(toolsRow, lp(-1, -2, 0, 1, 0, 2));
         Button calendarBtn = button("🗓️ تقویم مخارج روزانه", Color.rgb(224, 240, 255), dark, 15);
         calendarBtn.setMinHeight(dp(48));
         calendarBtn.setOnClickListener(v -> showExpenseCalendar());
