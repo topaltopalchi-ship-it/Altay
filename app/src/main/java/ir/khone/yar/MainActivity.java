@@ -1962,7 +1962,7 @@ public class MainActivity extends Activity {
             String item = raw.trim();
             if (!item.isEmpty()) {
                 long now = System.currentTimeMillis();
-                prefs.edit().putString("reminder_note_" + now + "_0", now + "\\n" + item).apply();
+                prefs.edit().putString("reminder_note_" + now + "_0", now + "\n" + item).apply();
                 if (reminderTranscriptView != null) reminderTranscriptView.setText(item);
                 refreshReminders();
                 status.setText("یادآوری در آرشیو یادآوری‌ها ثبت شد.");
