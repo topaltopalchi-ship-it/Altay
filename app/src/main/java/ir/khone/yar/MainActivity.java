@@ -141,8 +141,8 @@ public class MainActivity extends Activity {
         // Primary dashboard action: premium centered rectangular control for voice capture.
         wakeButton = button(
             prefs.getBoolean("wake_enabled", false)
-                ? "■  توقف شنیدن و ثبت صوتی"
-                : "🎙  فعال‌سازی ضبط و ثبت صوتی",
+                ? "■  پایان ثبت"
+                : "🎙  ثبت صوتی",
             Color.rgb(0, 105, 100), Color.WHITE, 18
         );
         wakeButton.setMinHeight(dp(62));
@@ -638,9 +638,9 @@ public class MainActivity extends Activity {
             recorder.setOutputFile(currentAudioFile.getAbsolutePath());
             recorder.prepare(); recorder.start();
             new AlertDialog.Builder(this).setTitle("ضبط صدا")
-                .setMessage("ضبط فعال است. برای پایان ضبط، «پایان و ذخیره» را بزن.")
+                .setMessage("ضبط فعال است. برای پایان، دکمهٔ «پایان ثبت» را بزن.")
                 .setCancelable(false)
-                .setPositiveButton("پایان و ذخیره", (d, w) -> stopAudioRecording())
+                .setPositiveButton("پایان ثبت", (d, w) -> stopAudioRecording())
                 .setNegativeButton("لغو ضبط", (d, w) -> { stopAudioRecording(); if (currentAudioFile != null) currentAudioFile.delete(); })
                 .show();
         } catch (Exception e) {
@@ -980,7 +980,7 @@ public class MainActivity extends Activity {
         try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
         prefs.edit().putBoolean("wake_enabled", false).apply();
         if (wakeButton != null) {
-            wakeButton.setText("🎙  فعال‌سازی ضبط و ثبت صوتی");
+            wakeButton.setText("🎙  ثبت صوتی");
         }
         if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
         Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
@@ -1236,13 +1236,13 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
             else startService(service);
             prefs.edit().putBoolean("wake_enabled", true).apply();
-            if (wakeButton != null) wakeButton.setText("■  توقف شنیدن و ثبت صوتی");
+            if (wakeButton != null) wakeButton.setText("■  پایان ثبت");
             status.setText("شنیدن نام OBA فعال شد. بگو «اوبا»؛ برای توقف، دکمه خاموش کردن را بزن.");
             say("OBA آماده شنیدن نامش است");
         } catch (Exception e) {
             prefs.edit().putBoolean("wake_enabled", false).apply();
             status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
-            if (wakeButton != null) wakeButton.setText("🎙  فعال‌سازی ضبط و ثبت صوتی");
+            if (wakeButton != null) wakeButton.setText("🎙  ثبت صوتی");
         }
     }
 
