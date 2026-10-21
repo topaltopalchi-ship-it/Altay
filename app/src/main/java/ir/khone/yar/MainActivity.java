@@ -1912,11 +1912,15 @@ public class MainActivity extends Activity {
         // "پیام صوتی" or the current mode has unexpectedly fallen back to auto.
         // Only trigger this global shortcut when a reminder draft already exists.
         String existingReminderDraft = prefs.getString("oba_reminder_draft", "").trim();
-        boolean reminderSaveShortcut = !existingReminderDraft.isEmpty()
+        boolean hasReminderDraft = !existingReminderDraft.isEmpty();
+        boolean reminderSaveShortcut = hasReminderDraft
             && (compactCommand.contains("ذخیرهکن")
                 || compactCommand.contains("ذخیرهیادآوری")
+                || compactCommand.contains("ذخیره")
                 || compactCommand.contains("ثبتکن")
-                || compactCommand.contains("ثبتیادآوری"));
+                || compactCommand.contains("ثبتیادآوری")
+                || compactCommand.equals("ثبت")
+                || compactCommand.contains("تمامشد"));
         if (reminderSaveShortcut && !pendingMode.equals("saving_reminder")) {
             pendingMode = "saving_reminder";
             saveReminderDraft();
@@ -1938,10 +1942,12 @@ public class MainActivity extends Activity {
                 .replaceAll("[،,؛;.!؟?]+", "");
             boolean saveCommand = reminderCommand.contains("ذخیرهکن")
                 || reminderCommand.contains("ذخیرهیادآوری")
+                || reminderCommand.contains("ذخیره")
                 || reminderCommand.contains("ثبتکن")
+                || reminderCommand.contains("ثبتیادآوری")
                 || reminderCommand.contains("ثبت یادآوری".replace(" ", ""))
-                || reminderCommand.equals("ذخیره")
-                || reminderCommand.equals("ثبت");
+                || reminderCommand.equals("ثبت")
+                || reminderCommand.contains("تمامشد");
             if (saveCommand) {
                 // Switch mode immediately so a late speech callback cannot append the command
                 // itself to the reminder draft or restart microphone capture.
