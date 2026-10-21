@@ -1307,6 +1307,16 @@ public class MainActivity extends Activity {
         startVoice("continuous_expense_confirmation");
     }
 
+    private String inferVoiceExpenseCategory(String item) {
+        String value = normalize(item == null ? "" : item).toLowerCase(Locale.ROOT);
+        if (contains(value, "ماشین", "خودرو", "بنزین", "سوخت", "روغن موتور", "لاستیک", "پارکینگ", "تعمیر خودرو", "بیمه خودرو")) return "ماشین";
+        if (contains(value, "مدرسه", "شهریه", "معلم", "کتاب درسی", "لوازم التحریر", "لوازم‌التحریر", "کلاس", "دانشگاه")) return "مدرسه";
+        if (contains(value, "مغازه", "فروشگاه", "جنس برای فروش", "خرید کالا", "اجاره مغازه", "حقوق کارمند", "تعمیر مغازه")) return "مغازه";
+        if (contains(value, "دکتر", "دارو", "درمان", "بیمارستان", "آزمایش", "دندان", "پزشک", "داروخانه", "بیمه درمانی")) return "سلامت";
+        if (contains(value, "اجاره خانه", "قبض", "برق", "آب", "گاز", "نان", "برنج", "غذا", "میوه", "سبزی", "لبنیات", "شیر", "گوشت", "مرغ", "نظافت", "لوازم خانه", "خرید خانه")) return "خانه";
+        return "سایر";
+    }
+
     private String[] parseContinuousExpense(String raw) {
         String normalized = normalize(raw == null ? "" : raw).trim();
         if (normalized.isEmpty()) return null;
@@ -1397,7 +1407,10 @@ public class MainActivity extends Activity {
             }
             expenseTotal += amount;
             prefs.edit().putLong("expense", expenseTotal).commit();
-            addEntry("خانه", parsed[0], amount);
+            // Voice and manual expense registration share addEntry() and the same dated history
+            // consumed by the calendar. Infer the category from the spoken item instead of
+            // forcing every dashboard voice expense into "خانه".
+            addEntry(inferVoiceExpenseCategory(parsed[0]), parsed[0], amount);
             saved++;
         }
         // Never discard a phrase that could not be parsed: leave it visible for correction.
