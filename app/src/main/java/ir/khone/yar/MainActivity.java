@@ -1220,9 +1220,10 @@ public class MainActivity extends Activity {
     private void showPurchaseCenter() {
         new AlertDialog.Builder(this)
             .setTitle("🛒 خریدها و تقویم هزینه‌ها")
-            .setItems(new String[]{"🗓️ خریدهای روزانه و تقویم", "🗂️ خریدهای دسته‌بندی‌شده", "➕ ثبت خرید با انتخاب دسته"}, (dialog, which) -> {
+            .setItems(new String[]{"🗓️ تقویم مخارج روزانه", "🗂️ آرشیو خریدهای روزانه", "📚 آرشیو خریدهای دسته‌بندی‌شده", "➕ ثبت خرید با انتخاب دسته"}, (dialog, which) -> {
                 if (which == 0) showExpenseCalendar();
                 else if (which == 1) showDailyPurchaseArchive();
+                else if (which == 2) showPurchaseCategoryPicker();
                 else showPurchaseCategoryPicker();
             })
             .setNegativeButton("بستن", null)
