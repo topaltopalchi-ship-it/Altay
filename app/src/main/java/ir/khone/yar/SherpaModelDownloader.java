@@ -44,7 +44,8 @@ public final class SherpaModelDownloader {
             try {
                 File installed = getInstalledModelDirectory(app);
                 if (installed != null) {
-                    MAIN.post(() -> callback.onInstalled(installed));
+                    File alreadyInstalled = installed;
+                    MAIN.post(() -> callback.onInstalled(alreadyInstalled));
                     return;
                 }
                 if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory()) {
