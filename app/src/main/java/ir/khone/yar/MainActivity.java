@@ -8,6 +8,7 @@ import android.app.PendingIntent;
 import android.os.Build;
 import android.provider.Settings;
 import android.content.Intent;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -73,7 +74,7 @@ public class MainActivity extends Activity {
     private final ArrayList<String> entries = new ArrayList<>();
     private static final int AUDIO_PERMISSION = 44;
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
-    private static final int HOME_DOC_CAMERA = 73, HOME_DOC_GALLERY = 74;
+    private static final int HOME_DOC_CAMERA = 73, HOME_DOC_GALLERY = 74, REMINDER_SOUND_PICKER = 75;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
     private int cardIndex = 0;
 
@@ -880,6 +881,15 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode,resultCode,data);
+        if (requestCode == REMINDER_SOUND_PICKER) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri selected = data.getData();
+                try { getContentResolver().takePersistableUriPermission(selected, data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+                prefs.edit().putString("reminder_alarm_sound_uri", selected.toString()).apply();
+                Toast.makeText(this, "آهنگ آلارم ذخیره شد؛ از هشدار بعدی استفاده می‌شود.", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (requestCode == HOME_DOC_CAMERA) {
             if (resultCode == RESULT_OK && data != null && data.getExtras() != null) {
                 Object image = data.getExtras().get("data");
@@ -2104,8 +2114,18 @@ public class MainActivity extends Activity {
             .setTitle("🗂️ آرشیو یادآوری‌ها")
             .setView(scroll)
             .setNegativeButton("بستن", null)
+            .setNeutralButton("🎵 انتخاب آهنگ آلارم", (dialog, which) -> pickReminderAlarmSound())
             .setPositiveButton("🎙 ثبت صوتی", (dialog, which) -> startReminderDraft())
             .show();
+    }
+
+    private void pickReminderAlarmSound() {
+        Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        picker.addCategory(Intent.CATEGORY_OPENABLE);
+        picker.setType("audio/*");
+        picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        try { startActivityForResult(picker, REMINDER_SOUND_PICKER); }
+        catch (Exception e) { Toast.makeText(this, "انتخاب فایل صوتی در گوشی در دسترس نیست.", Toast.LENGTH_LONG).show(); }
     }
 
     private void refreshReminders() {
