@@ -1912,6 +1912,11 @@ public class MainActivity extends Activity {
         // return extra leading words ("پیام صوتی ذخیره کن"), and mode can change
         // between final callbacks, so prefer the persisted reminder draft as source.
         String existingReminderDraft = prefs.getString("oba_reminder_draft", "").trim();
+        // The blue transcript can receive live speech before the final recognition callback
+        // persists it. Treat that visible transcript as a draft fallback for the save command.
+        if (existingReminderDraft.isEmpty() && continuousTranscriptView != null) {
+            existingReminderDraft = cleanReminderTranscript(continuousTranscriptView.getText().toString());
+        }
         boolean hasReminderDraft = !existingReminderDraft.isEmpty();
         boolean reminderSaveShortcut = hasReminderDraft
             && (compactCommand.contains("ذخیره")
@@ -2228,8 +2233,29 @@ public class MainActivity extends Activity {
         startVoice("reminder_draft");
     }
 
+    private String cleanReminderTranscript(String transcript) {
+        if (transcript == null) return "";
+        StringBuilder clean = new StringBuilder();
+        for (String line : transcript.split("\\n")) {
+            String item = line.trim();
+            if (item.isEmpty()) continue;
+            if (item.contains("در حال شنیدن") || item.contains("در پایان بگو")
+                    || item.contains("متن دریافت شد") || item.contains("ادامه بده")
+                    || item.contains("در حال ثبت یادآوری") || item.contains("برای ذخیره در آرشیو")) continue;
+            if (item.startsWith("🎙")) continue;
+            if (clean.length() > 0) clean.append("\\n");
+            clean.append(item);
+        }
+        return clean.toString().trim();
+    }
+
     private void saveReminderDraft() {
         String draft = prefs.getString("oba_reminder_draft", "").trim();
+        // Fallback to the actual blue transcript text if recognition updated the UI
+        // but its final callback did not persist the text into SharedPreferences.
+        if (draft.isEmpty() && continuousTranscriptView != null) {
+            draft = cleanReminderTranscript(continuousTranscriptView.getText().toString());
+        }
         if (draft.isEmpty()) {
             status.setText("هنوز متنی برای یادآوری گفته نشده است.");
             say("اول متن یادآوری را بگو");
@@ -2250,6 +2276,9 @@ public class MainActivity extends Activity {
             recognizer = null;
         }
 
+        // Persist the recovered transcript before parsing so the archive save path
+        // is independent of whether the speech engine delivered a final callback.
+        prefs.edit().putString("oba_reminder_draft", draft).apply();
         String[] lines = draft.split("\\n");
         int savedCount = 0;
         for (String line : lines) {
