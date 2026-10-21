@@ -1917,21 +1917,31 @@ public class MainActivity extends Activity {
 
         String mode = pendingMode;
         if (mode.equals("reminder_draft")) {
-            String reminderCommand = normalize(s).replace("‌", "").replace(" ", "").replace("ي", "ی").replace("ك", "ک");
-            if (contains(s, "ذخیره کن", "ذخیره یادآوری", "ثبت یادآوری") ||
-                reminderCommand.contains("ذخیرهکن") || reminderCommand.contains("ذخیرهیادآوری") ||
-                reminderCommand.contains("ثبتکن") || reminderCommand.equals("ذخیره")) {
+            String reminderCommand = normalize(raw).replace("‌", "").replace(" ", "")
+                .replace("ي", "ی").replace("ك", "ک")
+                .replaceAll("[،,؛;.!؟?]+", "");
+            boolean saveCommand = reminderCommand.contains("ذخیرهکن")
+                || reminderCommand.contains("ذخیرهیادآوری")
+                || reminderCommand.contains("ثبتکن")
+                || reminderCommand.contains("ثبت یادآوری".replace(" ", ""))
+                || reminderCommand.equals("ذخیره")
+                || reminderCommand.equals("ثبت");
+            if (saveCommand) {
+                // Switch mode immediately so a late speech callback cannot append the command
+                // itself to the reminder draft or restart microphone capture.
+                pendingMode = "saving_reminder";
                 saveReminderDraft();
             } else {
                 String draft = prefs.getString("oba_reminder_draft", "").trim();
                 String phrase = raw.trim();
-                String compact = normalize(phrase).replace("‌", "").replace(" ", "");
+                String compact = normalize(phrase).replace("‌", "").replace(" ", "")
+                    .replace("ي", "ی").replace("ك", "ک").replaceAll("[،,؛;.!؟?]+", "");
                 if (!phrase.isEmpty() && !compact.equals("ذخیرهکن") && !compact.equals("ذخیرهیادآوری")) {
                     String next = draft.isEmpty() ? phrase : draft + "\n" + phrase;
                     prefs.edit().putString("oba_reminder_draft", next).apply();
-                    if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\n\n🎙 ادامه بده؛ برای ذخیره و بستن بگو «ذخیره کن».");
+                    if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\n\n🎙 متن دریافت شد؛ برای ذخیره در آرشیو بگو «ذخیره کن».");
                 }
-                status.setText("متن یادآوری دریافت شد؛ هنوز در حال شنیدن هستم. در پایان بگو «ذخیره کن».");
+                status.setText("متن یادآوری دریافت شد؛ برای ذخیره در آرشیو و پایان ضبط، بگو «ذخیره کن».");
                 pendingMode = "reminder_draft";
                 if (root != null) root.postDelayed(() -> {
                     if ("reminder_draft".equals(pendingMode) && !isFinishing()) startVoice("reminder_draft");
@@ -2209,6 +2219,19 @@ public class MainActivity extends Activity {
             startVoice("reminder_draft");
             return;
         }
+        // Stop both speech backends before writing to the archive; this prevents a late
+        // recognizer callback from appending more text after the user said "ذخیره کن".
+        pendingMode = "saving_reminder";
+        if (offlineEngine != null) {
+            try { offlineEngine.stop(); } catch (Exception ignored) {}
+            offlineEngine = null;
+        }
+        if (recognizer != null) {
+            try { recognizer.cancel(); } catch (Exception ignored) {}
+            try { recognizer.destroy(); } catch (Exception ignored) {}
+            recognizer = null;
+        }
+
         String[] lines = draft.split("\\n");
         int savedCount = 0;
         for (String line : lines) {
@@ -2234,7 +2257,11 @@ public class MainActivity extends Activity {
             savedCount++;
         }
         prefs.edit().remove("oba_reminder_draft").apply();
-        if (continuousTranscriptView != null) continuousTranscriptView.setText("✅ یادآوری ذخیره شد. برای خواندن متن، «آرشیو یادآوری» را بزن.");
+        if (continuousTranscriptView != null) continuousTranscriptView.setText(
+            savedCount > 0
+                ? "✅ ذخیره کن انجام شد؛ " + savedCount + " یادآوری در آرشیو ذخیره شد."
+                : "⚠️ متن یادآوری برای ذخیره پیدا نشد. دوباره صحبت کن و در پایان بگو «ذخیره کن»."
+        );
         if (reminderDraftDialog != null && reminderDraftDialog.isShowing()) reminderDraftDialog.dismiss();
         reminderDraftDialog = null;
         reminderDraftInput = null;
