@@ -352,7 +352,7 @@ public class MainActivity extends Activity {
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("🛒 لیست خرید")
-                .setView(panel)
+                .setView(withReadButton(panel))
                 .setPositiveButton("ثبت متن", (d, which) -> {
                     String entered = itemInput.getText().toString().trim();
                     if (!entered.isEmpty()) {
@@ -572,7 +572,7 @@ public class MainActivity extends Activity {
             legend.setTextColor(CHART_COLORS[Math.abs(e.getKey().hashCode()) % CHART_COLORS.length]);
             panel.addView(legend, lp(-1, -2, 0, 2, 0, 2));
         }
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(title).setView(panel)
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(title).setView(withReadButton(panel))
             .setNegativeButton(parentCategory == null ? "بستن" : "بازگشت به نمودار اصلی", (d, w) -> { if (parentCategory != null) showExpenseCharts(); }).create();
         dialog.show();
     }
@@ -718,7 +718,7 @@ public class MainActivity extends Activity {
         yearInput.setOnFocusChangeListener((v, hasFocus) -> { if (!hasFocus) refreshDays.run(); });
         refreshDays.run();
         new AlertDialog.Builder(this).setTitle("تقویم شمسی مخارج")
-            .setView(panel)
+            .setView(withReadButton(panel))
             .setNegativeButton("انصراف", null)
             .setPositiveButton("نمایش مخارج", (dialog, which) -> {
                 int jy;
@@ -870,7 +870,7 @@ public class MainActivity extends Activity {
                 reportScroll.addView(reportCards);
                 new AlertDialog.Builder(this)
                     .setTitle("مخارج " + jalaliDatePartsText(jy, jm, jd))
-                    .setView(reportScroll)
+                    .setView(withReadButton(reportScroll))
                     .setPositiveButton("باشه", null)
                     .setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar())
                     .show();
@@ -892,7 +892,7 @@ public class MainActivity extends Activity {
         form.addView(timeInput, lp(-1, -2, 0, 0, 0, dp(8)));
 
         new AlertDialog.Builder(this).setTitle("یادآوری " + jalaliDatePartsText(jy, jm, jd))
-            .setView(form).setNegativeButton("انصراف", null)
+            .setView(withReadButton(form)).setNegativeButton("انصراف", null)
             .setPositiveButton("ذخیره", (d,w) -> {
                 String note = noteInput.getText().toString().trim();
                 if (note.isEmpty()) {
@@ -1120,7 +1120,7 @@ public class MainActivity extends Activity {
             nameInput.setHint("مثلاً کارت ملی، شناسنامه، سند خانه");
             new AlertDialog.Builder(this).setTitle("نام مدرک")
                 .setMessage("تصویر در حافظهٔ خصوصی برنامه ذخیره می‌شود.")
-                .setView(nameInput).setNegativeButton("لغو", (d,w) -> appendHomeDocument(fileName, defaultName))
+                .setView(withReadButton(nameInput)).setNegativeButton("لغو", (d,w) -> appendHomeDocument(fileName, defaultName))
                 .setPositiveButton("ذخیره", (d,w) -> {
                     String name = nameInput.getText().toString().trim();
                     appendHomeDocument(fileName, name.isEmpty() ? defaultName : name);
@@ -1155,7 +1155,7 @@ public class MainActivity extends Activity {
             preview.setImageBitmap(BitmapFactory.decodeFile(imageFile.getAbsolutePath()));
             preview.setAdjustViewBounds(true);
             ScrollView scroll = new ScrollView(this); scroll.addView(preview);
-            new AlertDialog.Builder(this).setTitle(labels[which]).setView(scroll).setPositiveButton("بستن", null).show();
+            new AlertDialog.Builder(this).setTitle(labels[which]).setView(withReadButton(scroll)).setPositiveButton("بستن", null).show();
         }).setNegativeButton("بستن", null).show();
     }
 
@@ -1309,7 +1309,7 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.addView(list);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setView(scroll).setNegativeButton("انصراف", null).create();
+            .setView(withReadButton(scroll)).setNegativeButton("انصراف", null).create();
         for (String option : groups) {
             Button item = button(option, Color.WHITE, Color.rgb(24, 37, 105), 16);
             item.setAllCaps(false);
@@ -1374,7 +1374,7 @@ public class MainActivity extends Activity {
         scroll.addView(list);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("زیرمجموعهٔ «" + parent + "»")
-            .setView(scroll).setNegativeButton("بازگشت", null).create();
+            .setView(withReadButton(scroll)).setNegativeButton("بازگشت", null).create();
         for (String child : children) {
             Button item = button(child, Color.WHITE, Color.rgb(24, 37, 105), 16);
             item.setAllCaps(false);
@@ -1413,7 +1413,7 @@ public class MainActivity extends Activity {
         actions.addView(archive, lp(-1, -2, 0, 0, 0, 0));
         new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
-            .setView(actions)
+            .setView(withReadButton(actions))
             .setNegativeButton("بستن", null)
             .show();
     }
@@ -1468,7 +1468,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this).setTitle("🔎 جست‌وجوی کالا در یک ماه")
             .setMessage("نام کالا، ماه و سال را انتخاب کن. برنامه تعداد دفعات و مجموع مبلغ را محاسبه می‌کند.")
-            .setView(form).setNegativeButton("انصراف", null)
+            .setView(withReadButton(form)).setNegativeButton("انصراف", null)
             .setPositiveButton("نمایش گزارش", (dialog, which) -> {
                 String query = itemInput.getText().toString().trim().replace('ي', 'ی').replace('ك', 'ک');
                 if (query.isEmpty()) {
@@ -1624,7 +1624,7 @@ public class MainActivity extends Activity {
         quantityInput.setSingleLine(true);
         form.addView(quantityInput, lp(-1,-2,0,0,0,4));
         new AlertDialog.Builder(this).setTitle(category + " ← " + subgroup)
-            .setView(form).setNegativeButton("لغو", null)
+            .setView(withReadButton(form)).setNegativeButton("لغو", null)
             .setPositiveButton("ثبت هزینه", (dialog, which) -> {
                 String rawAmount = amountInput.getText().toString().trim()
                     .replace("۰","0").replace("۱","1").replace("۲","2").replace("۳","3")
@@ -2777,7 +2777,7 @@ public class MainActivity extends Activity {
         reminderDraftDialog = new AlertDialog.Builder(this)
             .setTitle("ثبت متنی یادآوری و آلارم")
             .setMessage("متن را بنویس؛ سپس حتماً تاریخ و ساعت آلارم را انتخاب کن.")
-            .setView(scroll)
+            .setView(withReadButton(scroll))
             .setPositiveButton("انتخاب تاریخ و ساعت آلارم", null)
             .setNegativeButton("انصراف", (dialog, which) -> {
                 String text = reminderDraftInput == null ? "" : reminderDraftInput.getText().toString();
@@ -2858,7 +2858,7 @@ public class MainActivity extends Activity {
         scroll.addView(remindersView, new ScrollView.LayoutParams(-1, -2));
         new AlertDialog.Builder(this)
             .setTitle("🗂️ آرشیو یادآوری‌ها")
-            .setView(scroll)
+            .setView(withReadButton(scroll))
             .setNegativeButton("بستن", null)
             .setNeutralButton("🎵 انتخاب آهنگ آلارم", (dialog, which) -> pickReminderAlarmSound())
             .setPositiveButton("پاک کن", (dialog, which) -> confirmClearArchive(
@@ -2909,7 +2909,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("🎵 پیش‌شنوی آهنگ آلارم")
             .setMessage("برای شنیدن آهنگ انتخاب‌شده، پخش را بزن؛ هر زمان خواستی می‌توانی قطعش کنی.")
-            .setView(panel)
+            .setView(withReadButton(panel))
             .setNegativeButton("تمام", (dialog, which) -> {
                 stopReminderSoundPreview();
                 Toast.makeText(this, "آهنگ آلارم ذخیره شد.", Toast.LENGTH_SHORT).show();
@@ -3491,6 +3491,39 @@ public class MainActivity extends Activity {
         if (quietVoiceSession) return;
         speakWithSystemTts(s);
     }
+    private View withReadButton(View pageContent) {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.setPadding(dp(4), dp(4), dp(4), dp(4));
+        wrapper.addView(pageContent, new LinearLayout.LayoutParams(-1, 0, 1));
+        Button readButton = button("🔊 خواندن متن", Color.WHITE, dark, 14);
+        readButton.setMinHeight(dp(44));
+        readButton.setOnClickListener(v -> {
+            StringBuilder spoken = new StringBuilder();
+            collectReadableText(pageContent, spoken);
+            readPersianText(spoken.toString());
+        });
+        wrapper.addView(readButton, lp(-1, -2, 0, 6, 0, 0));
+        return wrapper;
+    }
+
+    private void collectReadableText(View view, StringBuilder result) {
+        if (view == null) return;
+        if (view instanceof Button) return;
+        if (view instanceof TextView) {
+            String value = ((TextView) view).getText().toString().trim();
+            if (!value.isEmpty()) {
+                if (result.length() > 0) result.append("، ");
+                result.append(value);
+            }
+            return;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) collectReadableText(group.getChildAt(i), result);
+        }
+    }
+
     private void readPersianText(String textToRead) {
         final String clean = textToRead == null ? "" : textToRead.trim();
         if (clean.isEmpty() || clean.startsWith("هنوز متنی")) {
