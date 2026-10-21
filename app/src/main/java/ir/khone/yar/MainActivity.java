@@ -1171,7 +1171,7 @@ public class MainActivity extends Activity {
             if (offlineEngine != null) { offlineEngine.stop(); offlineEngine = null; }
             if (recognizer != null) { try { recognizer.cancel(); } catch (Exception ignored) {} }
             awaitingVoiceConfirmation = true;
-            if (continuousExpenseButton != null) continuousExpenseButton.setText("⏹  پایان ثبت");
+            if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
             if (status != null) status.setText("فهرست را بررسی کن. با گفتن «بله» همه ثبت می‌شوند؛ با گفتن «اصلاح پنیر» مورد پنیر را اصلاح کن.");
             updateContinuousTranscript();
             startVoice("continuous_expense_confirmation");
@@ -1179,7 +1179,7 @@ public class MainActivity extends Activity {
         }
         awaitingVoiceConfirmation = false;
         continuousExpenseListening = true;
-        if (continuousExpenseButton != null) continuousExpenseButton.setText("🎙  شروع ثبت");
+        if (continuousExpenseButton != null) continuousExpenseButton.setText("⏹  پایان ثبت");
         if (status != null) status.setText("ثبت صوتی فعال است؛ هر مورد را با مبلغ و کلمهٔ «تومان» تمام کن.");
         startVoice("continuous_expense");
     }
