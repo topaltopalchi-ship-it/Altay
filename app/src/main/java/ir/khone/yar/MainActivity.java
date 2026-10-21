@@ -2410,11 +2410,11 @@ public class MainActivity extends Activity {
         }
         int id = (int) (System.currentTimeMillis() & 0x7fffffff);
         if (id == 0) id = 1;
-        String saved = when + "\\nonce\\n" + title + "\\n-1";
+        String saved = when + "\nonce\n" + title + "\n-1";
         String archiveKey = "reminder_note_" + when + "_" + id;
         prefs.edit()
             .putString("reminder_" + id, saved)
-            .putString(archiveKey, when + "\\n" + text.trim())
+            .putString(archiveKey, when + "\n" + text.trim())
             .remove("oba_reminder_text_draft")
             .apply();
         ReminderReceiver.schedule(this, id, when, title, false);
