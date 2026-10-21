@@ -1897,9 +1897,9 @@ public class MainActivity extends Activity {
                 String phrase = raw.trim();
                 String compact = normalize(phrase).replace("‌", "").replace(" ", "");
                 if (!phrase.isEmpty() && !compact.equals("ذخیرهکن") && !compact.equals("ذخیرهیادآوری")) {
-                    String next = draft.isEmpty() ? phrase : draft + "\\n" + phrase;
+                    String next = draft.isEmpty() ? phrase : draft + "\n" + phrase;
                     prefs.edit().putString("oba_reminder_draft", next).apply();
-                    if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\\n\\n🎙 ادامه بده؛ برای ذخیره و بستن بگو «ذخیره کن».");
+                    if (continuousTranscriptView != null) continuousTranscriptView.setText(next + "\n\n🎙 ادامه بده؛ برای ذخیره و بستن بگو «ذخیره کن».");
                 }
                 status.setText("متن یادآوری دریافت شد؛ هنوز در حال شنیدن هستم. در پایان بگو «ذخیره کن».");
                 pendingMode = "reminder_draft";
@@ -2184,7 +2184,7 @@ public class MainActivity extends Activity {
                 }
             }
             long now = System.currentTimeMillis();
-            prefs.edit().putString("reminder_note_" + now + "_" + savedCount, now + "\\n" + item).apply();
+            prefs.edit().putString("reminder_note_" + now + "_" + savedCount, now + "\n" + item).apply();
             savedCount++;
         }
         prefs.edit().remove("oba_reminder_draft").apply();
