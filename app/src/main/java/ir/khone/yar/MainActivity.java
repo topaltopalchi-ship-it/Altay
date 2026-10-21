@@ -2788,6 +2788,12 @@ public class MainActivity extends Activity {
         String confirmation = "یادآوری متنی در آرشیو ذخیره شد و آلارم برای " + formatPersianDateTime(new Date(when)) + " تنظیم شد.";
         status.setText(confirmation);
         Toast.makeText(this, confirmation, Toast.LENGTH_LONG).show();
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
+        }
+        // Open the archive so the newly saved reminder is immediately visible.
+        showReminderArchive();
     }
 
     private void showReminderArchive() {
@@ -2917,7 +2923,11 @@ public class MainActivity extends Activity {
             if (out.length() > 0) out.append("\n");
             out.append(row.substring(row.indexOf("|")+1));
         }
-        remindersView.setText(out.length() == 0 ? "هنوز یادآوری زمان‌بندی‌شده‌ای ثبت نشده است. با صدا بگو: «یادآوری قسط فردا ساعت ۹ صبح»." : out.toString());
+        String reminderText = out.length() == 0
+                ? "هنوز یادآوری زمان‌بندی‌شده‌ای ثبت نشده است. با صدا بگو: «یادآوری قسط فردا ساعت ۹ صبح»."
+                : out.toString();
+        // Saving can call refreshReminders before the archive dialog/view exists.
+        if (remindersView != null) remindersView.setText(reminderText);
     }
 
     private void startReminderDraft() {
