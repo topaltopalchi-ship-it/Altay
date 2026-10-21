@@ -812,6 +812,35 @@ public class MainActivity extends Activity {
             }).show();
     }
 
+    private void confirmClearArchive(String title, String message, Runnable clearAction) {
+        new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("پاک کن", (dialog, which) -> {
+                clearAction.run();
+                Toast.makeText(this, "آرشیو پاک شد.", Toast.LENGTH_LONG).show();
+            })
+            .setNegativeButton("انصراف", null)
+            .show();
+    }
+
+    private void clearPurchaseArchives() {
+        prefs.edit()
+            .remove("oba_expense_history")
+            .remove("entries")
+            .apply();
+        refreshRecent();
+    }
+
+    private void clearReminderArchive() {
+        SharedPreferences.Editor editor = prefs.edit();
+        for (String key : prefs.getAll().keySet()) {
+            if (key.startsWith("reminder_note_")) editor.remove(key);
+        }
+        editor.apply();
+        refreshReminders();
+    }
+
     private void showExpenseArchive() {
         String all = prefs.getString("entries", "");
         if (all.trim().isEmpty()) {
@@ -1402,7 +1431,11 @@ public class MainActivity extends Activity {
                 int index = which - 1;
                 new AlertDialog.Builder(this).setTitle("جزئیات خرید روزانه").setMessage(details.get(index))
                     .setPositiveButton("باشه", null).show();
-            }).setNegativeButton("بستن", null).show();
+            }).setNeutralButton("پاک کن", (d, w) -> confirmClearArchive(
+                "پاک کردن آرشیو خریدها",
+                "تمام خریدهای ذخیره‌شده در آرشیو خریدها پاک شوند؟ این کار قابل بازگشت نیست.",
+                this::clearPurchaseArchives))
+              .setNegativeButton("بستن", null).show();
     }
 
     private void showSubgroupPurchaseArchive(String category, String subgroup) {
@@ -2636,6 +2669,10 @@ public class MainActivity extends Activity {
             .setView(scroll)
             .setNegativeButton("بستن", null)
             .setNeutralButton("🎵 انتخاب آهنگ آلارم", (dialog, which) -> pickReminderAlarmSound())
+            .setPositiveButton("پاک کن", (dialog, which) -> confirmClearArchive(
+                "پاک کردن آرشیو یادآوری‌ها",
+                "تمام یادآوری‌های ذخیره‌شده پاک شوند؟ این کار قابل بازگشت نیست.",
+                this::clearReminderArchive))
             .show();
     }
 
