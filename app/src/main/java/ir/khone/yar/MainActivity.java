@@ -732,6 +732,9 @@ public class MainActivity extends Activity {
                 Button soundButton = button("🎵 انتخاب آهنگ آلارم", Color.WHITE, dark, 13);
                 soundButton.setOnClickListener(v -> pickReminderAlarmSound());
                 reportCards.addView(soundButton, lp(-1, dp(44), 0, 0, 0, dp(8)));
+                Button reminderArchiveButton = button("🗂️ آرشیو یادآوری‌ها", Color.rgb(224, 240, 255), dark, 13);
+                reminderArchiveButton.setOnClickListener(v -> showReminderArchive());
+                reportCards.addView(reminderArchiveButton, lp(-1, dp(44), 0, 0, 0, dp(8)));
 
                 ScrollView reportScroll = new ScrollView(this);
                 reportScroll.addView(reportCards);
@@ -753,16 +756,10 @@ public class MainActivity extends Activity {
         noteInput.setMinLines(2);
         form.addView(noteInput, lp(-1, -2, 0, 0, 0, dp(8)));
         android.widget.EditText timeInput = new android.widget.EditText(this);
-        timeInput.setHint("ساعت (مثلاً 10:30)");
+        timeInput.setHint("ساعت (00:00)");
         timeInput.setSingleLine(true);
         timeInput.setInputType(android.text.InputType.TYPE_CLASS_DATETIME);
         form.addView(timeInput, lp(-1, -2, 0, 0, 0, dp(8)));
-
-        // Keep the reminder archive directly accessible from the daily-expenses reminder form.
-        Button reminderArchiveButton = button("🗂️ مشاهده آرشیو یادآوری‌ها", Color.rgb(224, 240, 255), dark, 14);
-        reminderArchiveButton.setMinHeight(dp(46));
-        reminderArchiveButton.setOnClickListener(v -> showReminderArchive());
-        form.addView(reminderArchiveButton, lp(-1, dp(46), 0, dp(4), 0, dp(4)));
 
         new AlertDialog.Builder(this).setTitle("یادآوری " + jalaliDatePartsText(jy, jm, jd))
             .setView(form).setNegativeButton("انصراف", null)
@@ -778,10 +775,14 @@ public class MainActivity extends Activity {
                 if (!time.isEmpty()) {
                     try {
                         String[] hm = time.split(":");
-                        due.set(Calendar.HOUR_OF_DAY, Integer.parseInt(hm[0].trim()));
-                        due.set(Calendar.MINUTE, Integer.parseInt(hm[1].trim()));
+                        if (hm.length != 2) throw new IllegalArgumentException();
+                        int hour = Integer.parseInt(hm[0].trim());
+                        int minute = Integer.parseInt(hm[1].trim());
+                        if (hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new IllegalArgumentException();
+                        due.set(Calendar.HOUR_OF_DAY, hour);
+                        due.set(Calendar.MINUTE, minute);
                     } catch (Exception ex) {
-                        Toast.makeText(this, "ساعت را مانند 10:30 وارد کن.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "ساعت را به فرمت 00:00 وارد کن (مثلاً 09:05).", Toast.LENGTH_LONG).show();
                         return;
                     }
                 } else {
