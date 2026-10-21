@@ -196,6 +196,13 @@ public class MainActivity extends Activity {
         reminderTranscriptView.setTextIsSelectable(true);
         content.addView(reminderTranscriptView, lp(-1, -2, 0, 0, 0, 5));
 
+        // Visible save action is a reliable fallback when Android speech recognition
+        // does not return the spoken "ذخیره کن" command as a final result.
+        Button saveReminderButton = button("ذخیره کن", Color.WHITE, dark, 14);
+        saveReminderButton.setMinHeight(dp(48));
+        saveReminderButton.setOnClickListener(v -> saveReminderDraft());
+        content.addView(saveReminderButton, lp(-1, -2, 0, 0, 0, 7));
+
         LinearLayout voiceReviewRow = new LinearLayout(this);
         voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
         commitContinuousButton = button("تأیید و ثبت همه", Color.WHITE, dark, 13);
