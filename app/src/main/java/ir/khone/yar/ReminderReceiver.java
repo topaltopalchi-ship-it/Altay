@@ -22,12 +22,12 @@ import java.util.Calendar;
 import java.util.Locale;
 
 public class ReminderReceiver extends BroadcastReceiver {
-    public static final String CHANNEL_ID = "khoneyar_reminders_alarm_v2";
+    public static final String CHANNEL_ID = "khoneyar_reminders_alarm_v3";
     private static final String CHANNEL_NAME = "یادآوری‌های OBA";
 
     public static void schedule(Context context, int id, long when, String title, boolean monthly) {
         scheduleOne(context, id, id, when, title, monthly, false);
-        long earlyWhen = when - 2L * 60L * 60L * 1000L;
+        long earlyWhen = when - 1L * 60L * 60L * 1000L;
         if (earlyWhen > System.currentTimeMillis()) {
             scheduleOne(context, earlyRequestCode(id), id, earlyWhen, title, monthly, true);
         } else {
@@ -85,20 +85,21 @@ public class ReminderReceiver extends BroadcastReceiver {
         if (title == null || title.trim().isEmpty()) title = "زمان انجام کار رسیده است";
         boolean monthly = intent != null && intent.getBooleanExtra("monthly", false);
         boolean early = intent != null && intent.getBooleanExtra("early", false);
-        String spokenTitle = early ? "دو ساعت تا زمان یادآوری باقی مانده. " + title : "یادآوری اوبا. " + title;
+        String spokenTitle = early ? "یک ساعت تا زمان یادآوری باقی مانده. " + title : "یادآوری اوبا. " + title;
 
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) {
-            createChannel(context, manager);
+            String channelId = channelIdFor(context);
+            createChannel(context, manager, channelId);
             Intent open = new Intent(context, MainActivity.class);
             PendingIntent contentIntent = PendingIntent.getActivity(context, id, open,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                    ? new Notification.Builder(context, CHANNEL_ID)
+                    ? new Notification.Builder(context, channelId)
                     : new Notification.Builder(context);
             builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-                    .setContentTitle(early ? "⏰ یادآوری OBA؛ دو ساعت مانده" : "⏰ یادآوری OBA")
+                    .setContentTitle(early ? "⏰ یادآوری OBA؛ یک ساعت مانده" : "⏰ یادآوری OBA")
                     .setContentText(title)
                     .setStyle(new Notification.BigTextStyle().bigText(spokenTitle))
                     .setAutoCancel(true)
@@ -107,6 +108,10 @@ public class ReminderReceiver extends BroadcastReceiver {
                     .setDefaults(Notification.DEFAULT_SOUND | Notification.DEFAULT_VIBRATE);
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
                 builder.setPriority(Notification.PRIORITY_MAX);
+                String selected = context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE)
+                        .getString("reminder_alarm_sound_uri", "");
+                Uri sound = selected.isEmpty() ? RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) : Uri.parse(selected);
+                if (sound != null) builder.setSound(sound);
             }
             try {
                 manager.notify(early ? earlyRequestCode(id) : id, builder.build());
@@ -127,16 +132,24 @@ public class ReminderReceiver extends BroadcastReceiver {
         }
     }
 
-    private static void createChannel(Context context, NotificationManager manager) {
+    private static String channelIdFor(Context context) {
+        String selected = context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE)
+                .getString("reminder_alarm_sound_uri", "");
+        return CHANNEL_ID + (selected.isEmpty() ? "_default" : "_" + Integer.toHexString(selected.hashCode()));
+    }
+
+    private static void createChannel(Context context, NotificationManager manager, String channelId) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            String selected = context.getSharedPreferences("khoneyar", Context.MODE_PRIVATE)
+                    .getString("reminder_alarm_sound_uri", "");
+            Uri sound = selected.isEmpty() ? RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) : Uri.parse(selected);
             if (sound == null) sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
             AudioAttributes audio = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ALARM)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build();
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
+                    channelId, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
             channel.setDescription("یادآوری‌های متنی همراه با صدای هشدار");
             channel.enableVibration(true);
             channel.setSound(sound, audio);
