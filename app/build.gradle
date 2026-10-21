@@ -40,7 +40,9 @@ android {
 
 dependencies {
     implementation 'com.alphacephei:vosk-android:0.3.47'
-    implementation 'com.github.k2-fsa:sherpa-onnx:1.13.8'
+    implementation('com.github.k2-fsa:sherpa-onnx:1.13.8') {
+        exclude group: 'com.github.k2-fsa', module: 'sherpa-onnx-jvm'
+    }
     implementation 'org.apache.commons:commons-compress:1.27.1'
     implementation 'org.tukaani:xz:1.10'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
