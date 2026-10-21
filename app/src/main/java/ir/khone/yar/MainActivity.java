@@ -3545,7 +3545,7 @@ public class MainActivity extends Activity {
                     model.setVits(vits); model.setNumThreads(2); model.setDebug(false);
                     OfflineTtsConfig config = new OfflineTtsConfig();
                     config.setModel(model); config.setMaxNumSentences(1);
-                    localPersianTts = new OfflineTts(config);
+                    localPersianTts = new OfflineTts(getAssets(), config);
                 }
                 GenerationConfig generation = new GenerationConfig();
                 generation.setSid(0); generation.setSpeed(1.0f); generation.setSilenceScale(0.2f);
