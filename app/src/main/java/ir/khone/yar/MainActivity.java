@@ -757,6 +757,13 @@ public class MainActivity extends Activity {
         timeInput.setSingleLine(true);
         timeInput.setInputType(android.text.InputType.TYPE_CLASS_DATETIME);
         form.addView(timeInput, lp(-1, -2, 0, 0, 0, dp(8)));
+
+        // Keep the reminder archive directly accessible from the daily-expenses reminder form.
+        Button reminderArchiveButton = button("🗂️ مشاهده آرشیو یادآوری‌ها", Color.rgb(224, 240, 255), dark, 14);
+        reminderArchiveButton.setMinHeight(dp(46));
+        reminderArchiveButton.setOnClickListener(v -> showReminderArchive());
+        form.addView(reminderArchiveButton, lp(-1, dp(46), 0, dp(4), 0, dp(4)));
+
         new AlertDialog.Builder(this).setTitle("یادآوری " + jalaliDatePartsText(jy, jm, jd))
             .setView(form).setNegativeButton("انصراف", null)
             .setPositiveButton("ذخیره", (d,w) -> {
