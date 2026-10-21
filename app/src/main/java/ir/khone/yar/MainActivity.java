@@ -323,9 +323,8 @@ public class MainActivity extends Activity {
         panel.addView(current, lp(-1, -2, 0, 0, 0, 8));
 
         EditText itemInput = new EditText(this);
-        itemInput.setTextSize(16);
+        itemInput.setHint("اقلام خرید را اینجا بنویسید");
         itemInput.setGravity(Gravity.RIGHT | Gravity.TOP);
-        itemInput.setHint("متن خرید را بنویس؛ هر قلم در یک خط");
         itemInput.setMinLines(2);
         itemInput.setMaxLines(5);
         itemInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
@@ -340,18 +339,32 @@ public class MainActivity extends Activity {
                     String entered = itemInput.getText().toString().trim();
                     if (!entered.isEmpty()) {
                         String existing = prefs.getString("oba_shopping_list", "").trim();
-                        String updated = existing.isEmpty() ? entered : existing + "\n" + entered;
+                        String updated = existing.isEmpty() ? entered : existing + "\\n" + entered;
                         prefs.edit().putString("oba_shopping_list", updated).apply();
                         Toast.makeText(this, "اقلام به لیست خرید اضافه شد.", Toast.LENGTH_SHORT).show();
                     }
                     showShoppingList();
                 })
-                .setNeutralButton("🎙 افزودن با صدا", (d, which) -> startVoice("shopping_list_voice"))
-                .setNegativeButton("بستن", null)
+                .setNeutralButton("🗑 پاک کردن لیست", null)
+                .setNegativeButton("برگشت", (d, which) -> d.dismiss())
                 .create();
         dialog.setOnShowListener(d -> {
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setTextSize(13);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextSize(13);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextSize(13);
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                new AlertDialog.Builder(this)
+                        .setTitle("پاک کردن لیست خرید")
+                        .setMessage("همه اقلام لیست خرید پاک شوند؟")
+                        .setNegativeButton("لغو", (confirm, which) -> { })
+                        .setPositiveButton("پاک کن", (confirm, which) -> {
+                            prefs.edit().remove("oba_shopping_list").apply();
+                            Toast.makeText(this, "لیست خرید پاک شد.", Toast.LENGTH_SHORT).show();
+                            dialog.dismiss();
+                            showShoppingList();
+                        })
+                        .show();
+            });
         });
         dialog.show();
     }
