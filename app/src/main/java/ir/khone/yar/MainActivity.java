@@ -48,14 +48,15 @@ public class MainActivity extends Activity {
     private TextView status, recent, remindersView, inventoryView;
     private SharedPreferences prefs;
     private SpeechRecognizer recognizer;
-    private Button wakeButton;
+    private Button audioStartButton, audioStopButton;
+    private boolean pendingAudioRecordingControls = true;
     private TextToSpeech tts;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
     private long incomeTotal = 0, expenseTotal = 0;
     private final ArrayList<String> entries = new ArrayList<>();
-    private static final int AUDIO_PERMISSION = 44;
+    private static final int AUDIO_PERMISSION = 44, AUDIO_RECORDING_PERMISSION = 45;
     private static final int BACKUP_CREATE = 71, BACKUP_RESTORE = 72;
     private static final int HOME_DOC_CAMERA = 73, HOME_DOC_GALLERY = 74;
     private int dark = Color.rgb(32, 52, 105), green = Color.rgb(0, 157, 112), cream = Color.rgb(244, 248, 255);
@@ -138,29 +139,23 @@ public class MainActivity extends Activity {
             content.addView(row, lp(-1,-2,0,0,0,0));
         }
 
-        // Primary dashboard action: premium centered rectangular control for voice capture.
-        wakeButton = button(
-            prefs.getBoolean("wake_enabled", false)
-                ? "■  پایان ثبت"
-                : "🎙  ثبت صوتی",
-            Color.rgb(0, 105, 100), Color.WHITE, 18
-        );
-        wakeButton.setMinHeight(dp(62));
-        wakeButton.setTextSize(18);
-        wakeButton.setPadding(dp(18), dp(12), dp(18), dp(12));
-        GradientDrawable premiumVoiceBg = new GradientDrawable(
-            GradientDrawable.Orientation.LEFT_RIGHT,
-            new int[]{Color.rgb(0, 112, 108), Color.rgb(0, 77, 83), Color.rgb(8, 54, 67)}
-        );
-        premiumVoiceBg.setCornerRadius(dp(14));
-        premiumVoiceBg.setStroke(dp(2), Color.rgb(211, 174, 92));
-        wakeButton.setBackground(premiumVoiceBg);
-        wakeButton.setElevation(dp(8));
-        wakeButton.setStateListAnimator(null);
-        wakeButton.setOnClickListener(v -> toggleWakeService());
-        LinearLayout.LayoutParams voiceActionParams = lp(-1, 62, 8, 8, 8, 10);
-        voiceActionParams.gravity = Gravity.CENTER_HORIZONTAL;
-        content.addView(wakeButton, voiceActionParams);
+        // Explicit start/stop controls for local audio recording; no wake-word listening.
+        LinearLayout voiceControls = new LinearLayout(this);
+        voiceControls.setOrientation(LinearLayout.HORIZONTAL);
+        audioStartButton = button("🎙  ثبت صوتی", Color.rgb(0, 105, 100), Color.WHITE, 17);
+        audioStartButton.setMinHeight(dp(58));
+        audioStartButton.setOnClickListener(v -> startAudioRecording(false));
+        audioStopButton = button("■  پایان صوت", Color.rgb(145, 42, 42), Color.WHITE, 17);
+        audioStopButton.setMinHeight(dp(58));
+        audioStopButton.setEnabled(false);
+        audioStopButton.setAlpha(0.55f);
+        audioStopButton.setOnClickListener(v -> stopAudioRecording());
+        for (Button voiceButton : new Button[]{audioStartButton, audioStopButton}) {
+            LinearLayout.LayoutParams vp = new LinearLayout.LayoutParams(0, dp(58), 1);
+            vp.setMargins(dp(4), dp(6), dp(4), dp(6));
+            voiceControls.addView(voiceButton, vp);
+        }
+        content.addView(voiceControls, lp(-1, -2, 0, 2, 0, 4));
         status = text("مثلاً بگو: «هزینه ۸۰ هزار تومان برای نان»", 15, dark, false);
         status.setGravity(Gravity.CENTER); status.setPadding(dp(8),dp(10),dp(8),dp(10));
         content.addView(status, lp(-1,-2,0,0,0,12));
@@ -619,16 +614,25 @@ public class MainActivity extends Activity {
     private android.media.MediaRecorder recorder;
     private File currentAudioFile;
     private void startAudioRecording() {
+        startAudioRecording(true);
+    }
+
+    private void startAudioRecording(boolean showControls) {
+        pendingAudioRecordingControls = showControls;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_PERMISSION);
-            Toast.makeText(this, "پس از اجازهٔ میکروفون، دوباره آرشیو صداها را باز کن.", Toast.LENGTH_LONG).show();
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, AUDIO_RECORDING_PERMISSION);
+            Toast.makeText(this, "برای ضبط صدا، اجازهٔ میکروفون را بده.", Toast.LENGTH_LONG).show();
             return;
         }
         if (recorder != null) {
-            Toast.makeText(this, "ضبط دیگری در حال اجراست.", Toast.LENGTH_SHORT).show(); return;
+            Toast.makeText(this, "ضبط دیگری در حال اجراست.", Toast.LENGTH_SHORT).show();
+            return;
         }
         File folder = new File(getFilesDir(), "audio_records");
-        if (!folder.exists()) folder.mkdirs();
+        if (!folder.exists() && !folder.mkdirs()) {
+            Toast.makeText(this, "ساخت پوشهٔ آرشیو صدا ممکن نشد.", Toast.LENGTH_LONG).show();
+            return;
+        }
         currentAudioFile = new File(folder, "OBA_audio_" + System.currentTimeMillis() + ".3gp");
         try {
             recorder = Build.VERSION.SDK_INT >= 31 ? new android.media.MediaRecorder(this) : new android.media.MediaRecorder();
@@ -636,27 +640,58 @@ public class MainActivity extends Activity {
             recorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.THREE_GPP);
             recorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AMR_NB);
             recorder.setOutputFile(currentAudioFile.getAbsolutePath());
-            recorder.prepare(); recorder.start();
-            new AlertDialog.Builder(this).setTitle("ضبط صدا")
-                .setMessage("ضبط فعال است. برای پایان، دکمهٔ «پایان ثبت» را بزن.")
-                .setCancelable(false)
-                .setPositiveButton("پایان ثبت", (d, w) -> stopAudioRecording())
-                .setNegativeButton("لغو ضبط", (d, w) -> { stopAudioRecording(); if (currentAudioFile != null) currentAudioFile.delete(); })
-                .show();
+            recorder.prepare();
+            recorder.start();
+            if (audioStartButton != null) {
+                audioStartButton.setEnabled(false);
+                audioStartButton.setAlpha(0.55f);
+            }
+            if (audioStopButton != null) {
+                audioStopButton.setEnabled(true);
+                audioStopButton.setAlpha(1f);
+            }
+            if (status != null) status.setText("ضبط صدا فعال است؛ برای ذخیره، «پایان صوت» را بزن.");
+            if (showControls) {
+                new AlertDialog.Builder(this).setTitle("ضبط صدا")
+                    .setMessage("ضبط فعال است. برای پایان، دکمهٔ «پایان صوت» را بزن.")
+                    .setCancelable(false)
+                    .setPositiveButton("پایان صوت", (d, w) -> stopAudioRecording())
+                    .setNegativeButton("لغو ضبط", (d, w) -> {
+                        stopAudioRecording();
+                        if (currentAudioFile != null) currentAudioFile.delete();
+                    })
+                    .show();
+            }
         } catch (Exception e) {
             releaseRecorder();
+            if (currentAudioFile != null) currentAudioFile.delete();
+            if (audioStartButton != null) { audioStartButton.setEnabled(true); audioStartButton.setAlpha(1f); }
+            if (audioStopButton != null) { audioStopButton.setEnabled(false); audioStopButton.setAlpha(0.55f); }
             Toast.makeText(this, "شروع ضبط صدا ممکن نشد؛ مجوز میکروفون را بررسی کن.", Toast.LENGTH_LONG).show();
         }
     }
     private void stopAudioRecording() {
+        if (recorder == null) {
+            if (audioStopButton != null) Toast.makeText(this, "ضبط فعالی وجود ندارد.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         try {
-            if (recorder != null) { recorder.stop(); recorder.reset(); recorder.release(); recorder = null; }
-            if (currentAudioFile != null && currentAudioFile.isFile() && currentAudioFile.length() > 0)
+            recorder.stop();
+            recorder.reset();
+            recorder.release();
+            recorder = null;
+            if (currentAudioFile != null && currentAudioFile.isFile() && currentAudioFile.length() > 0) {
                 Toast.makeText(this, "صدا در آرشیو خصوصی برنامه ذخیره شد.", Toast.LENGTH_LONG).show();
+                if (status != null) status.setText("ضبط پایان یافت و صدا ذخیره شد.");
+            }
         } catch (Exception e) {
             if (currentAudioFile != null) currentAudioFile.delete();
             Toast.makeText(this, "ضبط خیلی کوتاه بود یا ذخیره صدا انجام نشد.", Toast.LENGTH_LONG).show();
-        } finally { releaseRecorder(); }
+        } finally {
+            releaseRecorder();
+            if (audioStartButton != null) { audioStartButton.setEnabled(true); audioStartButton.setAlpha(1f); }
+            if (audioStopButton != null) { audioStopButton.setEnabled(false); audioStopButton.setAlpha(0.55f); }
+        }
     }
     private void releaseRecorder() {
         if (recorder != null) { try { recorder.reset(); } catch (Exception ignored) {} try { recorder.release(); } catch (Exception ignored) {} recorder = null; }
@@ -787,8 +822,6 @@ public class MainActivity extends Activity {
                 for (java.util.Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
                     String key = entry.getKey();
                     Object value = entry.getValue();
-                    // Service state is transient and must never be restored from a backup file.
-                    if ("wake_enabled".equals(key)) continue;
                     if (isValidBackupPreference(key, value)) values.put(key, value);
                 }
                 json.put("preferences",values);
@@ -975,19 +1008,10 @@ public class MainActivity extends Activity {
             return;
         }
 
-        // The wake-word service also owns the microphone. Stop it before starting Vosk,
-        // otherwise Vosk may appear to do nothing while Android keeps the mic busy.
-        try { stopService(new Intent(this, VoiceWakeService.class)); } catch (Exception ignored) {}
-        prefs.edit().putBoolean("wake_enabled", false).apply();
-        if (wakeButton != null) {
-            wakeButton.setText("🎙  ثبت صوتی");
-        }
         if (status != null) status.setText("در حال بررسی مدل Vosk؛ اگر نصب نباشد دانلود شروع می‌شود…");
         Toast.makeText(this, "آماده‌سازی تشخیص گفتار Vosk…", Toast.LENGTH_SHORT).show();
-
-        // Give Android a moment to release the microphone from the wake-word service.
         if (root != null) {
-            root.postDelayed(() -> ensureVoskModelAndStart(mode), 500);
+            root.postDelayed(() -> ensureVoskModelAndStart(mode), 250);
         } else {
             ensureVoskModelAndStart(mode);
         }
@@ -1208,41 +1232,12 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == AUDIO_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startVoice(pendingMode);
-        else if (requestCode == 46 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startWakeService();
-        else { status.setText("برای فرمان صوتی باید اجازهٔ میکروفون بدهی."); say("برای استفاده صوتی اجازه میکروفون لازم است"); }
-    }
-
-    private void toggleWakeService() {
-        if (prefs.getBoolean("wake_enabled", false)) {
-            stopService(new Intent(this, VoiceWakeService.class));
-            prefs.edit().putBoolean("wake_enabled", false).apply();
-            wakeButton.setText("🎧 فعال‌سازی شنیدن نام OBA در صفحه قفل");
-            status.setText("شنیدن نام OBA خاموش شد.");
-            say("شنیدن نام OBA خاموش شد");
-            return;
-        }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 46);
-            return;
-        }
-        startWakeService();
-    }
-
-    private void startWakeService() {
-        Intent service = new Intent(this, VoiceWakeService.class);
-        service.setAction(VoiceWakeService.ACTION_START);
-        try {
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(service);
-            else startService(service);
-            prefs.edit().putBoolean("wake_enabled", true).apply();
-            if (wakeButton != null) wakeButton.setText("■  پایان ثبت");
-            status.setText("شنیدن نام OBA فعال شد. بگو «اوبا»؛ برای توقف، دکمه خاموش کردن را بزن.");
-            say("OBA آماده شنیدن نامش است");
-        } catch (Exception e) {
-            prefs.edit().putBoolean("wake_enabled", false).apply();
-            status.setText("فعال‌سازی در پس‌زمینه ممکن نشد. برنامه را باز نگه دار و مجوز میکروفون را بررسی کن.");
-            if (wakeButton != null) wakeButton.setText("🎙  ثبت صوتی");
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+            if (requestCode == AUDIO_PERMISSION) startVoice(pendingMode);
+            else if (requestCode == AUDIO_RECORDING_PERMISSION) startAudioRecording(pendingAudioRecordingControls);
+        } else {
+            if (status != null) status.setText("برای استفاده از میکروفون باید اجازهٔ ضبط صدا را بدهی.");
+            Toast.makeText(this, "اجازهٔ میکروفون داده نشد.", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1818,6 +1813,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
+        if(recorder!=null) stopAudioRecording();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
     }
