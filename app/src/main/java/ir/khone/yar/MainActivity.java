@@ -140,6 +140,32 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        // Re-register saved reminders when returning from Android's exact-alarm settings.
+        if (prefs != null) ReminderReceiver.restore(this);
+    }
+
+    private void ensureExactAlarmAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        if (alarmManager == null || alarmManager.canScheduleExactAlarms()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("فعال‌کردن آلارم دقیق")
+            .setMessage("برای اینکه یادآوری‌ها سر ساعت و حتی هنگام بسته بودن برنامه اجرا شوند، اجازهٔ «آلارم‌ها و یادآوری‌ها» را در صفحهٔ بعد فعال کنید. بدون این اجازه ممکن است هشدار دیر اجرا شود.")
+            .setNegativeButton("بعداً", (dialog, which) -> dialog.dismiss())
+            .setPositiveButton("فعال‌کردن", (dialog, which) -> {
+                try {
+                    Intent settingsIntent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        Uri.parse("package:" + getPackageName()));
+                    startActivity(settingsIntent);
+                } catch (Exception ignored) {
+                    try { startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName()))); } catch (Exception ignoredAgain) {}
+                }
+            }).show();
+    }
+
     private void buildUi() {
         root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(cream);
         root.setPadding(dp(12), dp(10), dp(12), dp(8));
@@ -819,7 +845,7 @@ public class MainActivity extends Activity {
                     .putString("reminder_" + reminderId, savedReminder)
                     .putString("reminder_note_" + when + "_" + reminderId, when + "\n" + note)
                     .apply();
-                ReminderReceiver.schedule(this, reminderId, when, title, false);
+                ReminderReceiver.schedule(this, reminderId, when, title, false);\n                ensureExactAlarmAccess();
                 if (Build.VERSION.SDK_INT >= 33
                         && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
@@ -2663,7 +2689,7 @@ public class MainActivity extends Activity {
             .putString(archiveKey, when + "\n" + text.trim())
             .remove("oba_reminder_text_draft")
             .apply();
-        ReminderReceiver.schedule(this, id, when, title, false);
+        ReminderReceiver.schedule(this, id, when, title, false);\n        ensureExactAlarmAccess();
         if (reminderDraftDialog != null && reminderDraftDialog.isShowing()) reminderDraftDialog.dismiss();
         reminderDraftDialog = null;
         reminderDraftInput = null;
@@ -3000,7 +3026,7 @@ public class MainActivity extends Activity {
         long when = due.getTimeInMillis();
         String saved = when + "\n" + (monthly ? "monthly" : "once") + "\n" + title + "\n" + monthlyDay;
         prefs.edit().putString("reminder_" + id, saved).apply();
-        ReminderReceiver.schedule(this, id, when, title, monthly);
+        ReminderReceiver.schedule(this, id, when, title, monthly);\n        ensureExactAlarmAccess();
         String whenText = formatPersianDateTime(due.getTime());
         String confirmation = "یادآوری «" + title + "» برای " + whenText + (monthly ? " و تکرار ماهانه" : "") + " ثبت شد.";
         addEntry("یادآوری", confirmation, 0);
