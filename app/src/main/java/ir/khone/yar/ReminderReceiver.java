@@ -48,12 +48,26 @@ public class ReminderReceiver extends BroadcastReceiver {
         PendingIntent pending = PendingIntent.getBroadcast(context, requestCode, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         if (alarms != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarms.canScheduleExactAlarms()) {
-                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
-            } else {
-                alarms.set(AlarmManager.RTC_WAKEUP, when, pending);
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarms.canScheduleExactAlarms()) {
+                    alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
+                } else {
+                    alarms.set(AlarmManager.RTC_WAKEUP, when, pending);
+                }
+            } catch (SecurityException exactAlarmPermissionChanged) {
+                // The special access can be revoked between checking it and scheduling.
+                // Keep the reminder scheduled with the best inexact API available.
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pending);
+                    } else {
+                        alarms.set(AlarmManager.RTC_WAKEUP, when, pending);
+                    }
+                } catch (SecurityException ignored) {
+                    // Do not crash the app if Android blocks alarm scheduling entirely.
+                }
             }
         }
     }
