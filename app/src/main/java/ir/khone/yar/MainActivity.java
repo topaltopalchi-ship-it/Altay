@@ -1326,7 +1326,7 @@ public class MainActivity extends Activity {
         // Do not let the amount matcher consume item words (e.g. "برنج ده میلیون تومان").
         // The previous broad Persian-letter alternative could match "برنج ده میلیون" as the number,
         // leaving an empty item description and causing the whole purchase to be rejected.
-        String numberWords = "(?:یک|یه|دو|سه|چهار|پنج|شش|شیش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|هیجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|دویست|سیصد|چهارصد|پانصد)";
+        String numberWords = "(?:یک|یه|دو|سه|چهار|پنج|شش|شیش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|هیجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|صد|یکصد|دویست|سیصد|چهارصد|پانصد|ششصد|هفتصد|هشتصد|نهصد|و)";
         java.util.regex.Pattern currencyPattern = java.util.regex.Pattern.compile(
             "([0-9][0-9,٬.]*|" + numberWords + "(?:\\s+" + numberWords + "){0,3})\\s*(میلیارد|میلیون|هزار)?\\s*(تومان|تومن|ریال)"
         );
