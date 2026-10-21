@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - fix/offline-persian-tts
+      - feature/auto-sherpa-download
   pull_request:
     branches:
       - main

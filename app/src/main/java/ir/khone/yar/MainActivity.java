@@ -12,6 +12,12 @@ import android.provider.Settings;
 import android.content.Intent;
 import android.net.Uri;
 import android.media.MediaPlayer;
+import android.media.AudioAttributes;
+import com.k2fsa.sherpa.onnx.OfflineTts;
+import com.k2fsa.sherpa.onnx.OfflineTtsConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig;
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig;
+import com.k2fsa.sherpa.onnx.GenerationConfig;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -70,6 +76,10 @@ public class MainActivity extends Activity {
     private boolean wakeTriggeredSession = false;
     private boolean quietVoiceSession = false;
     private TextToSpeech tts;
+    private OfflineTts localPersianTts;
+    private final java.util.concurrent.ExecutorService ttsExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private MediaPlayer generatedSpeechPlayer;
+    private volatile boolean generatingSpeech = false;
     private OfflineVoskSpeechEngine offlineEngine;
     private boolean downloadingVoskModel = false;
     private String pendingMode = "auto";
@@ -137,6 +147,10 @@ public class MainActivity extends Activity {
             if (status != null) status.setText("در حال آماده‌سازی و دانلود خودکار مدل گفتار فارسی…");
             if (root != null) root.postDelayed(this::downloadVoskModelAutomatically, 800);
             else downloadVoskModelAutomatically();
+        } else {
+            // Vosk is already installed, so prepare the Persian Sherpa voice model too.
+            if (root != null) root.postDelayed(this::downloadSherpaModelAutomatically, 800);
+            else downloadSherpaModelAutomatically();
         }
     }
 
@@ -210,6 +224,10 @@ public class MainActivity extends Activity {
         continuousTranscriptView.setLineSpacing(dp(3), 1.08f);
         continuousTranscriptView.setTextIsSelectable(true);
         content.addView(continuousTranscriptView, lp(-1, -2, 0, 0, 0, 5));
+        Button readTextButton = button("🔊 خواندن متن", Color.WHITE, dark, 16);
+        readTextButton.setMinHeight(dp(48));
+        readTextButton.setOnClickListener(v -> readPersianText(continuousTranscriptView == null ? "" : continuousTranscriptView.getText().toString()));
+        content.addView(readTextButton, lp(-1, -2, 0, 2, 0, 8));
 
         // Reminder transcript is intentionally hidden: voice input is unified in the
         // main expense capture box and classified by date words versus amount/quantity.
@@ -334,7 +352,7 @@ public class MainActivity extends Activity {
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("🛒 لیست خرید")
-                .setView(panel)
+                .setView(withReadButton(panel))
                 .setPositiveButton("ثبت متن", (d, which) -> {
                     String entered = itemInput.getText().toString().trim();
                     if (!entered.isEmpty()) {
@@ -554,7 +572,7 @@ public class MainActivity extends Activity {
             legend.setTextColor(CHART_COLORS[Math.abs(e.getKey().hashCode()) % CHART_COLORS.length]);
             panel.addView(legend, lp(-1, -2, 0, 2, 0, 2));
         }
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(title).setView(panel)
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(title).setView(withReadButton(panel))
             .setNegativeButton(parentCategory == null ? "بستن" : "بازگشت به نمودار اصلی", (d, w) -> { if (parentCategory != null) showExpenseCharts(); }).create();
         dialog.show();
     }
@@ -700,7 +718,7 @@ public class MainActivity extends Activity {
         yearInput.setOnFocusChangeListener((v, hasFocus) -> { if (!hasFocus) refreshDays.run(); });
         refreshDays.run();
         new AlertDialog.Builder(this).setTitle("تقویم شمسی مخارج")
-            .setView(panel)
+            .setView(withReadButton(panel))
             .setNegativeButton("انصراف", null)
             .setPositiveButton("نمایش مخارج", (dialog, which) -> {
                 int jy;
@@ -852,7 +870,7 @@ public class MainActivity extends Activity {
                 reportScroll.addView(reportCards);
                 new AlertDialog.Builder(this)
                     .setTitle("مخارج " + jalaliDatePartsText(jy, jm, jd))
-                    .setView(reportScroll)
+                    .setView(withReadButton(reportScroll))
                     .setPositiveButton("باشه", null)
                     .setNeutralButton("روز دیگر", (d,w) -> showExpenseCalendar())
                     .show();
@@ -874,7 +892,7 @@ public class MainActivity extends Activity {
         form.addView(timeInput, lp(-1, -2, 0, 0, 0, dp(8)));
 
         new AlertDialog.Builder(this).setTitle("یادآوری " + jalaliDatePartsText(jy, jm, jd))
-            .setView(form).setNegativeButton("انصراف", null)
+            .setView(withReadButton(form)).setNegativeButton("انصراف", null)
             .setPositiveButton("ذخیره", (d,w) -> {
                 String note = noteInput.getText().toString().trim();
                 if (note.isEmpty()) {
@@ -1102,7 +1120,7 @@ public class MainActivity extends Activity {
             nameInput.setHint("مثلاً کارت ملی، شناسنامه، سند خانه");
             new AlertDialog.Builder(this).setTitle("نام مدرک")
                 .setMessage("تصویر در حافظهٔ خصوصی برنامه ذخیره می‌شود.")
-                .setView(nameInput).setNegativeButton("لغو", (d,w) -> appendHomeDocument(fileName, defaultName))
+                .setView(withReadButton(nameInput)).setNegativeButton("لغو", (d,w) -> appendHomeDocument(fileName, defaultName))
                 .setPositiveButton("ذخیره", (d,w) -> {
                     String name = nameInput.getText().toString().trim();
                     appendHomeDocument(fileName, name.isEmpty() ? defaultName : name);
@@ -1137,7 +1155,7 @@ public class MainActivity extends Activity {
             preview.setImageBitmap(BitmapFactory.decodeFile(imageFile.getAbsolutePath()));
             preview.setAdjustViewBounds(true);
             ScrollView scroll = new ScrollView(this); scroll.addView(preview);
-            new AlertDialog.Builder(this).setTitle(labels[which]).setView(scroll).setPositiveButton("بستن", null).show();
+            new AlertDialog.Builder(this).setTitle(labels[which]).setView(withReadButton(scroll)).setPositiveButton("بستن", null).show();
         }).setNegativeButton("بستن", null).show();
     }
 
@@ -1291,7 +1309,7 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.addView(list);
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("زیرگروه «" + category + "»")
-            .setView(scroll).setNegativeButton("انصراف", null).create();
+            .setView(withReadButton(scroll)).setNegativeButton("انصراف", null).create();
         for (String option : groups) {
             Button item = button(option, Color.WHITE, Color.rgb(24, 37, 105), 16);
             item.setAllCaps(false);
@@ -1356,7 +1374,7 @@ public class MainActivity extends Activity {
         scroll.addView(list);
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("زیرمجموعهٔ «" + parent + "»")
-            .setView(scroll).setNegativeButton("بازگشت", null).create();
+            .setView(withReadButton(scroll)).setNegativeButton("بازگشت", null).create();
         for (String child : children) {
             Button item = button(child, Color.WHITE, Color.rgb(24, 37, 105), 16);
             item.setAllCaps(false);
@@ -1395,7 +1413,7 @@ public class MainActivity extends Activity {
         actions.addView(archive, lp(-1, -2, 0, 0, 0, 0));
         new AlertDialog.Builder(this)
             .setTitle(category + " ← " + subgroup)
-            .setView(actions)
+            .setView(withReadButton(actions))
             .setNegativeButton("بستن", null)
             .show();
     }
@@ -1450,7 +1468,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this).setTitle("🔎 جست‌وجوی کالا در یک ماه")
             .setMessage("نام کالا، ماه و سال را انتخاب کن. برنامه تعداد دفعات و مجموع مبلغ را محاسبه می‌کند.")
-            .setView(form).setNegativeButton("انصراف", null)
+            .setView(withReadButton(form)).setNegativeButton("انصراف", null)
             .setPositiveButton("نمایش گزارش", (dialog, which) -> {
                 String query = itemInput.getText().toString().trim().replace('ي', 'ی').replace('ك', 'ک');
                 if (query.isEmpty()) {
@@ -1606,7 +1624,7 @@ public class MainActivity extends Activity {
         quantityInput.setSingleLine(true);
         form.addView(quantityInput, lp(-1,-2,0,0,0,4));
         new AlertDialog.Builder(this).setTitle(category + " ← " + subgroup)
-            .setView(form).setNegativeButton("لغو", null)
+            .setView(withReadButton(form)).setNegativeButton("لغو", null)
             .setPositiveButton("ثبت هزینه", (dialog, which) -> {
                 String rawAmount = amountInput.getText().toString().trim()
                     .replace("۰","0").replace("۱","1").replace("۲","2").replace("۳","3")
@@ -2048,8 +2066,9 @@ public class MainActivity extends Activity {
             @Override public void onInstalled(File installedDirectory) {
                 downloadingVoskModel = false;
                 if (!isFinishing() && status != null) {
-                    status.setText("بستهٔ تشخیص گفتار فارسی آماده شد؛ تشخیص گفتار آفلاین فعال است.");
+                    status.setText("مدل گفتار فارسی آماده شد؛ اکنون دریافت صدای فارسی شروع می‌شود…");
                 }
+                if (!isFinishing() && !isDestroyed()) downloadSherpaModelAutomatically();
             }
             @Override public void onError(String message) {
                 downloadingVoskModel = false;
@@ -2068,6 +2087,43 @@ public class MainActivity extends Activity {
                         }
                     }, retryDelayMs);
                 }
+            }
+        });
+    }
+
+    private boolean downloadingSherpaModel = false;
+
+    private void downloadSherpaModelAutomatically() {
+        if (isFinishing() || isDestroyed()
+                || SherpaModelDownloader.getInstalledModelDirectory(this) != null
+                || downloadingSherpaModel) return;
+        downloadingSherpaModel = true;
+        if (status != null) status.setText("مدل گفتار فارسی آماده است؛ در حال دریافت صدای فارسی…");
+        SherpaModelDownloader.downloadModel(this, new SherpaModelDownloader.Callback() {
+            @Override public void onProgress(String fileName, long downloadedBytes, long totalBytes) {
+                if (status == null || isFinishing()) return;
+                if (totalBytes > 0) {
+                    int percent = (int) Math.min(100L, downloadedBytes * 100L / totalBytes);
+                    status.setText("دریافت فایل صوتی (" + fileName + "): " + percent + "%");
+                } else {
+                    status.setText("در حال دریافت فایل صوتی (" + fileName + ")…");
+                }
+            }
+            @Override public void onInstalled(File modelDirectory) {
+                downloadingSherpaModel = false;
+                if (!isFinishing() && status != null) {
+                    status.setText("صدای فارسی آمادهٔ خواندن متن است.");
+                }
+            }
+            @Override public void onError(String message) {
+                downloadingSherpaModel = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (status != null) status.setText("دریافت صدای فارسی انجام نشد؛ بعداً دوباره تلاش می‌کنیم. " + message);
+                if (root != null) root.postDelayed(() -> {
+                    if (!isFinishing() && !isDestroyed()
+                            && SherpaModelDownloader.getInstalledModelDirectory(MainActivity.this) == null
+                            && !downloadingSherpaModel) downloadSherpaModelAutomatically();
+                }, 30000L);
             }
         });
     }
@@ -2721,7 +2777,7 @@ public class MainActivity extends Activity {
         reminderDraftDialog = new AlertDialog.Builder(this)
             .setTitle("ثبت متنی یادآوری و آلارم")
             .setMessage("متن را بنویس؛ سپس حتماً تاریخ و ساعت آلارم را انتخاب کن.")
-            .setView(scroll)
+            .setView(withReadButton(scroll))
             .setPositiveButton("انتخاب تاریخ و ساعت آلارم", null)
             .setNegativeButton("انصراف", (dialog, which) -> {
                 String text = reminderDraftInput == null ? "" : reminderDraftInput.getText().toString();
@@ -2802,7 +2858,7 @@ public class MainActivity extends Activity {
         scroll.addView(remindersView, new ScrollView.LayoutParams(-1, -2));
         new AlertDialog.Builder(this)
             .setTitle("🗂️ آرشیو یادآوری‌ها")
-            .setView(scroll)
+            .setView(withReadButton(scroll))
             .setNegativeButton("بستن", null)
             .setNeutralButton("🎵 انتخاب آهنگ آلارم", (dialog, which) -> pickReminderAlarmSound())
             .setPositiveButton("پاک کن", (dialog, which) -> confirmClearArchive(
@@ -2853,7 +2909,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("🎵 پیش‌شنوی آهنگ آلارم")
             .setMessage("برای شنیدن آهنگ انتخاب‌شده، پخش را بزن؛ هر زمان خواستی می‌توانی قطعش کنی.")
-            .setView(panel)
+            .setView(withReadButton(panel))
             .setNegativeButton("تمام", (dialog, which) -> {
                 stopReminderSoundPreview();
                 Toast.makeText(this, "آهنگ آلارم ذخیره شد.", Toast.LENGTH_SHORT).show();
@@ -3435,6 +3491,84 @@ public class MainActivity extends Activity {
         if (quietVoiceSession) return;
         speakWithSystemTts(s);
     }
+    private View withReadButton(View pageContent) {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.setPadding(dp(4), dp(4), dp(4), dp(4));
+        wrapper.addView(pageContent, new LinearLayout.LayoutParams(-1, -2));
+        Button readButton = button("🔊 خواندن متن", Color.WHITE, dark, 14);
+        readButton.setMinHeight(dp(44));
+        readButton.setOnClickListener(v -> {
+            StringBuilder spoken = new StringBuilder();
+            collectReadableText(pageContent, spoken);
+            readPersianText(spoken.toString());
+        });
+        wrapper.addView(readButton, lp(-1, -2, 0, 6, 0, 0));
+        return wrapper;
+    }
+
+    private void collectReadableText(View view, StringBuilder result) {
+        if (view == null) return;
+        if (view instanceof Button) return;
+        if (view instanceof TextView) {
+            String value = ((TextView) view).getText().toString().trim();
+            if (!value.isEmpty()) {
+                if (result.length() > 0) result.append("، ");
+                result.append(value);
+            }
+            return;
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) collectReadableText(group.getChildAt(i), result);
+        }
+    }
+
+    private void readPersianText(String textToRead) {
+        final String clean = textToRead == null ? "" : textToRead.trim();
+        if (clean.isEmpty() || clean.startsWith("هنوز متنی")) {
+            Toast.makeText(this, "متنی برای خواندن وجود ندارد.", Toast.LENGTH_SHORT).show(); return;
+        }
+        if (generatingSpeech) { Toast.makeText(this, "در حال آماده‌سازی صدا هستم؛ کمی صبر کنید.", Toast.LENGTH_SHORT).show(); return; }
+        File modelDir = SherpaModelDownloader.getInstalledModelDirectory(this);
+        if (modelDir == null) { Toast.makeText(this, "فایل‌های صدای فارسی هنوز کامل آماده نشده‌اند.", Toast.LENGTH_LONG).show(); downloadSherpaModelAutomatically(); return; }
+        generatingSpeech = true;
+        Toast.makeText(this, "در حال آماده‌سازی خواندن فارسی…", Toast.LENGTH_SHORT).show();
+        ttsExecutor.execute(() -> {
+            try {
+                if (localPersianTts == null) {
+                    OfflineTtsVitsModelConfig vits = new OfflineTtsVitsModelConfig();
+                    vits.setModel(new File(modelDir, "fa_IR-amir-medium.onnx").getAbsolutePath());
+                    vits.setTokens(new File(modelDir, "tokens.txt").getAbsolutePath());
+                    vits.setDataDir(new File(modelDir, "espeak-ng-data").getAbsolutePath());
+                    OfflineTtsModelConfig model = new OfflineTtsModelConfig();
+                    model.setVits(vits); model.setNumThreads(2); model.setDebug(false);
+                    OfflineTtsConfig config = new OfflineTtsConfig();
+                    config.setModel(model); config.setMaxNumSentences(1);
+                    localPersianTts = new OfflineTts(getAssets(), config);
+                }
+                GenerationConfig generation = new GenerationConfig();
+                generation.setSid(0); generation.setSpeed(1.0f); generation.setSilenceScale(0.2f);
+                String normalized = clean.replace("•", "، ").replace('\n', ' ');
+                com.k2fsa.sherpa.onnx.GeneratedAudio audio = localPersianTts.generateWithConfigAndCallback(normalized, generation, samples -> 1);
+                File wav = new File(getCacheDir(), "oba-persian-reading.wav");
+                if (audio == null || !audio.save(wav.getAbsolutePath())) throw new IllegalStateException("ساخت فایل صوتی انجام نشد.");
+                runOnUiThread(() -> {
+                    try {
+                        if (generatedSpeechPlayer != null) { generatedSpeechPlayer.release(); generatedSpeechPlayer = null; }
+                        generatedSpeechPlayer = new MediaPlayer();
+                        generatedSpeechPlayer.setDataSource(wav.getAbsolutePath());
+                        generatedSpeechPlayer.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+                        generatedSpeechPlayer.setOnCompletionListener(player -> { player.release(); if (generatedSpeechPlayer == player) generatedSpeechPlayer = null; });
+                        generatedSpeechPlayer.setOnErrorListener((player, what, extra) -> { player.release(); if (generatedSpeechPlayer == player) generatedSpeechPlayer = null; Toast.makeText(this, "پخش صدای فارسی ناموفق بود.", Toast.LENGTH_LONG).show(); return true; });
+                        generatedSpeechPlayer.prepare(); generatedSpeechPlayer.start();
+                    } catch (Exception e) { Toast.makeText(this, "پخش صدای فارسی ناموفق بود.", Toast.LENGTH_LONG).show(); }
+                    finally { generatingSpeech = false; }
+                });
+            } catch (Exception e) { runOnUiThread(() -> { generatingSpeech = false; Toast.makeText(this, "خواندن فارسی آماده نشد؛ فایل‌های مدل را بررسی کنید.", Toast.LENGTH_LONG).show(); }); }
+        });
+    }
+
     private void speakWithSystemTts(String s) {
         if (tts != null) tts.speak(s, TextToSpeech.QUEUE_FLUSH, null, "khoneyar");
     }
@@ -3492,6 +3626,9 @@ public class MainActivity extends Activity {
         stopReminderSoundPreview();
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
+        if (generatedSpeechPlayer != null) { try { generatedSpeechPlayer.release(); } catch (Exception ignored) {} generatedSpeechPlayer = null; }
+        if (localPersianTts != null) { try { localPersianTts.release(); } catch (Exception ignored) {} localPersianTts = null; }
+        ttsExecutor.shutdownNow();
         if(tts!=null) tts.shutdown();
         super.onDestroy();
     }
