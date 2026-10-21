@@ -820,6 +820,10 @@ public class MainActivity extends Activity {
                     .putString("reminder_note_" + when + "_" + reminderId, when + "\n" + note)
                     .apply();
                 ReminderReceiver.schedule(this, reminderId, when, title, false);
+                if (Build.VERSION.SDK_INT >= 33
+                        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 45);
+                }
                 refreshReminders();
                 Toast.makeText(this, "یادآوری ذخیره شد؛ آلارم یک ساعت قبل پخش می‌شود.", Toast.LENGTH_LONG).show();
                 showExpenseCalendar();
