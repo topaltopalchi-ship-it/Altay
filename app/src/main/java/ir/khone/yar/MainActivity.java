@@ -217,7 +217,7 @@ public class MainActivity extends Activity {
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
         Button remindersBtn = button("🔔 یادآوری‌ها", Color.rgb(255, 239, 205), dark, 10);
-        remindersBtn.setOnClickListener(v -> startReminderDraft());
+        remindersBtn.setOnClickListener(v -> showReminderList());
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 10);
         docsBtn.setOnClickListener(v -> showHomeDocuments());
         Button audioBtn = button("🎧 صداها", Color.WHITE, dark, 10);
@@ -2060,6 +2060,24 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
         }
         inventoryView.setText(out.length() == 0 ? "هنوز خریدی در موجودی ثبت نشده است. بگو: «خریدم شیر به قیمت ۸۰ هزار تومان»." : out.toString());
+    }
+
+    private void showReminderList() {
+        remindersView = new TextView(this);
+        remindersView.setTextSize(16);
+        remindersView.setTextColor(dark);
+        remindersView.setGravity(Gravity.RIGHT | Gravity.TOP);
+        remindersView.setTextDirection(View.TEXT_DIRECTION_RTL);
+        remindersView.setPadding(dp(18), dp(12), dp(18), dp(12));
+        refreshReminders();
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(remindersView, new ScrollView.LayoutParams(-1, -2));
+        new AlertDialog.Builder(this)
+            .setTitle("🔔 یادآوری‌های من")
+            .setView(scroll)
+            .setNegativeButton("بستن", null)
+            .setPositiveButton("➕ افزودن یادآوری", (dialog, which) -> startReminderDraft())
+            .show();
     }
 
     private void refreshReminders() {
