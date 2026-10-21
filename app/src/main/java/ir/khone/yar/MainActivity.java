@@ -1908,21 +1908,19 @@ public class MainActivity extends Activity {
         String compactCommand = s.replace("‌", "").replace(" ", "")
             .replace("ي", "ی").replace("ك", "ک")
             .replaceAll("[،,؛;.!؟?]+", "");
-        // Recognize save phrases even if speech recognition adds a prefix such as
-        // "پیام صوتی" or the current mode has unexpectedly fallen back to auto.
-        // Only trigger this global shortcut when a reminder draft already exists.
+        // Handle the save command before expense/category routing. Some recognizers
+        // return extra leading words ("پیام صوتی ذخیره کن"), and mode can change
+        // between final callbacks, so prefer the persisted reminder draft as source.
         String existingReminderDraft = prefs.getString("oba_reminder_draft", "").trim();
         boolean hasReminderDraft = !existingReminderDraft.isEmpty();
         boolean reminderSaveShortcut = hasReminderDraft
-            && (compactCommand.contains("ذخیرهکن")
-                || compactCommand.contains("ذخیرهیادآوری")
-                || compactCommand.contains("ذخیره")
+            && (compactCommand.contains("ذخیره")
                 || compactCommand.contains("ثبتکن")
                 || compactCommand.contains("ثبتیادآوری")
                 || compactCommand.equals("ثبت")
-                || compactCommand.contains("تمامشد"));
+                || compactCommand.contains("تمامشد")
+                || compactCommand.contains("تمومشد"));
         if (reminderSaveShortcut && !pendingMode.equals("saving_reminder")) {
-            pendingMode = "saving_reminder";
             saveReminderDraft();
             return;
         }
@@ -1940,14 +1938,12 @@ public class MainActivity extends Activity {
             String reminderCommand = normalize(raw).replace("‌", "").replace(" ", "")
                 .replace("ي", "ی").replace("ك", "ک")
                 .replaceAll("[،,؛;.!؟?]+", "");
-            boolean saveCommand = reminderCommand.contains("ذخیرهکن")
-                || reminderCommand.contains("ذخیرهیادآوری")
-                || reminderCommand.contains("ذخیره")
+            boolean saveCommand = reminderCommand.contains("ذخیره")
                 || reminderCommand.contains("ثبتکن")
                 || reminderCommand.contains("ثبتیادآوری")
-                || reminderCommand.contains("ثبت یادآوری".replace(" ", ""))
                 || reminderCommand.equals("ثبت")
-                || reminderCommand.contains("تمامشد");
+                || reminderCommand.contains("تمامشد")
+                || reminderCommand.contains("تمومشد");
             if (saveCommand) {
                 // Switch mode immediately so a late speech callback cannot append the command
                 // itself to the reminder draft or restart microphone capture.
