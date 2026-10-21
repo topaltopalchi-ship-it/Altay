@@ -116,6 +116,8 @@ public class MainActivity extends Activity {
             }
         });
         buildUi();
+        // Rebuild pending reminder alarms with the current one-hour lead time and selected sound.
+        ReminderReceiver.restore(this);
         // Voice wake-up by saying "OBA" is disabled; voice commands remain available from other controls.
         wakeTriggeredSession = false;
         quietVoiceSession = false;
