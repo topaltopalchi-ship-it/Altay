@@ -3495,7 +3495,7 @@ public class MainActivity extends Activity {
         LinearLayout wrapper = new LinearLayout(this);
         wrapper.setOrientation(LinearLayout.VERTICAL);
         wrapper.setPadding(dp(4), dp(4), dp(4), dp(4));
-        wrapper.addView(pageContent, new LinearLayout.LayoutParams(-1, 0, 1));
+        wrapper.addView(pageContent, new LinearLayout.LayoutParams(-1, -2));
         Button readButton = button("🔊 خواندن متن", Color.WHITE, dark, 14);
         readButton.setMinHeight(dp(44));
         readButton.setOnClickListener(v -> {
