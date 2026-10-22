@@ -62,6 +62,45 @@ jobs:
             echo "Signing secrets are not configured; skipping signed release APK and AAB."
           fi
 
+      - name: Generate Cafe Bazaar BIN from signed AAB
+        if: env.HAS_SIGNED_RELEASE == 'true' && github.ref == 'refs/heads/release/bazaar'
+        env:
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAB_PATH="app/build/outputs/bundle/release/app-release.aab"
+          KEYSTORE_PATH="$RUNNER_TEMP/oba-release.jks"
+          test -s "$AAB_PATH"
+          test -s "$KEYSTORE_PATH"
+          curl --fail --location --silent --show-error \
+            https://github.com/cafebazaar/bundle-signer/releases/download/v0.1.13/bundlesigner-0.1.13.jar \
+            --output "$RUNNER_TEMP/bundlesigner-0.1.13.jar"
+          mkdir -p app/build/outputs/cafebazaar
+          java -Xmx4g -jar "$RUNNER_TEMP/bundlesigner-0.1.13.jar" genbin \
+            --verbose \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --bundle "$AAB_PATH" \
+            --bin app/build/outputs/cafebazaar \
+            --ks "$KEYSTORE_PATH" \
+            --ks-type JKS \
+            --ks-pass "pass:$OBA_KEYSTORE_PASSWORD" \
+            --ks-key-alias "$OBA_KEY_ALIAS" \
+            --key-pass "pass:$OBA_KEY_PASSWORD"
+          find app/build/outputs/cafebazaar -maxdepth 1 -type f -name '*.bin' -print -quit | grep -q .
+      
+      - name: Upload Cafe Bazaar BIN
+        if: env.HAS_SIGNED_RELEASE == 'true' && github.ref == 'refs/heads/release/bazaar'
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBA-cafebazaar-BIN
+          path: app/build/outputs/cafebazaar/*.bin
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload signed release APK
         if: env.HAS_SIGNED_RELEASE == 'true'
         uses: actions/upload-artifact@v4
