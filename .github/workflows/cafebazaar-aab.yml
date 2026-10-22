@@ -2,6 +2,15 @@ name: Build OBA CafeBazaar AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/cafebazaar-aab.yml'
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
 
 permissions:
   contents: read
