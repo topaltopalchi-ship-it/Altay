@@ -355,8 +355,8 @@ public class MainActivity extends Activity {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(8), dp(4), dp(8), dp(4));
 
-        TextView summary = text("بودجهٔ کل: " + fmt(currentBudget) + " تومان\\nهزینه‌های ثبت‌شده: "
-                + fmt(spent) + " تومان\\nماندهٔ بودجه: " + fmt(remaining) + " تومان",
+        TextView summary = text("بودجهٔ کل: " + fmt(currentBudget) + " تومان\nهزینه‌های ثبت‌شده: "
+                + fmt(spent) + " تومان\nماندهٔ بودجه: " + fmt(remaining) + " تومان",
                 17, dark, true);
         summary.setGravity(Gravity.RIGHT);
         summary.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -440,18 +440,49 @@ public class MainActivity extends Activity {
     }
 
     private void showShoppingList() {
-        String savedList = prefs.getString("oba_shopping_list", "").trim();
+        String savedList = prefs.getString("oba_shopping_list", "").replace("\\n", "\n").trim();
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(8), dp(4), dp(8), dp(4));
 
         TextView current = text(savedList.isEmpty()
                 ? "هنوز چیزی در لیست خرید نیست."
-                : "🛒 فهرست فعلی:\\n" + savedList, 16, dark, false);
+                : "🛒 فهرست فعلی:\n" + savedList, 16, dark, false);
         current.setGravity(Gravity.RIGHT | Gravity.TOP);
         current.setPadding(dp(10), dp(10), dp(10), dp(10));
         current.setBackground(round(Color.rgb(245, 249, 246), 10));
         panel.addView(current, lp(-1, -2, 0, 0, 0, 8));
+
+        if (!savedList.isEmpty()) {
+            Button deleteOneButton = button("🗑 حذف یک قلم از لیست", Color.rgb(255, 224, 233), Color.rgb(150, 25, 65), 14);
+            deleteOneButton.setMinHeight(dp(44));
+            deleteOneButton.setOnClickListener(v -> {
+                String normalizedList = prefs.getString("oba_shopping_list", "").replace("\\n", "\n").trim();
+                String[] items = normalizedList.isEmpty() ? new String[0] : normalizedList.split("\n");
+                ArrayList<String> nonEmptyItems = new ArrayList<>();
+                for (String item : items) if (!item.trim().isEmpty()) nonEmptyItems.add(item.trim());
+                if (nonEmptyItems.isEmpty()) {
+                    prefs.edit().remove("oba_shopping_list").apply();
+                    dialogRefreshShoppingList();
+                    return;
+                }
+                String[] labels = nonEmptyItems.toArray(new String[0]);
+                new AlertDialog.Builder(this)
+                    .setTitle("کدام قلم حذف شود؟")
+                    .setItems(labels, (deleteDialog, which) -> {
+                        nonEmptyItems.remove(which);
+                        String updatedList = String.join("\n", nonEmptyItems);
+                        if (updatedList.trim().isEmpty()) prefs.edit().remove("oba_shopping_list").apply();
+                        else prefs.edit().putString("oba_shopping_list", updatedList).apply();
+                        Toast.makeText(this, "قلم انتخاب‌شده حذف شد.", Toast.LENGTH_SHORT).show();
+                        dialog.dismiss();
+                        showShoppingList();
+                    })
+                    .setNegativeButton("انصراف", null)
+                    .show();
+            });
+            panel.addView(deleteOneButton, lp(-1, -2, 0, 0, 0, 8));
+        }
 
         EditText itemInput = new EditText(this);
         itemInput.setHint("اقلام خرید را اینجا بنویسید");
@@ -470,7 +501,7 @@ public class MainActivity extends Activity {
                     String entered = itemInput.getText().toString().trim();
                     if (!entered.isEmpty()) {
                         String existing = prefs.getString("oba_shopping_list", "").trim();
-                        String updated = existing.isEmpty() ? entered : existing + "\\n" + entered;
+                        String updated = existing.isEmpty() ? entered : existing.replace("\\n", "\n") + "\n" + entered;
                         prefs.edit().putString("oba_shopping_list", updated).apply();
                         Toast.makeText(this, "اقلام به لیست خرید اضافه شد.", Toast.LENGTH_SHORT).show();
                     }
