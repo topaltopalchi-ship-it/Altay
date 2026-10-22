@@ -463,7 +463,9 @@ public class MainActivity extends Activity {
                 for (String item : items) if (!item.trim().isEmpty()) nonEmptyItems.add(item.trim());
                 if (nonEmptyItems.isEmpty()) {
                     prefs.edit().remove("oba_shopping_list").apply();
-                    dialogRefreshShoppingList();
+                    current.setText("هنوز چیزی در لیست خرید نیست.");
+                    deleteOneButton.setVisibility(View.GONE);
+                    Toast.makeText(this, "لیست خرید خالی شد.", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 String[] labels = nonEmptyItems.toArray(new String[0]);
@@ -471,12 +473,14 @@ public class MainActivity extends Activity {
                     .setTitle("کدام قلم حذف شود؟")
                     .setItems(labels, (deleteDialog, which) -> {
                         nonEmptyItems.remove(which);
-                        String updatedList = String.join("\n", nonEmptyItems);
+                        String updatedList = android.text.TextUtils.join("\n", nonEmptyItems);
                         if (updatedList.trim().isEmpty()) prefs.edit().remove("oba_shopping_list").apply();
                         else prefs.edit().putString("oba_shopping_list", updatedList).apply();
                         Toast.makeText(this, "قلم انتخاب‌شده حذف شد.", Toast.LENGTH_SHORT).show();
-                        dialog.dismiss();
-                        showShoppingList();
+                        current.setText(updatedList.isEmpty()
+                            ? "هنوز چیزی در لیست خرید نیست."
+                            : "🛒 فهرست فعلی:\n" + updatedList);
+                        if (updatedList.isEmpty()) deleteOneButton.setVisibility(View.GONE);
                     })
                     .setNegativeButton("انصراف", null)
                     .show();
