@@ -85,8 +85,6 @@ jobs:
             --ks-pass "pass:$OBA_KEYSTORE_PASSWORD" \
             --key-pass "pass:$OBA_KEY_PASSWORD"
           find output -maxdepth 1 -type f -name '*.bin' -print -quit | grep -q .
-          BIN_FILE="$(find output -maxdepth 1 -type f -name '*.bin' -print -quit)"
-          cp "$BIN_FILE" output/OBA.bin
           test -s output/OBA.bin
 
       - name: Upload AAB and BIN
