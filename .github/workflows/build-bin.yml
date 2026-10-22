@@ -1,0 +1,66 @@
+
+name: Build CafeBazaar BIN
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-bin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download Bundle Signer
+        run: |
+          curl -fL \
+            https://github.com/cafebazaar/bundle-signer/releases/download/v0.1.13/bundlesigner-0.1.13.jar \
+            -o bundlesigner.jar
+
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 -d > signing-key.jks
+          test -s signing-key.jks
+
+      - name: Generate BIN
+        env:
+          KS_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p output
+
+          java -jar bundlesigner.jar genbin \
+            -v \
+            --bundle app-release.aab \
+            --bin output \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --ks signing-key.jks \
+            --ks-pass env:KS_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" \
+            --key-pass env:KEY_PASSWORD
+
+      - name: Upload BIN artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafebazaar-bin
+          path: output/*.bin
+          if-no-files-found: error
+
+      - name: Clean up signing key
+        if: always()
+        run: rm -f signing-key.jks
