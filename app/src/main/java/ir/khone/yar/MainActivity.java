@@ -1544,17 +1544,65 @@ public class MainActivity extends Activity {
     }
 
     private void showPurchaseCenter() {
-        new AlertDialog.Builder(this)
+        String[] labels = {
+            "🗓️  تقویم مخارج روزانه",
+            "🗂️  آرشیو خریدهای روزانه",
+            "📚  آرشیو خریدهای دسته‌بندی‌شده",
+            "🔎  گزارش ماهانهٔ کالا (مثلاً گوشت)",
+            "➕  ثبت خرید با انتخاب دسته"
+        };
+        int[][] gradients = {
+            {Color.rgb(57, 126, 190), Color.rgb(35, 76, 139)},
+            {Color.rgb(40, 157, 151), Color.rgb(20, 104, 112)},
+            {Color.rgb(123, 105, 176), Color.rgb(75, 58, 129)},
+            {Color.rgb(213, 151, 67), Color.rgb(158, 99, 34)},
+            {Color.rgb(75, 143, 113), Color.rgb(38, 101, 79)}
+        };
+        int[] borders = {
+            Color.rgb(185, 220, 250),
+            Color.rgb(175, 235, 226),
+            Color.rgb(218, 204, 246),
+            Color.rgb(249, 220, 164),
+            Color.rgb(188, 230, 207)
+        };
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.setPadding(dp(16), dp(8), dp(16), dp(6));
+        AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle("🛒 خریدها و تقویم هزینه‌ها")
-            .setItems(new String[]{"🗓️ تقویم مخارج روزانه", "🗂️ آرشیو خریدهای روزانه", "📚 آرشیو خریدهای دسته‌بندی‌شده", "🔎 گزارش ماهانهٔ کالا (مثلاً گوشت)", "➕ ثبت خرید با انتخاب دسته"}, (dialog, which) -> {
-                if (which == 0) showExpenseCalendar();
-                else if (which == 1) showDailyPurchaseArchive();
-                else if (which == 2) showPurchaseCategoryPicker();
-                else if (which == 3) showMonthlyItemReport();
-                else showPurchaseCategoryPicker();
-            })
+            .setView(menu)
             .setNegativeButton("بستن", null)
-            .show();
+            .create();
+        for (int i = 0; i < labels.length; i++) {
+            final int selected = i;
+            Button item = button(labels[i], Color.WHITE, Color.WHITE, 16);
+            item.setAllCaps(false);
+            item.setGravity(Gravity.CENTER);
+            item.setMinHeight(dp(54));
+            item.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            item.setTextColor(Color.WHITE);
+            GradientDrawable face = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT, gradients[i]);
+            face.setCornerRadius(dp(15));
+            face.setStroke(dp(2), borders[i]);
+            item.setBackground(face);
+            item.setElevation(dp(3));
+            item.setPadding(dp(12), dp(8), dp(12), dp(8));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(56));
+            params.setMargins(0, dp(5), 0, dp(5));
+            menu.addView(item, params);
+            item.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (selected == 0) showExpenseCalendar();
+                else if (selected == 1) showDailyPurchaseArchive();
+                else if (selected == 2) showPurchaseCategoryPicker();
+                else if (selected == 3) showMonthlyItemReport();
+                else showPurchaseCategoryPicker();
+            });
+        }
+        dialog.show();
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.rgb(28, 133, 119));
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTypeface(Typeface.DEFAULT, Typeface.BOLD);
     }
 
     private void showMonthlyItemReport() {
