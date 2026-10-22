@@ -1,5 +1,4 @@
-
-name: Build CafeBazaar BIN
+name: Build OBA CafeBazaar BIN
 
 on:
   workflow_dispatch:
@@ -10,31 +9,60 @@ permissions:
 jobs:
   build-bin:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Download Bundle Signer
-        run: |
-          curl -fL \
-            https://github.com/cafebazaar/bundle-signer/releases/download/v0.1.13/bundlesigner-0.1.13.jar \
-            -o bundlesigner.jar
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
 
-      - name: Prepare signing key
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
+          cache-provider: basic
+
+      - name: Validate and prepare signing key
+        shell: bash
         env:
-          KEYSTORE_BASE64: ${{ secrets.OBA_KEYSTORE_BASE64 }}
-          
+          OBA_KEYSTORE_BASE64: ${{ secrets.OBA_KEYSTORE_BASE64 }}
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
         run: |
-          printf '%s' "$KEYSTORE_BASE64" \
-            | base64 -d > signing-key.jks
-          test -s signing-key.jks
+          if [[ -z "$OBA_KEYSTORE_BASE64" || -z "$OBA_KEYSTORE_PASSWORD" || -z "$OBA_KEY_ALIAS" || -z "$OBA_KEY_PASSWORD" ]]; then
+            echo "::error::Missing OBA release signing secrets."
+            exit 1
+          fi
+          printf '%s' "$OBA_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/oba-release.jks"
+          chmod 600 "$RUNNER_TEMP/oba-release.jks"
+          test -s "$RUNNER_TEMP/oba-release.jks"
+
+      - name: Build signed release AAB for BIN conversion
+        env:
+          OBA_KEYSTORE_PATH: ${{ runner.temp }}/oba-release.jks
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
+        run: |
+          gradle --no-daemon testReleaseUnitTest bundleRelease
+          mkdir -p output
+          cp app/build/outputs/bundle/release/app-release.aab output/OBA.aab
+          test -s output/OBA.aab
+
+      - name: Download CafeBazaar BundleSigner
+        run: |
+          curl -fL --retry 3 \
+            https://github.com/cafebazaar/bundle-signer/releases/download/v0.1.14/bundlesigner-0.1.14.jar \
+            -o "$RUNNER_TEMP/bundlesigner.jar"
 
       - name: Generate BIN
         env:
@@ -42,26 +70,26 @@ jobs:
           KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
         run: |
-          mkdir -p output
-
-          java -jar bundlesigner.jar genbin \
+          java -jar "$RUNNER_TEMP/bundlesigner.jar" genbin \
             -v \
-            --bundle app-release.aab \
-            --bin output \
+            --bundle output/OBA.aab \
+            --bin output/OBA.bin \
             --v2-signing-enabled true \
-            --v3-signing-enabled false \
-            --ks signing-key.jks \
-            --ks-pass env:KS_PASSWORD \
+            --v3-signing-enabled true \
+            --ks "$RUNNER_TEMP/oba-release.jks" \
+            --ks-pass "pass:$KS_PASSWORD" \
             --ks-key-alias "$KEY_ALIAS" \
-            --key-pass env:KEY_PASSWORD
+            --key-pass "pass:$KEY_PASSWORD"
+          test -s output/OBA.bin
 
-      - name: Upload BIN artifact
+      - name: Upload BIN
         uses: actions/upload-artifact@v4
         with:
-          name: cafebazaar-bin
-          path: output/*.bin
+          name: OBA-CafeBazaar-BIN
+          path: output/OBA.bin
           if-no-files-found: error
+          retention-days: 30
 
       - name: Clean up signing key
         if: always()
-        run: rm -f signing-key.jks
+        run: rm -f "$RUNNER_TEMP/oba-release.jks"
