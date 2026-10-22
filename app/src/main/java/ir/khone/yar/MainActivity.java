@@ -294,14 +294,14 @@ public class MainActivity extends Activity {
         // Distinct but coordinated dashboard colors for the three utility buttons.
         Button[] toolButtons = {docsBtn, backupBtn, chartBtn};
         int[][] toolGradients = {
-            {Color.rgb(52, 152, 219), Color.rgb(35, 91, 175)},   // Documents: blue
-            {Color.rgb(151, 104, 218), Color.rgb(91, 63, 164)}, // Backup: violet
-            {Color.rgb(35, 190, 173), Color.rgb(16, 119, 133)} // Expenses: teal
+            {Color.rgb(82, 133, 190), Color.rgb(39, 72, 125)},   // Documents: refined steel blue
+            {Color.rgb(125, 105, 174), Color.rgb(69, 54, 119)},  // Backup: muted royal violet
+            {Color.rgb(43, 158, 151), Color.rgb(20, 99, 105)}   // Expenses: deep teal
         };
         int[] toolBorders = {
-            Color.rgb(177, 220, 255),
-            Color.rgb(218, 195, 255),
-            Color.rgb(170, 245, 231)
+            Color.rgb(190, 218, 247),
+            Color.rgb(207, 195, 239),
+            Color.rgb(174, 229, 221)
         };
         for (int i = 0; i < toolButtons.length; i++) {
             Button b = toolButtons[i];
