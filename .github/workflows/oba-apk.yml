@@ -36,12 +36,12 @@ jobs:
       - name: Upload debug APK for testing
         uses: actions/upload-artifact@v4
         with:
-          name: OBA-${{ github.ref_name }}-debug-APK
+          name: OBA-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build signed release APK when signing secrets are configured
+      - name: Build signed release APK and AAB when signing secrets are configured
         env:
           OBA_KEYSTORE_BASE64: ${{ secrets.OBA_KEYSTORE_BASE64 }}
           OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
@@ -59,14 +59,14 @@ jobs:
               gradle assembleRelease bundleRelease
             echo "HAS_SIGNED_RELEASE=true" >> "$GITHUB_ENV"
           else
-            echo "Signing secrets are not configured; skipping signed release APK."
+            echo "Signing secrets are not configured; skipping signed release APK and AAB."
           fi
 
       - name: Upload signed release APK
         if: env.HAS_SIGNED_RELEASE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: OBA-${{ github.ref_name }}-signed-release-APK
+          name: OBA-signed-release-APK
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
@@ -75,7 +75,7 @@ jobs:
         if: env.HAS_SIGNED_RELEASE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: OBA-${{ github.ref_name }}-signed-release-AAB
+          name: OBA-signed-release-AAB
           path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 14
