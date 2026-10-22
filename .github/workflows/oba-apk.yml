@@ -1,13 +1,14 @@
-name: OBA Android APK (latest source)
+name: OBA Android APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, release/bazaar, release/myket]
     paths:
       - 'app/**'
       - '*.gradle'
       - 'settings.gradle'
+      - 'gradle.properties'
       - '.github/workflows/oba-apk.yml'
 
 permissions:
@@ -19,19 +20,53 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
       - name: Build and test debug APK
         run: gradle testDebugUnitTest assembleDebug
-      - name: Upload debug APK
+
+      - name: Upload debug APK for testing
         uses: actions/upload-artifact@v4
         with:
-          name: OBA-latest-main-debug-APK
+          name: OBA-${{ github.ref_name }}-debug-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build signed release APK when signing secrets are configured
+        env:
+          OBA_KEYSTORE_BASE64: ${{ secrets.OBA_KEYSTORE_BASE64 }}
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -n "$OBA_KEYSTORE_BASE64" && -n "$OBA_KEYSTORE_PASSWORD" && -n "$OBA_KEY_ALIAS" && -n "$OBA_KEY_PASSWORD" ]]; then
+            KEYSTORE_PATH="$RUNNER_TEMP/oba-release.jks"
+            printf '%s' "$OBA_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            OBA_KEYSTORE_PATH="$KEYSTORE_PATH" \
+            OBA_KEYSTORE_PASSWORD="$OBA_KEYSTORE_PASSWORD" \
+            OBA_KEY_ALIAS="$OBA_KEY_ALIAS" \
+            OBA_KEY_PASSWORD="$OBA_KEY_PASSWORD" \
+              gradle assembleRelease
+            echo "HAS_SIGNED_RELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "Signing secrets are not configured; skipping signed release APK."
+          fi
+
+      - name: Upload signed release APK
+        if: env.HAS_SIGNED_RELEASE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: OBA-${{ github.ref_name }}-signed-release-APK
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
