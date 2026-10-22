@@ -291,12 +291,35 @@ public class MainActivity extends Activity {
         backupBtn.setOnClickListener(v -> showBackupOptions());
         Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 11);
         chartBtn.setOnClickListener(v -> showExpenseCharts());
-        for (Button b : new Button[]{docsBtn, backupBtn, chartBtn}) {
+        // Distinct but coordinated dashboard colors for the three utility buttons.
+        Button[] toolButtons = {docsBtn, backupBtn, chartBtn};
+        int[][] toolGradients = {
+            {Color.rgb(52, 152, 219), Color.rgb(35, 91, 175)},   // Documents: blue
+            {Color.rgb(151, 104, 218), Color.rgb(91, 63, 164)}, // Backup: violet
+            {Color.rgb(35, 190, 173), Color.rgb(16, 119, 133)} // Expenses: teal
+        };
+        int[] toolBorders = {
+            Color.rgb(177, 220, 255),
+            Color.rgb(218, 195, 255),
+            Color.rgb(170, 245, 231)
+        };
+        for (int i = 0; i < toolButtons.length; i++) {
+            Button b = toolButtons[i];
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, dp(50), 1);
             bp.setMargins(dp(3), dp(2), dp(3), dp(2));
             b.setMinHeight(dp(50));
             b.setPadding(dp(4), dp(2), dp(4), dp(2));
             b.setMaxLines(2);
+            b.setTextColor(Color.WHITE);
+            b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            GradientDrawable toolFace = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                toolGradients[i]
+            );
+            toolFace.setCornerRadius(dp(16));
+            toolFace.setStroke(dp(2), toolBorders[i]);
+            b.setBackground(toolFace);
+            b.setElevation(dp(4));
             toolsRow.addView(b, bp);
         }
         content.addView(toolsRow, lp(-1, -2, 0, 1, 0, 2));
