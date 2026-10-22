@@ -1,4 +1,4 @@
-name: Build OBA CafeBazaar AAB
+name: Build OBA CafeBazaar AAB and BIN
 
 on:
   workflow_dispatch:
@@ -67,14 +67,38 @@ jobs:
           cp app/build/outputs/bundle/release/app-release.aab output/OBA.aab
           test -s output/OBA.aab
 
-      - name: Upload AAB
+      - name: Generate CafeBazaar BIN
+        shell: bash
+        env:
+          OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
+          OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
+          OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/bundlesigner.jar" https://github.com/cafebazaar/bundle-signer/releases/download/v0.1.13/bundlesigner-0.1.13.jar
+          java -jar "$RUNNER_TEMP/bundlesigner.jar" genbin -v \
+            --bundle output/OBA.aab \
+            --bin output/ \
+            --v2-signing-enabled true \
+            --v3-signing-enabled false \
+            --ks "$RUNNER_TEMP/oba-release.jks" \
+            --ks-key-alias "$OBA_KEY_ALIAS" \
+            --ks-pass "pass:$OBA_KEYSTORE_PASSWORD" \
+            --key-pass "pass:$OBA_KEY_PASSWORD"
+          find output -maxdepth 1 -type f -name '*.bin' -print -quit | grep -q .
+          BIN_FILE="$(find output -maxdepth 1 -type f -name '*.bin' -print -quit)"
+          cp "$BIN_FILE" output/OBA.bin
+          test -s output/OBA.bin
+
+      - name: Upload AAB and BIN
         uses: actions/upload-artifact@v4
         with:
-          name: OBA-CafeBazaar-AAB
-          path: output/OBA.aab
+          name: OBA-CafeBazaar-AAB-BIN
+          path: |
+            output/OBA.aab
+            output/OBA.bin
           if-no-files-found: error
           retention-days: 30
 
       - name: Clean up signing key
         if: always()
-        run: rm -f "$RUNNER_TEMP/oba-release.jks"
+        run: rm -f "$RUNNER_TEMP/oba-release.jks" "$RUNNER_TEMP/bundlesigner.jar"
