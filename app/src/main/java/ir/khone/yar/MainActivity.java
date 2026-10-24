@@ -2,6 +2,14 @@ package ir.khone.yar;
 
 import android.Manifest;
 import android.app.Activity;
+import androidx.activity.ComponentActivity;
+import ir.cafebazaar.poolakey.Connection;
+import ir.cafebazaar.poolakey.Payment;
+import ir.cafebazaar.poolakey.config.PaymentConfiguration;
+import ir.cafebazaar.poolakey.config.SecurityCheck;
+import ir.cafebazaar.poolakey.request.PurchaseRequest;
+import ir.cafebazaar.poolakey.entity.PurchaseInfo;
+import kotlin.Unit;
 import android.app.AlertDialog;
 import android.app.AlarmManager;
 import android.app.DatePickerDialog;
@@ -47,12 +55,15 @@ import java.io.FileOutputStream;
 import org.json.JSONObject;
 import org.json.JSONException;
 
-public class MainActivity extends Activity {
+public class MainActivity extends ComponentActivity {
     private LinearLayout root, cards;
     private TextView status, recent, remindersView, inventoryView;
     private EditText reminderDraftInput;
     private AlertDialog reminderDraftDialog;
     private SharedPreferences prefs;
+    private Payment bazaarPayment;
+    private Connection bazaarConnection;
+    private boolean bazaarBillingConnected = false;
     private MediaPlayer reminderPreviewPlayer;
     private SpeechRecognizer recognizer;
     private boolean continuousExpenseListening = false;
@@ -121,6 +132,7 @@ public class MainActivity extends Activity {
             }
         });
         buildUi();
+        initBazaarBilling();
         // Restore scheduled text reminders with vibration notifications.
         ReminderReceiver.restore(this);
         // Voice wake-up by saying "OBA" is disabled; voice commands remain available from other controls.
@@ -138,6 +150,176 @@ public class MainActivity extends Activity {
             if (root != null) root.postDelayed(this::downloadVoskModelAutomatically, 800);
             else downloadVoskModelAutomatically();
         }
+    }
+
+    @Override protected void onDestroy() {
+        if (bazaarConnection != null) {
+            try { bazaarConnection.disconnect(); } catch (Exception ignored) {}
+        }
+        bazaarBillingConnected = false;
+        super.onDestroy();
+    }
+
+
+    private boolean isBazaarBillingConfigured() {
+        return BuildConfig.OBA_BAZAAR_PRODUCT_ID != null
+                && !BuildConfig.OBA_BAZAAR_PRODUCT_ID.trim().isEmpty()
+                && BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY != null
+                && !BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY.trim().isEmpty();
+    }
+
+    private void initBazaarBilling() {
+        if (!isBazaarBillingConfigured()) return;
+        try {
+            PaymentConfiguration configuration =
+                    new PaymentConfiguration(new SecurityCheck.Enable(BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY.trim()));
+            bazaarPayment = new Payment(this, configuration);
+            bazaarConnection = bazaarPayment.connect(callback -> {
+                callback.connectionSucceed(() -> {
+                    bazaarBillingConnected = true;
+                    runOnUiThread(this::restoreBazaarPurchaseSilently);
+                    return Unit.INSTANCE;
+                });
+                callback.connectionFailed(error -> {
+                    bazaarBillingConnected = false;
+                    return Unit.INSTANCE;
+                });
+                callback.disconnected(() -> {
+                    bazaarBillingConnected = false;
+                    return Unit.INSTANCE;
+                });
+                return Unit.INSTANCE;
+            });
+        } catch (Exception error) {
+            bazaarBillingConnected = false;
+        }
+    }
+
+    private void showBazaarPurchaseDialog() {
+        if (!isBazaarBillingConfigured()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("آماده‌سازی پرداخت کافه‌بازار")
+                    .setMessage("برای فعال‌کردن پرداخت، شناسهٔ محصول باید در پیشخان توسعه‌دهندگان کافه‌بازار ساخته شود و کلید عمومی RSA پرداخت در تنظیمات امن ساخت برنامه قرار بگیرد. تا آن زمان خرید غیرفعال می‌ماند.")
+                    .setPositiveButton("متوجه شدم", null)
+                    .show();
+            return;
+        }
+        if (!bazaarBillingConnected) {
+            new AlertDialog.Builder(this)
+                    .setTitle("اتصال به کافه‌بازار")
+                    .setMessage("اتصال پرداخت برقرار نیست. کافه‌بازار را نصب و به‌روز کن، اینترنت را بررسی کن و دوباره تلاش کن.")
+                    .setPositiveButton("باشه", null)
+                    .show();
+            return;
+        }
+        boolean premium = prefs.getBoolean("oba_bazaar_premium", false);
+        String message = premium
+                ? "نسخهٔ کامل روی این گوشی فعال است. می‌توانی خرید را دوباره از حساب کافه‌بازار بازیابی کنی."
+                : "با خرید یک‌بارهٔ نسخهٔ کامل، دسترسی به محصول تعریف‌شده در کافه‌بازار فعال می‌شود. مبلغ نهایی را کافه‌بازار نشان می‌دهد.";
+        new AlertDialog.Builder(this)
+                .setTitle("خرید از کافه‌بازار")
+                .setMessage(message)
+                .setPositiveButton(premium ? "بررسی خرید" : "خرید نسخهٔ کامل", (d, which) -> {
+                    if (premium) restoreBazaarPurchase(); else purchaseBazaarPremium();
+                })
+                .setNeutralButton("بازیابی خرید", (d, which) -> restoreBazaarPurchase())
+                .setNegativeButton("بستن", null)
+                .show();
+    }
+
+    private void purchaseBazaarPremium() {
+        if (bazaarPayment == null || !bazaarBillingConnected) {
+            Toast.makeText(this, "اتصال پرداخت آماده نیست.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        String payload = "oba-premium-" + java.util.UUID.randomUUID();
+        PurchaseRequest request = new PurchaseRequest(BuildConfig.OBA_BAZAAR_PRODUCT_ID, payload, null);
+        bazaarPayment.purchaseProduct(getActivityResultRegistry(), request, callback -> {
+            callback.purchaseFlowBegan(() -> {
+                runOnUiThread(() -> Toast.makeText(this, "فرایند خرید در کافه‌بازار آغاز شد.", Toast.LENGTH_SHORT).show());
+                return Unit.INSTANCE;
+            });
+            callback.failedToBeginFlow(error -> {
+                runOnUiThread(() -> Toast.makeText(this, "شروع پرداخت ممکن نشد: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            callback.purchaseSucceed(purchase -> {
+                boolean matchingProduct = BuildConfig.OBA_BAZAAR_PRODUCT_ID.equals(purchase.getProductId());
+                if (matchingProduct) {
+                    prefs.edit().putBoolean("oba_bazaar_premium", true).apply();
+                    runOnUiThread(() -> new AlertDialog.Builder(this)
+                            .setTitle("خرید موفق")
+                            .setMessage("خرید نسخهٔ کامل تأیید شد و روی این گوشی فعال شد.")
+                            .setPositiveButton("باشه", null).show());
+                } else {
+                    runOnUiThread(() -> Toast.makeText(this, "شناسهٔ محصول خریداری‌شده با محصول OBA مطابقت ندارد.", Toast.LENGTH_LONG).show());
+                }
+                return Unit.INSTANCE;
+            });
+            callback.purchaseCanceled(() -> {
+                runOnUiThread(() -> Toast.makeText(this, "خرید لغو شد؛ مبلغی از طرف OBA ثبت نشد.", Toast.LENGTH_SHORT).show());
+                return Unit.INSTANCE;
+            });
+            callback.purchaseFailed(error -> {
+                runOnUiThread(() -> Toast.makeText(this, "خرید ناموفق بود: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            return Unit.INSTANCE;
+        });
+    }
+
+    private void restoreBazaarPurchase() {
+        if (bazaarPayment == null || !bazaarBillingConnected) {
+            Toast.makeText(this, "اتصال پرداخت آماده نیست.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "در حال بررسی خریدهای کافه‌بازار…", Toast.LENGTH_SHORT).show();
+        bazaarPayment.getPurchasedProducts(callback -> {
+            callback.querySucceed(purchases -> {
+                boolean found = false;
+                for (PurchaseInfo purchase : purchases) {
+                    if (BuildConfig.OBA_BAZAAR_PRODUCT_ID.equals(purchase.getProductId())) {
+                        found = true;
+                        break;
+                    }
+                }
+                final boolean hasPremium = found;
+                prefs.edit().putBoolean("oba_bazaar_premium", hasPremium).apply();
+                runOnUiThread(() -> Toast.makeText(this,
+                        hasPremium ? "خرید تأیید شد؛ نسخهٔ کامل فعال است." : "خریدی برای محصول OBA در این حساب بازار پیدا نشد.",
+                        Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            callback.queryFailed(error -> {
+                runOnUiThread(() -> Toast.makeText(this, "بررسی خرید ناموفق بود: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            return Unit.INSTANCE;
+        });
+    }
+
+    private void restoreBazaarPurchaseSilently() {
+        if (bazaarPayment == null || !bazaarBillingConnected) return;
+        bazaarPayment.getPurchasedProducts(callback -> {
+            callback.querySucceed(purchases -> {
+                boolean found = false;
+                for (PurchaseInfo purchase : purchases) {
+                    if (BuildConfig.OBA_BAZAAR_PRODUCT_ID.equals(purchase.getProductId())) {
+                        found = true;
+                        break;
+                    }
+                }
+                prefs.edit().putBoolean("oba_bazaar_premium", found).apply();
+                return Unit.INSTANCE;
+            });
+            callback.queryFailed(error -> Unit.INSTANCE);
+            return Unit.INSTANCE;
+        });
+    }
+
+    private String safeBazaarError(Throwable error) {
+        if (error == null || error.getMessage() == null || error.getMessage().trim().isEmpty()) return "خطای نامشخص";
+        return error.getMessage();
     }
 
     @Override protected void onResume() {
@@ -257,6 +439,11 @@ public class MainActivity extends Activity {
         shoppingListButton.setMinHeight(dp(50));
         shoppingListButton.setOnClickListener(v -> showShoppingList());
         content.addView(shoppingListButton, lp(-1, -2, 0, 2, 0, 8));
+
+        Button bazaarButton = button("💳 خرید و فعال‌سازی نسخهٔ کامل", Color.rgb(232, 242, 255), dark, 16);
+        bazaarButton.setMinHeight(dp(50));
+        bazaarButton.setOnClickListener(v -> showBazaarPurchaseDialog());
+        content.addView(bazaarButton, lp(-1, -2, 0, 2, 0, 8));
 
         TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 18, dark, true);
         content.addView(categoryTitle, lp(-1,-2,0,2,0,4));
