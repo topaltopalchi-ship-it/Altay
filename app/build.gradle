@@ -1,8 +1,12 @@
 plugins { id 'com.android.application' }
 
+def bazaarProductId = (System.getenv("OBA_BAZAAR_PRODUCT_ID") ?: "oba_premium_lifetime").trim()
+def bazaarRsaPublicKey = (System.getenv("OBA_BAZAAR_RSA_PUBLIC_KEY") ?: "").replaceAll("\\s+", "")
+
 def releaseKeystorePath = System.getenv("OBA_KEYSTORE_PATH")
 
 android {
+    buildFeatures { buildConfig true }
     namespace 'ir.khone.yar'
     compileSdk 35
     defaultConfig {
@@ -11,6 +15,8 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0.0'
+        buildConfigField "String", "OBA_BAZAAR_PRODUCT_ID", "\"${bazaarProductId}\""
+        buildConfigField "String", "OBA_BAZAAR_RSA_PUBLIC_KEY", "\"${bazaarRsaPublicKey}\""
     }
 
     signingConfigs {
@@ -39,6 +45,8 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.activity:activity:1.10.1'
+    implementation 'com.github.cafebazaar.Poolakey:poolakey:2.2.0'
     implementation 'com.alphacephei:vosk-android:0.3.47'
     implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.21"
     testImplementation 'junit:junit:4.13.2'
