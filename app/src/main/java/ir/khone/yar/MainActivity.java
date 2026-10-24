@@ -776,9 +776,192 @@ public class MainActivity extends Activity {
 
     private void showBackupOptions() {
         new AlertDialog.Builder(this).setTitle("پشتیبان‌گیری")
-            .setItems(new String[]{"ساخت فایل پشتیبان", "بازیابی فایل پشتیبان"}, (d, which) -> {
-                if (which == 0) createBackup(); else chooseBackup();
+            .setItems(new String[]{"ساخت فایل پشتیبان", "بازیابی فایل پشتیبان", "☁️ پشتیبان ابری و حساب کاربری"}, (d, which) -> {
+                if (which == 0) createBackup();
+                else if (which == 1) chooseBackup();
+                else showCloudOptions();
             }).setNegativeButton("بستن", null).show();
+    }
+
+    private void showCloudOptions() {
+        String accountLabel = OBACloud.isSignedIn(this)
+            ? "حساب: " + OBACloud.userEmail(this)
+            : "هنوز وارد حساب نشده‌ای";
+        String[] options = OBACloud.isSignedIn(this)
+            ? new String[]{accountLabel, "☁️ ذخیره پشتیبان روی ابر", "☁️ بازیابی پشتیبان از ابر", "خروج از حساب"}
+            : new String[]{accountLabel, "ورود به حساب", "ساخت حساب جدید"};
+        new AlertDialog.Builder(this).setTitle("حساب و پشتیبان ابری")
+            .setItems(options, (d, which) -> {
+                if (OBACloud.isSignedIn(this)) {
+                    if (which == 1) uploadCloudBackup();
+                    else if (which == 2) downloadCloudBackup();
+                    else if (which == 3) {
+                        OBACloud.signOut(this);
+                        Toast.makeText(this, "از حساب خارج شدی.", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    if (which == 1) showCloudAuthDialog(false);
+                    else if (which == 2) showCloudAuthDialog(true);
+                }
+            }).setNegativeButton("بستن", null).show();
+    }
+
+    private void showCloudAuthDialog(boolean createAccount) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText email = new EditText(this);
+        email.setSingleLine(true);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setHint("ایمیل");
+        form.addView(email, lp(-1, -2, 0, 4, 0, 4));
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setHint("گذرواژه (حداقل ۶ نویسه)");
+        form.addView(password, lp(-1, -2, 0, 4, 0, 4));
+        EditText username = new EditText(this);
+        if (createAccount) {
+            username.setSingleLine(true);
+            username.setHint("نام کاربری اختیاری: حروف انگلیسی، عدد یا _");
+            form.addView(username, lp(-1, -2, 0, 4, 0, 4));
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(createAccount ? "ساخت حساب OBA" : "ورود به حساب OBA")
+            .setMessage("برای پشتیبان ابری، ایمیل و گذرواژهٔ حساب را وارد کن.")
+            .setView(form)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton(createAccount ? "ثبت‌نام" : "ورود", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String mail = email.getText().toString().trim();
+            String pass = password.getText().toString();
+            String name = createAccount ? username.getText().toString().trim() : "";
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches() || pass.length() < 6) {
+                Toast.makeText(this, "ایمیل معتبر و گذرواژه‌ای با حداقل ۶ نویسه وارد کن.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            dialog.dismiss();
+            Toast.makeText(this, "در حال ارتباط با سرور…", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                String message;
+                try {
+                    message = createAccount ? OBACloud.signUp(this, mail, pass, name) : OBACloud.signIn(this, mail, pass);
+                } catch (Exception e) {
+                    message = e.getMessage() == null ? "ارتباط با سرور انجام نشد." : e.getMessage();
+                }
+                final String result = message;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                    if (OBACloud.isSignedIn(this)) showCloudOptions();
+                });
+            }).start();
+        }));
+        dialog.show();
+    }
+
+    private JSONObject buildCloudBackup() throws Exception {
+        JSONObject json = new JSONObject();
+        json.put("app", "OBA");
+        json.put("version", 1);
+        JSONObject values = new JSONObject();
+        for (java.util.Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if ("wake_enabled".equals(key)) continue;
+            if (isValidBackupPreference(key, value)) values.put(key, value);
+        }
+        json.put("preferences", values);
+        return json;
+    }
+
+    private void uploadCloudBackup() {
+        if (!OBACloud.isSignedIn(this)) { showCloudAuthDialog(false); return; }
+        final JSONObject backup;
+        try { backup = buildCloudBackup(); }
+        catch (Exception e) {
+            Toast.makeText(this, "ساخت نسخه پشتیبان ممکن نشد.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "در حال ذخیره امن نسخه پشتیبان…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            String message;
+            try {
+                OBACloud.uploadBackup(this, backup);
+                message = "نسخه پشتیبان روی حساب ابری ذخیره شد.";
+            } catch (Exception e) {
+                message = e.getMessage() == null ? "ذخیره ابری انجام نشد." : e.getMessage();
+            }
+            final String result = message;
+            runOnUiThread(() -> Toast.makeText(this, result, Toast.LENGTH_LONG).show());
+        }).start();
+    }
+
+    private void downloadCloudBackup() {
+        if (!OBACloud.isSignedIn(this)) { showCloudAuthDialog(false); return; }
+        Toast.makeText(this, "در حال دریافت نسخه پشتیبان…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            JSONObject backup = null;
+            String error = null;
+            try { backup = OBACloud.downloadBackup(this); }
+            catch (Exception e) { error = e.getMessage() == null ? "دریافت پشتیبان انجام نشد." : e.getMessage(); }
+            final JSONObject result = backup;
+            final String problem = error;
+            runOnUiThread(() -> {
+                if (problem != null) {
+                    Toast.makeText(this, problem, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                applyCloudBackup(result);
+            });
+        }).start();
+    }
+
+    private void applyCloudBackup(JSONObject json) {
+        try {
+            if (json == null || !"OBA".equals(json.optString("app")) || json.optInt("version", -1) != 1
+                    || !(json.opt("preferences") instanceof JSONObject)) {
+                Toast.makeText(this, "نسخه پشتیبان ابری معتبر نیست؛ اطلاعات تغییر نکرد.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            JSONObject values = json.getJSONObject("preferences");
+            java.util.Iterator<String> check = values.keys();
+            while (check.hasNext()) {
+                String key = check.next();
+                if (!isValidBackupPreference(key, values.opt(key))) {
+                    Toast.makeText(this, "پشتیبان دارای داده نامعتبر است؛ اطلاعات فعلی تغییر نکرد.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+            }
+            new AlertDialog.Builder(this).setTitle("بازیابی پشتیبان ابری")
+                .setMessage("اطلاعات محلی فعلی با نسخه پشتیبان ابری جایگزین می‌شود. قبل از ادامه، در صورت نیاز از اطلاعات فعلی فایل پشتیبان بگیر.")
+                .setNegativeButton("انصراف", null)
+                .setPositiveButton("بازیابی", (d, w) -> {
+                    try {
+                        SharedPreferences.Editor editor = prefs.edit().clear();
+                        java.util.Iterator<String> keys = values.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            Object value = values.get(key);
+                            if (value instanceof String) editor.putString(key, (String) value);
+                            else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key))
+                                editor.putLong(key, ((Number) value).longValue());
+                            else if (key.startsWith("stock_")) editor.putInt(key, ((Number) value).intValue());
+                        }
+                        editor.apply();
+                        incomeTotal = prefs.getLong("income", 0);
+                        expenseTotal = prefs.getLong("expense", 0);
+                        entries.clear();
+                        loadEntries();
+                        refresh();
+                        Toast.makeText(this, "پشتیبان ابری بازیابی شد.", Toast.LENGTH_LONG).show();
+                    } catch (Exception e) {
+                        Toast.makeText(this, "بازیابی انجام نشد؛ اطلاعات فعلی را بررسی کن.", Toast.LENGTH_LONG).show();
+                    }
+                }).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "خواندن نسخه پشتیبان ممکن نشد.", Toast.LENGTH_LONG).show();
+        }
     }
 
     // Convert Gregorian dates to the Jalali (Solar Hijri) calendar for Persian display.
