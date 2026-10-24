@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-def bazaarProductId = (System.getenv("OBA_BAZAAR_PRODUCT_ID") ?: "oba_premium_lifetime").trim()
+def bazaarSubscriptionId = (System.getenv("OBA_BAZAAR_SUBSCRIPTION_ID") ?: "oba_premium_3_months").trim()
 def bazaarRsaPublicKey = (System.getenv("OBA_BAZAAR_RSA_PUBLIC_KEY") ?: "").replaceAll("\\s+", "")
 
 def releaseKeystorePath = System.getenv("OBA_KEYSTORE_PATH")
@@ -15,7 +15,7 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0.0'
-        buildConfigField "String", "OBA_BAZAAR_PRODUCT_ID", "\"${bazaarProductId}\""
+        buildConfigField "String", "OBA_BAZAAR_SUBSCRIPTION_ID", "\"${bazaarSubscriptionId}\""
         buildConfigField "String", "OBA_BAZAAR_RSA_PUBLIC_KEY", "\"${bazaarRsaPublicKey}\""
     }
 
