@@ -187,6 +187,41 @@ public class MainActivity extends ComponentActivity {
         }
     }
 
+    private static final int FREE_USES_PER_FEATURE = 20;
+
+    /**
+     * Each dashboard feature has its own local free-use counter. Data remains on-device.
+     * An active Bazaar subscription bypasses the counters; the 21st attempt opens the
+     * subscription prompt without running the requested feature.
+     */
+    private void runLimitedFeature(String featureKey, String featureLabel, Runnable action) {
+        if (prefs == null) {
+            action.run();
+            return;
+        }
+        if (prefs.getBoolean("oba_bazaar_subscription_active", false)) {
+            action.run();
+            return;
+        }
+        String counterKey = "oba_free_usage_" + featureKey;
+        int used = Math.max(0, prefs.getInt(counterKey, 0));
+        if (used >= FREE_USES_PER_FEATURE) {
+            showFeatureSubscriptionRequired(featureLabel);
+            return;
+        }
+        prefs.edit().putInt(counterKey, used + 1).apply();
+        action.run();
+    }
+
+    private void showFeatureSubscriptionRequired(String featureLabel) {
+        new AlertDialog.Builder(this)
+                .setTitle("پایان استفادهٔ رایگان")
+                .setMessage("برای «" + featureLabel + "» ۲۰ بار استفادهٔ رایگان داشتی. برای استفادهٔ بی‌محدودیت از همهٔ امکانات OBA، اشتراک سه‌ماهه را تهیه کن.")
+                .setPositiveButton("مشاهده و خرید اشتراک", (dialog, which) -> showBazaarPurchaseDialog())
+                .setNegativeButton("فعلاً نه", null)
+                .show();
+    }
+
     private void showBazaarPurchaseDialog() {
         if (!isBazaarBillingConfigured()) {
             new AlertDialog.Builder(this)
@@ -367,7 +402,7 @@ public class MainActivity extends ComponentActivity {
         continuousExpenseButton.setBackground(voiceFace);
         continuousExpenseButton.setElevation(dp(7));
         continuousExpenseButton.setMinHeight(dp(62));
-        continuousExpenseButton.setOnClickListener(v -> toggleContinuousExpenseListening());
+        continuousExpenseButton.setOnClickListener(v -> { if (continuousExpenseListening) toggleContinuousExpenseListening(); else runLimitedFeature("voice_expense", "ثبت صوتی هزینه", () -> toggleContinuousExpenseListening()); });
         content.addView(continuousExpenseButton, lp(-1, -2, 0, 3, 0, 6));
 
         TextView transcriptLabel = text("متن شنیده‌شده و فهرست موقت هزینه‌ها", 15, dark, true);
@@ -404,10 +439,10 @@ public class MainActivity extends ComponentActivity {
         LinearLayout voiceReviewRow = new LinearLayout(this);
         voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
         commitContinuousButton = button("تأیید و ثبت همه", Color.WHITE, dark, 13);
-        commitContinuousButton.setOnClickListener(v -> commitPendingVoiceExpenses());
+        commitContinuousButton.setOnClickListener(v -> runLimitedFeature("voice_expense_save", "تأیید و ثبت هزینه‌های صوتی", () -> commitPendingVoiceExpenses()));
         commitContinuousButton.setVisibility(View.GONE);
         Button clearContinuousButton = button("پاک‌کردن فهرست", Color.WHITE, dark, 13);
-        clearContinuousButton.setOnClickListener(v -> clearPendingVoiceExpenses());
+        clearContinuousButton.setOnClickListener(v -> runLimitedFeature("voice_expense_clear", "پاک‌کردن فهرست صوتی", () -> clearPendingVoiceExpenses()));
         voiceReviewRow.addView(commitContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         voiceReviewRow.addView(clearContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         content.addView(voiceReviewRow, lp(-1, -2, 0, 0, 0, 10));
@@ -424,12 +459,12 @@ public class MainActivity extends ComponentActivity {
         budgetFace.setStroke(dp(2), Color.rgb(255, 190, 205));
         budgetButton.setBackground(budgetFace);
         budgetButton.setElevation(dp(5));
-        budgetButton.setOnClickListener(v -> showBudgetDialog());
+        budgetButton.setOnClickListener(v -> runLimitedFeature("budget", "بودجه", () -> showBudgetDialog()));
         content.addView(budgetButton, lp(-1, -2, 0, 2, 0, 8));
 
         Button shoppingListButton = button("🛒 لیست خرید", Color.rgb(221, 245, 232), dark, 17);
         shoppingListButton.setMinHeight(dp(50));
-        shoppingListButton.setOnClickListener(v -> showShoppingList());
+        shoppingListButton.setOnClickListener(v -> runLimitedFeature("shopping_list", "لیست خرید", () -> showShoppingList()));
         content.addView(shoppingListButton, lp(-1, -2, 0, 2, 0, 8));
 
         Button bazaarButton = button("💳 خرید و فعال‌سازی نسخهٔ کامل", Color.rgb(232, 242, 255), dark, 16);
@@ -450,7 +485,7 @@ public class MainActivity extends ComponentActivity {
                 final String category = categoryButtons[j][1];
                 Button categoryButton = button(categoryButtons[j][0], Color.WHITE, dark, 15);
                 categoryButton.setMinHeight(dp(42));
-                categoryButton.setOnClickListener(v -> showCategorySubgroups(category));
+                categoryButton.setOnClickListener(v -> runLimitedFeature("category_" + category, "دسته‌بندی " + category, () -> showCategorySubgroups(category)));
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(44), 1);
                 p.setMargins(dp(3), dp(2), dp(3), dp(2));
                 row.addView(categoryButton, p);
@@ -465,11 +500,11 @@ public class MainActivity extends ComponentActivity {
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 11);
-        docsBtn.setOnClickListener(v -> showHomeDocuments());
+        docsBtn.setOnClickListener(v -> runLimitedFeature("home_documents", "مدارک خانه", () -> showHomeDocuments()));
         Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 11);
-        backupBtn.setOnClickListener(v -> showBackupOptions());
+        backupBtn.setOnClickListener(v -> runLimitedFeature("local_backup", "پشتیبان محلی", () -> showBackupOptions()));
         Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 11);
-        chartBtn.setOnClickListener(v -> showExpenseCharts());
+        chartBtn.setOnClickListener(v -> runLimitedFeature("expense_charts", "گزارش هزینه‌ها", () -> showExpenseCharts()));
         // Distinct but coordinated dashboard colors for the three utility buttons.
         Button[] toolButtons = {docsBtn, backupBtn, chartBtn};
         int[][] toolGradients = {
@@ -504,11 +539,11 @@ public class MainActivity extends ComponentActivity {
         content.addView(toolsRow, lp(-1, -2, 0, 1, 0, 2));
         Button calendarBtn = button("🗓️ تقویم و آرشیو خریدها", Color.rgb(224, 240, 255), dark, 15);
         calendarBtn.setMinHeight(dp(48));
-        calendarBtn.setOnClickListener(v -> showPurchaseCenter());
+        calendarBtn.setOnClickListener(v -> runLimitedFeature("calendar_archive", "تقویم و آرشیو خریدها", () -> showPurchaseCenter()));
         content.addView(calendarBtn, lp(-1, -2, 0, 2, 0, 6));
         Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
         smartBtn.setMinHeight(dp(44));
-        smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
+        smartBtn.setOnClickListener(v -> runLimitedFeature("smart_analysis", "تحلیل هوشمند هزینه‌ها", () -> showSmartExpenseAnalysis()));
         content.addView(smartBtn, lp(-1, -2, 0, 2, 0, 4));
         // Keep every home-screen action reachable on short displays by scrolling the content.
         ScrollView homeScroll = new ScrollView(this);
