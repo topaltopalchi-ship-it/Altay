@@ -154,8 +154,8 @@ public class MainActivity extends ComponentActivity {
 
 
     private boolean isBazaarBillingConfigured() {
-        return BuildConfig.OBA_BAZAAR_PRODUCT_ID != null
-                && !BuildConfig.OBA_BAZAAR_PRODUCT_ID.trim().isEmpty()
+        return BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID != null
+                && !BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.trim().isEmpty()
                 && BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY != null
                 && !BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY.trim().isEmpty();
     }
@@ -204,31 +204,31 @@ public class MainActivity extends ComponentActivity {
                     .show();
             return;
         }
-        boolean premium = prefs.getBoolean("oba_bazaar_premium", false);
+        boolean premium = prefs.getBoolean("oba_bazaar_subscription_active", false);
         String message = premium
                 ? "نسخهٔ کامل روی این گوشی فعال است. می‌توانی خرید را دوباره از حساب کافه‌بازار بازیابی کنی."
-                : "با خرید یک‌بارهٔ نسخهٔ کامل، دسترسی به محصول تعریف‌شده در کافه‌بازار فعال می‌شود. مبلغ نهایی را کافه‌بازار نشان می‌دهد.";
+                : "با با تهیهٔ اشتراک سه‌ماههٔ نسخهٔ کامل، دسترسی تا پایان دورهٔ اشتراک فعال می‌شود. مبلغ نهایی را کافه‌بازار نشان می‌دهد.";
         new AlertDialog.Builder(this)
                 .setTitle("خرید از کافه‌بازار")
                 .setMessage(message)
-                .setPositiveButton(premium ? "بررسی خرید" : "خرید نسخهٔ کامل", (d, which) -> {
-                    if (premium) restoreBazaarPurchase(); else purchaseBazaarPremium();
+                .setPositiveButton(premium ? "بررسی اشتراک" : "خرید اشتراک سه‌ماهه", (d, which) -> {
+                    if (premium) restoreBazaarPurchase(); else subscribeBazaarPremium();
                 })
-                .setNeutralButton("بازیابی خرید", (d, which) -> restoreBazaarPurchase())
+                .setNeutralButton("بازیابی اشتراک", (d, which) -> restoreBazaarPurchase())
                 .setNegativeButton("بستن", null)
                 .show();
     }
 
-    private void purchaseBazaarPremium() {
+    private void subscribeBazaarPremium() {
         if (bazaarPayment == null || !bazaarBillingConnected) {
             Toast.makeText(this, "اتصال پرداخت آماده نیست.", Toast.LENGTH_LONG).show();
             return;
         }
         String payload = "oba-premium-" + java.util.UUID.randomUUID();
-        PurchaseRequest request = new PurchaseRequest(BuildConfig.OBA_BAZAAR_PRODUCT_ID, payload, null);
-        bazaarPayment.purchaseProduct(getActivityResultRegistry(), request, callback -> {
+        PurchaseRequest request = new PurchaseRequest(BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID, payload, null);
+        bazaarPayment.subscribeProduct(getActivityResultRegistry(), request, callback -> {
             callback.purchaseFlowBegan(() -> {
-                runOnUiThread(() -> Toast.makeText(this, "فرایند خرید در کافه‌بازار آغاز شد.", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(this, "فرایند خرید اشتراک در کافه‌بازار آغاز شد.", Toast.LENGTH_SHORT).show());
                 return Unit.INSTANCE;
             });
             callback.failedToBeginFlow(error -> {
@@ -236,12 +236,12 @@ public class MainActivity extends ComponentActivity {
                 return Unit.INSTANCE;
             });
             callback.purchaseSucceed(purchase -> {
-                boolean matchingProduct = BuildConfig.OBA_BAZAAR_PRODUCT_ID.equals(purchase.getProductId());
+                boolean matchingProduct = BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.equals(purchase.getProductId());
                 if (matchingProduct) {
-                    prefs.edit().putBoolean("oba_bazaar_premium", true).apply();
+                    prefs.edit().putBoolean("oba_bazaar_subscription_active", true).apply();
                     runOnUiThread(() -> new AlertDialog.Builder(this)
-                            .setTitle("خرید موفق")
-                            .setMessage("خرید نسخهٔ کامل تأیید شد و روی این گوشی فعال شد.")
+                            .setTitle("اشتراک فعال شد")
+                            .setMessage("خرید اشتراک سه‌ماهه تأیید شد و روی این گوشی فعال شد.")
                             .setPositiveButton("باشه", null).show());
                 } else {
                     runOnUiThread(() -> Toast.makeText(this, "شناسهٔ محصول خریداری‌شده با محصول OBA مطابقت ندارد.", Toast.LENGTH_LONG).show());
@@ -249,7 +249,7 @@ public class MainActivity extends ComponentActivity {
                 return Unit.INSTANCE;
             });
             callback.purchaseCanceled(() -> {
-                runOnUiThread(() -> Toast.makeText(this, "خرید لغو شد؛ مبلغی از طرف OBA ثبت نشد.", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(this, "خرید اشتراک لغو شد؛ پرداختی از طرف OBA ثبت نشد.", Toast.LENGTH_SHORT).show());
                 return Unit.INSTANCE;
             });
             callback.purchaseFailed(error -> {
@@ -265,25 +265,25 @@ public class MainActivity extends ComponentActivity {
             Toast.makeText(this, "اتصال پرداخت آماده نیست.", Toast.LENGTH_LONG).show();
             return;
         }
-        Toast.makeText(this, "در حال بررسی خریدهای کافه‌بازار…", Toast.LENGTH_SHORT).show();
-        bazaarPayment.getPurchasedProducts(callback -> {
+        Toast.makeText(this, "در حال بررسی اشتراک‌های کافه‌بازار…", Toast.LENGTH_SHORT).show();
+        bazaarPayment.getSubscribedProducts(callback -> {
             callback.querySucceed(purchases -> {
                 boolean found = false;
                 for (PurchaseInfo purchase : purchases) {
-                    if (BuildConfig.OBA_BAZAAR_PRODUCT_ID.equals(purchase.getProductId())) {
+                    if (BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.equals(purchase.getProductId())) {
                         found = true;
                         break;
                     }
                 }
                 final boolean hasPremium = found;
-                prefs.edit().putBoolean("oba_bazaar_premium", hasPremium).apply();
+                prefs.edit().putBoolean("oba_bazaar_subscription_active", hasPremium).apply();
                 runOnUiThread(() -> Toast.makeText(this,
-                        hasPremium ? "خرید تأیید شد؛ نسخهٔ کامل فعال است." : "خریدی برای محصول OBA در این حساب بازار پیدا نشد.",
+                        hasPremium ? "اشتراک فعال است؛ دسترسی نسخهٔ کامل برقرار است." : "اشتراک فعالی برای OBA در این حساب بازار پیدا نشد.",
                         Toast.LENGTH_LONG).show());
                 return Unit.INSTANCE;
             });
             callback.queryFailed(error -> {
-                runOnUiThread(() -> Toast.makeText(this, "بررسی خرید ناموفق بود: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                runOnUiThread(() -> Toast.makeText(this, "بررسی اشتراک ناموفق بود: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
                 return Unit.INSTANCE;
             });
             return Unit.INSTANCE;
@@ -292,16 +292,16 @@ public class MainActivity extends ComponentActivity {
 
     private void restoreBazaarPurchaseSilently() {
         if (bazaarPayment == null || !bazaarBillingConnected) return;
-        bazaarPayment.getPurchasedProducts(callback -> {
+        bazaarPayment.getSubscribedProducts(callback -> {
             callback.querySucceed(purchases -> {
                 boolean found = false;
                 for (PurchaseInfo purchase : purchases) {
-                    if (BuildConfig.OBA_BAZAAR_PRODUCT_ID.equals(purchase.getProductId())) {
+                    if (BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.equals(purchase.getProductId())) {
                         found = true;
                         break;
                     }
                 }
-                prefs.edit().putBoolean("oba_bazaar_premium", found).apply();
+                prefs.edit().putBoolean("oba_bazaar_subscription_active", found).apply();
                 return Unit.INSTANCE;
             });
             callback.queryFailed(error -> Unit.INSTANCE);
