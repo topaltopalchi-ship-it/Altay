@@ -2,6 +2,14 @@ package ir.khone.yar;
 
 import android.Manifest;
 import android.app.Activity;
+import androidx.activity.ComponentActivity;
+import ir.cafebazaar.poolakey.Connection;
+import ir.cafebazaar.poolakey.Payment;
+import ir.cafebazaar.poolakey.config.PaymentConfiguration;
+import ir.cafebazaar.poolakey.config.SecurityCheck;
+import ir.cafebazaar.poolakey.request.PurchaseRequest;
+import ir.cafebazaar.poolakey.entity.PurchaseInfo;
+import kotlin.Unit;
 import android.app.AlertDialog;
 import android.app.AlarmManager;
 import android.app.DatePickerDialog;
@@ -47,12 +55,15 @@ import java.io.FileOutputStream;
 import org.json.JSONObject;
 import org.json.JSONException;
 
-public class MainActivity extends Activity {
+public class MainActivity extends ComponentActivity {
     private LinearLayout root, cards;
     private TextView status, recent, remindersView, inventoryView;
     private EditText reminderDraftInput;
     private AlertDialog reminderDraftDialog;
     private SharedPreferences prefs;
+    private Payment bazaarPayment;
+    private Connection bazaarConnection;
+    private boolean bazaarBillingConnected = false;
     private MediaPlayer reminderPreviewPlayer;
     private SpeechRecognizer recognizer;
     private boolean continuousExpenseListening = false;
@@ -121,6 +132,7 @@ public class MainActivity extends Activity {
             }
         });
         buildUi();
+        initBazaarBilling();
         // Restore scheduled text reminders with vibration notifications.
         ReminderReceiver.restore(this);
         // Voice wake-up by saying "OBA" is disabled; voice commands remain available from other controls.
@@ -138,6 +150,203 @@ public class MainActivity extends Activity {
             if (root != null) root.postDelayed(this::downloadVoskModelAutomatically, 800);
             else downloadVoskModelAutomatically();
         }
+    }
+
+
+    private boolean isBazaarBillingConfigured() {
+        return BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID != null
+                && !BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.trim().isEmpty()
+                && BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY != null
+                && !BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY.trim().isEmpty();
+    }
+
+    private void initBazaarBilling() {
+        if (!isBazaarBillingConfigured()) return;
+        try {
+            PaymentConfiguration configuration =
+                    new PaymentConfiguration(new SecurityCheck.Enable(BuildConfig.OBA_BAZAAR_RSA_PUBLIC_KEY.trim()));
+            bazaarPayment = new Payment(this, configuration);
+            bazaarConnection = bazaarPayment.connect(callback -> {
+                callback.connectionSucceed(() -> {
+                    bazaarBillingConnected = true;
+                    runOnUiThread(this::restoreBazaarPurchaseSilently);
+                    return Unit.INSTANCE;
+                });
+                callback.connectionFailed(error -> {
+                    bazaarBillingConnected = false;
+                    return Unit.INSTANCE;
+                });
+                callback.disconnected(() -> {
+                    bazaarBillingConnected = false;
+                    return Unit.INSTANCE;
+                });
+                return Unit.INSTANCE;
+            });
+        } catch (Exception error) {
+            bazaarBillingConnected = false;
+        }
+    }
+
+    private static final int FREE_USES_PER_FEATURE = 20;
+
+    /**
+     * Each dashboard feature has its own local free-use counter. Data remains on-device.
+     * An active Bazaar subscription bypasses the counters; the 21st attempt opens the
+     * subscription prompt without running the requested feature.
+     */
+    private void runLimitedFeature(String featureKey, String featureLabel, Runnable action) {
+        if (prefs == null) {
+            action.run();
+            return;
+        }
+        if (prefs.getBoolean("oba_bazaar_subscription_active", false)) {
+            action.run();
+            return;
+        }
+        String counterKey = "oba_free_usage_" + featureKey;
+        int used = Math.max(0, prefs.getInt(counterKey, 0));
+        if (used >= FREE_USES_PER_FEATURE) {
+            showFeatureSubscriptionRequired(featureLabel);
+            return;
+        }
+        prefs.edit().putInt(counterKey, used + 1).apply();
+        action.run();
+    }
+
+    private void showFeatureSubscriptionRequired(String featureLabel) {
+        new AlertDialog.Builder(this)
+                .setTitle("پایان استفادهٔ رایگان")
+                .setMessage("برای «" + featureLabel + "» ۲۰ بار استفادهٔ رایگان داشتی. برای استفادهٔ بی‌محدودیت از همهٔ امکانات OBA، اشتراک سه‌ماهه را تهیه کن.")
+                .setPositiveButton("مشاهده و خرید اشتراک", (dialog, which) -> showBazaarPurchaseDialog())
+                .setNegativeButton("فعلاً نه", null)
+                .show();
+    }
+
+    private void showBazaarPurchaseDialog() {
+        if (!isBazaarBillingConfigured()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("آماده‌سازی پرداخت کافه‌بازار")
+                    .setMessage("برای فعال‌کردن پرداخت، شناسهٔ محصول باید در پیشخان توسعه‌دهندگان کافه‌بازار ساخته شود و کلید عمومی RSA پرداخت در تنظیمات امن ساخت برنامه قرار بگیرد. تا آن زمان خرید غیرفعال می‌ماند.")
+                    .setPositiveButton("متوجه شدم", null)
+                    .show();
+            return;
+        }
+        if (!bazaarBillingConnected) {
+            new AlertDialog.Builder(this)
+                    .setTitle("اتصال به کافه‌بازار")
+                    .setMessage("اتصال پرداخت برقرار نیست. کافه‌بازار را نصب و به‌روز کن، اینترنت را بررسی کن و دوباره تلاش کن.")
+                    .setPositiveButton("باشه", null)
+                    .show();
+            return;
+        }
+        boolean premium = prefs.getBoolean("oba_bazaar_subscription_active", false);
+        String message = premium
+                ? "نسخهٔ کامل روی این گوشی فعال است. می‌توانی خرید را دوباره از حساب کافه‌بازار بازیابی کنی."
+                : "با تهیهٔ اشتراک سه‌ماههٔ نسخهٔ کامل، دسترسی تا پایان دورهٔ اشتراک فعال می‌شود. مبلغ نهایی را کافه‌بازار نشان می‌دهد.";
+        new AlertDialog.Builder(this)
+                .setTitle("خرید از کافه‌بازار")
+                .setMessage(message)
+                .setPositiveButton(premium ? "بررسی اشتراک" : "خرید اشتراک سه‌ماهه", (d, which) -> {
+                    if (premium) restoreBazaarPurchase(); else subscribeBazaarPremium();
+                })
+                .setNeutralButton("بازیابی اشتراک", (d, which) -> restoreBazaarPurchase())
+                .setNegativeButton("بستن", null)
+                .show();
+    }
+
+    private void subscribeBazaarPremium() {
+        if (bazaarPayment == null || !bazaarBillingConnected) {
+            Toast.makeText(this, "اتصال پرداخت آماده نیست.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        String payload = "oba-premium-" + java.util.UUID.randomUUID();
+        PurchaseRequest request = new PurchaseRequest(BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID, payload, null);
+        bazaarPayment.subscribeProduct(getActivityResultRegistry(), request, callback -> {
+            callback.purchaseFlowBegan(() -> {
+                runOnUiThread(() -> Toast.makeText(this, "فرایند خرید اشتراک در کافه‌بازار آغاز شد.", Toast.LENGTH_SHORT).show());
+                return Unit.INSTANCE;
+            });
+            callback.failedToBeginFlow(error -> {
+                runOnUiThread(() -> Toast.makeText(this, "شروع پرداخت ممکن نشد: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            callback.purchaseSucceed(purchase -> {
+                boolean matchingProduct = BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.equals(purchase.getProductId());
+                if (matchingProduct) {
+                    prefs.edit().putBoolean("oba_bazaar_subscription_active", true).apply();
+                    runOnUiThread(() -> new AlertDialog.Builder(this)
+                            .setTitle("اشتراک فعال شد")
+                            .setMessage("اشتراک سه‌ماهه با موفقیت ثبت شد و دسترسی نسخهٔ کامل فعال شد.")
+                            .setPositiveButton("باشه", null).show());
+                } else {
+                    runOnUiThread(() -> Toast.makeText(this, "شناسهٔ محصول خریداری‌شده با محصول OBA مطابقت ندارد.", Toast.LENGTH_LONG).show());
+                }
+                return Unit.INSTANCE;
+            });
+            callback.purchaseCanceled(() -> {
+                runOnUiThread(() -> Toast.makeText(this, "خرید اشتراک لغو شد؛ پرداختی از طرف OBA ثبت نشد.", Toast.LENGTH_SHORT).show());
+                return Unit.INSTANCE;
+            });
+            callback.purchaseFailed(error -> {
+                runOnUiThread(() -> Toast.makeText(this, "خرید ناموفق بود: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            return Unit.INSTANCE;
+        });
+    }
+
+    private void restoreBazaarPurchase() {
+        if (bazaarPayment == null || !bazaarBillingConnected) {
+            Toast.makeText(this, "اتصال پرداخت آماده نیست.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "در حال بررسی اشتراک‌های کافه‌بازار…", Toast.LENGTH_SHORT).show();
+        bazaarPayment.getSubscribedProducts(callback -> {
+            callback.querySucceed(purchases -> {
+                boolean found = false;
+                for (PurchaseInfo purchase : purchases) {
+                    if (BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.equals(purchase.getProductId())) {
+                        found = true;
+                        break;
+                    }
+                }
+                final boolean hasPremium = found;
+                prefs.edit().putBoolean("oba_bazaar_subscription_active", hasPremium).apply();
+                runOnUiThread(() -> Toast.makeText(this,
+                        hasPremium ? "اشتراک فعال است؛ دسترسی نسخهٔ کامل برقرار است." : "اشتراک فعالی برای OBA در این حساب بازار پیدا نشد.",
+                        Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            callback.queryFailed(error -> {
+                runOnUiThread(() -> Toast.makeText(this, "بررسی اشتراک ناموفق بود: " + safeBazaarError(error), Toast.LENGTH_LONG).show());
+                return Unit.INSTANCE;
+            });
+            return Unit.INSTANCE;
+        });
+    }
+
+    private void restoreBazaarPurchaseSilently() {
+        if (bazaarPayment == null || !bazaarBillingConnected) return;
+        bazaarPayment.getSubscribedProducts(callback -> {
+            callback.querySucceed(purchases -> {
+                boolean found = false;
+                for (PurchaseInfo purchase : purchases) {
+                    if (BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID.equals(purchase.getProductId())) {
+                        found = true;
+                        break;
+                    }
+                }
+                prefs.edit().putBoolean("oba_bazaar_subscription_active", found).apply();
+                return Unit.INSTANCE;
+            });
+            callback.queryFailed(error -> Unit.INSTANCE);
+            return Unit.INSTANCE;
+        });
+    }
+
+    private String safeBazaarError(Throwable error) {
+        if (error == null || error.getMessage() == null || error.getMessage().trim().isEmpty()) return "خطای نامشخص";
+        return error.getMessage();
     }
 
     @Override protected void onResume() {
@@ -193,7 +402,7 @@ public class MainActivity extends Activity {
         continuousExpenseButton.setBackground(voiceFace);
         continuousExpenseButton.setElevation(dp(7));
         continuousExpenseButton.setMinHeight(dp(62));
-        continuousExpenseButton.setOnClickListener(v -> toggleContinuousExpenseListening());
+        continuousExpenseButton.setOnClickListener(v -> { if (continuousExpenseListening) toggleContinuousExpenseListening(); else runLimitedFeature("voice_expense", "ثبت صوتی هزینه", () -> toggleContinuousExpenseListening()); });
         content.addView(continuousExpenseButton, lp(-1, -2, 0, 3, 0, 6));
 
         TextView transcriptLabel = text("متن شنیده‌شده و فهرست موقت هزینه‌ها", 15, dark, true);
@@ -230,10 +439,10 @@ public class MainActivity extends Activity {
         LinearLayout voiceReviewRow = new LinearLayout(this);
         voiceReviewRow.setOrientation(LinearLayout.HORIZONTAL);
         commitContinuousButton = button("تأیید و ثبت همه", Color.WHITE, dark, 13);
-        commitContinuousButton.setOnClickListener(v -> commitPendingVoiceExpenses());
+        commitContinuousButton.setOnClickListener(v -> runLimitedFeature("voice_expense_save", "تأیید و ثبت هزینه‌های صوتی", () -> commitPendingVoiceExpenses()));
         commitContinuousButton.setVisibility(View.GONE);
         Button clearContinuousButton = button("پاک‌کردن فهرست", Color.WHITE, dark, 13);
-        clearContinuousButton.setOnClickListener(v -> clearPendingVoiceExpenses());
+        clearContinuousButton.setOnClickListener(v -> runLimitedFeature("voice_expense_clear", "پاک‌کردن فهرست صوتی", () -> clearPendingVoiceExpenses()));
         voiceReviewRow.addView(commitContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         voiceReviewRow.addView(clearContinuousButton, new LinearLayout.LayoutParams(0, dp(46), 1));
         content.addView(voiceReviewRow, lp(-1, -2, 0, 0, 0, 10));
@@ -250,13 +459,18 @@ public class MainActivity extends Activity {
         budgetFace.setStroke(dp(2), Color.rgb(255, 190, 205));
         budgetButton.setBackground(budgetFace);
         budgetButton.setElevation(dp(5));
-        budgetButton.setOnClickListener(v -> showBudgetDialog());
+        budgetButton.setOnClickListener(v -> runLimitedFeature("budget", "بودجه", () -> showBudgetDialog()));
         content.addView(budgetButton, lp(-1, -2, 0, 2, 0, 8));
 
         Button shoppingListButton = button("🛒 لیست خرید", Color.rgb(221, 245, 232), dark, 17);
         shoppingListButton.setMinHeight(dp(50));
-        shoppingListButton.setOnClickListener(v -> showShoppingList());
+        shoppingListButton.setOnClickListener(v -> runLimitedFeature("shopping_list", "لیست خرید", () -> showShoppingList()));
         content.addView(shoppingListButton, lp(-1, -2, 0, 2, 0, 8));
+
+        Button bazaarButton = button("💳 خرید و فعال‌سازی نسخهٔ کامل", Color.rgb(232, 242, 255), dark, 16);
+        bazaarButton.setMinHeight(dp(50));
+        bazaarButton.setOnClickListener(v -> showBazaarPurchaseDialog());
+        content.addView(bazaarButton, lp(-1, -2, 0, 2, 0, 8));
 
         TextView categoryTitle = text("دسته‌بندی هزینه‌ها", 18, dark, true);
         content.addView(categoryTitle, lp(-1,-2,0,2,0,4));
@@ -271,7 +485,7 @@ public class MainActivity extends Activity {
                 final String category = categoryButtons[j][1];
                 Button categoryButton = button(categoryButtons[j][0], Color.WHITE, dark, 15);
                 categoryButton.setMinHeight(dp(42));
-                categoryButton.setOnClickListener(v -> showCategorySubgroups(category));
+                categoryButton.setOnClickListener(v -> runLimitedFeature("category_" + category, "دسته‌بندی " + category, () -> showCategorySubgroups(category)));
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(44), 1);
                 p.setMargins(dp(3), dp(2), dp(3), dp(2));
                 row.addView(categoryButton, p);
@@ -286,11 +500,11 @@ public class MainActivity extends Activity {
         LinearLayout toolsRow = new LinearLayout(this);
         toolsRow.setOrientation(LinearLayout.HORIZONTAL);
         Button docsBtn = button("📄 مدارک", Color.WHITE, dark, 11);
-        docsBtn.setOnClickListener(v -> showHomeDocuments());
+        docsBtn.setOnClickListener(v -> runLimitedFeature("home_documents", "مدارک خانه", () -> showHomeDocuments()));
         Button backupBtn = button("💾 پشتیبان", Color.WHITE, dark, 11);
-        backupBtn.setOnClickListener(v -> showBackupOptions());
+        backupBtn.setOnClickListener(v -> runLimitedFeature("local_backup", "پشتیبان محلی", () -> showBackupOptions()));
         Button chartBtn = button("📊 هزینه‌ها", Color.WHITE, dark, 11);
-        chartBtn.setOnClickListener(v -> showExpenseCharts());
+        chartBtn.setOnClickListener(v -> runLimitedFeature("expense_charts", "گزارش هزینه‌ها", () -> showExpenseCharts()));
         // Distinct but coordinated dashboard colors for the three utility buttons.
         Button[] toolButtons = {docsBtn, backupBtn, chartBtn};
         int[][] toolGradients = {
@@ -325,11 +539,11 @@ public class MainActivity extends Activity {
         content.addView(toolsRow, lp(-1, -2, 0, 1, 0, 2));
         Button calendarBtn = button("🗓️ تقویم و آرشیو خریدها", Color.rgb(224, 240, 255), dark, 15);
         calendarBtn.setMinHeight(dp(48));
-        calendarBtn.setOnClickListener(v -> showPurchaseCenter());
+        calendarBtn.setOnClickListener(v -> runLimitedFeature("calendar_archive", "تقویم و آرشیو خریدها", () -> showPurchaseCenter()));
         content.addView(calendarBtn, lp(-1, -2, 0, 2, 0, 6));
         Button smartBtn = button("🧠 تحلیل هوشمند هزینه‌ها و راهکار صرفه‌جویی", Color.rgb(255, 244, 220), dark, 14);
         smartBtn.setMinHeight(dp(44));
-        smartBtn.setOnClickListener(v -> showSmartExpenseAnalysis());
+        smartBtn.setOnClickListener(v -> runLimitedFeature("smart_analysis", "تحلیل هوشمند هزینه‌ها", () -> showSmartExpenseAnalysis()));
         content.addView(smartBtn, lp(-1, -2, 0, 2, 0, 4));
         // Keep every home-screen action reachable on short displays by scrolling the content.
         ScrollView homeScroll = new ScrollView(this);
@@ -776,9 +990,180 @@ public class MainActivity extends Activity {
 
     private void showBackupOptions() {
         new AlertDialog.Builder(this).setTitle("پشتیبان‌گیری")
-            .setItems(new String[]{"ساخت فایل پشتیبان", "بازیابی فایل پشتیبان"}, (d, which) -> {
-                if (which == 0) createBackup(); else chooseBackup();
+            .setItems(new String[]{"ساخت فایل پشتیبان روی گوشی", "بازیابی فایل پشتیبان از گوشی", "حساب کاربری"}, (d, which) -> {
+                if (which == 0) createBackup();
+                else if (which == 1) chooseBackup();
+                else showCloudOptions();
             }).setNegativeButton("بستن", null).show();
+    }
+
+    private void showCloudOptions() {
+        String accountLabel = OBACloud.isSignedIn(this)
+            ? "حساب: " + OBACloud.userEmail(this)
+            : "هنوز وارد حساب نشده‌ای";
+        String[] options = OBACloud.isSignedIn(this)
+            ? new String[]{accountLabel, "خروج از حساب"}
+            : new String[]{accountLabel, "ورود به حساب", "ساخت حساب جدید"};
+        new AlertDialog.Builder(this).setTitle("حساب کاربری")
+            .setMessage("اطلاعات برنامه و فایل‌های پشتیبان فقط روی گوشی می‌مانند. حساب کاربری برای ورود و شناسایی کاربر استفاده می‌شود.")
+            .setItems(options, (d, which) -> {
+                if (OBACloud.isSignedIn(this)) {
+                    if (which == 1) {
+                        OBACloud.signOut(this);
+                        Toast.makeText(this, "از حساب خارج شدی.", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    if (which == 1) showCloudAuthDialog(false);
+                    else if (which == 2) showCloudAuthDialog(true);
+                }
+            }).setNegativeButton("بستن", null).show();
+    }
+
+    private void showCloudAuthDialog(boolean createAccount) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText email = new EditText(this);
+        email.setSingleLine(true);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setHint("ایمیل");
+        form.addView(email, lp(-1, -2, 0, 4, 0, 4));
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password.setHint("گذرواژه (حداقل ۶ نویسه)");
+        form.addView(password, lp(-1, -2, 0, 4, 0, 4));
+        EditText username = new EditText(this);
+        if (createAccount) {
+            username.setSingleLine(true);
+            username.setHint("نام کاربری (۳ تا ۲۴ حرف انگلیسی، عدد یا _)");
+            form.addView(username, lp(-1, -2, 0, 4, 0, 4));
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(createAccount ? "ساخت حساب OBA" : "ورود به حساب OBA")
+            .setMessage(createAccount ? "برای ساخت حساب، نام کاربری، ایمیل و گذرواژه را وارد کن. کد تأیید در صورت فعال بودن تأیید ایمیل از طریق ایمیل ارسال می‌شود." : "برای ورود، ایمیل و گذرواژه را وارد کن.")
+            .setView(form)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton(createAccount ? "ثبت‌نام" : "ورود", null)
+            .create();
+        dialog.setOnShowListener(ignored -> {
+            if (!createAccount) {
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                    dialog.dismiss();
+                    showPasswordRecoveryDialog();
+                });
+            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String mail = email.getText().toString().trim();
+            String pass = password.getText().toString();
+            String name = createAccount ? username.getText().toString().trim() : "";
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches() || pass.length() < 6) {
+                Toast.makeText(this, "ایمیل معتبر و گذرواژه‌ای با حداقل ۶ نویسه وارد کن.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (createAccount && !name.matches("[a-zA-Z0-9_]{3,24}")) {
+                Toast.makeText(this, "نام کاربری باید ۳ تا ۲۴ نویسه و فقط شامل حروف انگلیسی، عدد یا _ باشد.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            dialog.dismiss();
+            Toast.makeText(this, "در حال ارتباط با سرور…", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                String message;
+                try {
+                    message = createAccount ? OBACloud.signUp(this, mail, pass, name) : OBACloud.signIn(this, mail, pass);
+                } catch (Exception e) {
+                    message = e.getMessage() == null ? "ارتباط با سرور انجام نشد." : e.getMessage();
+                }
+                final String result = message;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                    if (OBACloud.isSignedIn(this)) showCloudOptions();
+                });
+            }).start();
+            });
+        });
+        if (!createAccount) dialog.setButton(AlertDialog.BUTTON_NEUTRAL, "فراموشی گذرواژه", (d, which) -> {});
+        dialog.show();
+    }
+
+    private void showPasswordRecoveryDialog() {
+        EditText email = new EditText(this);
+        email.setSingleLine(true);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setHint("ایمیل حساب");
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        form.addView(email, lp(-1, -2, 0, 4, 0, 4));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("بازیابی گذرواژه")
+            .setMessage("کد بازیابی به ایمیل حساب ارسال می‌شود.")
+            .setView(form)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("ارسال کد", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String mail = email.getText().toString().trim();
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches()) {
+                Toast.makeText(this, "ایمیل معتبر وارد کن.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            dialog.dismiss();
+            new Thread(() -> {
+                String message;
+                try { message = OBACloud.requestPasswordRecovery(mail); }
+                catch (Exception e) { message = e.getMessage() == null ? "ارسال کد ناموفق بود." : e.getMessage(); }
+                final String result = message;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                    if (result.startsWith("اگر این ایمیل")) showPasswordRecoveryCodeDialog(mail);
+                });
+            }).start();
+        }));
+        dialog.show();
+    }
+
+    private void showPasswordRecoveryCodeDialog(String email) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText code = new EditText(this);
+        code.setSingleLine(true);
+        code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        code.setHint("کد تأیید ایمیل");
+        form.addView(code, lp(-1, -2, 0, 4, 0, 4));
+        EditText newPassword = new EditText(this);
+        newPassword.setSingleLine(true);
+        newPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        newPassword.setHint("گذرواژه جدید (حداقل ۶ نویسه)");
+        form.addView(newPassword, lp(-1, -2, 0, 4, 0, 4));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("تعیین گذرواژه جدید")
+            .setMessage("کد ارسال‌شده را وارد کن و یک گذرواژه جدید بساز.")
+            .setView(form)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("تغییر گذرواژه", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String otp = code.getText().toString().trim();
+            String pass = newPassword.getText().toString();
+            if (otp.length() < 6 || pass.length() < 6) {
+                Toast.makeText(this, "کد را کامل وارد کن و گذرواژه‌ای با حداقل ۶ نویسه بساز.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            dialog.dismiss();
+            new Thread(() -> {
+                String message;
+                try { message = OBACloud.verifyRecoveryCodeAndSetPassword(this, email, otp, pass); }
+                catch (Exception e) { message = e.getMessage() == null ? "بازیابی گذرواژه ناموفق بود." : e.getMessage(); }
+                final String result = message;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                    if (OBACloud.isSignedIn(this)) showCloudOptions();
+                });
+            }).start();
+        }));
+        dialog.show();
     }
 
     // Convert Gregorian dates to the Jalali (Solar Hijri) calendar for Persian display.
@@ -3730,6 +4115,10 @@ public class MainActivity extends Activity {
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
+        if (bazaarConnection != null) {
+            try { bazaarConnection.disconnect(); } catch (Exception ignored) {}
+        }
+        bazaarBillingConnected = false;
         stopReminderSoundPreview();
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
