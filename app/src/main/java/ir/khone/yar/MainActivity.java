@@ -207,7 +207,7 @@ public class MainActivity extends ComponentActivity {
         boolean premium = prefs.getBoolean("oba_bazaar_subscription_active", false);
         String message = premium
                 ? "نسخهٔ کامل روی این گوشی فعال است. می‌توانی خرید را دوباره از حساب کافه‌بازار بازیابی کنی."
-                : "با با تهیهٔ اشتراک سه‌ماههٔ نسخهٔ کامل، دسترسی تا پایان دورهٔ اشتراک فعال می‌شود. مبلغ نهایی را کافه‌بازار نشان می‌دهد.";
+                : "با تهیهٔ اشتراک سه‌ماههٔ نسخهٔ کامل، دسترسی تا پایان دورهٔ اشتراک فعال می‌شود. مبلغ نهایی را کافه‌بازار نشان می‌دهد.";
         new AlertDialog.Builder(this)
                 .setTitle("خرید از کافه‌بازار")
                 .setMessage(message)
@@ -241,7 +241,7 @@ public class MainActivity extends ComponentActivity {
                     prefs.edit().putBoolean("oba_bazaar_subscription_active", true).apply();
                     runOnUiThread(() -> new AlertDialog.Builder(this)
                             .setTitle("اشتراک فعال شد")
-                            .setMessage("خرید اشتراک سه‌ماهه تأیید شد و روی این گوشی فعال شد.")
+                            .setMessage("اشتراک سه‌ماهه با موفقیت ثبت شد و دسترسی نسخهٔ کامل فعال شد.")
                             .setPositiveButton("باشه", null).show());
                 } else {
                     runOnUiThread(() -> Toast.makeText(this, "شناسهٔ محصول خریداری‌شده با محصول OBA مطابقت ندارد.", Toast.LENGTH_LONG).show());
