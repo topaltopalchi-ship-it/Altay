@@ -134,7 +134,6 @@ final class OBACloud {
             conn.setRequestProperty("apikey", API_KEY);
             conn.setRequestProperty("Accept", "application/json");
             if (token != null && !token.isEmpty()) conn.setRequestProperty("Authorization", "Bearer " + token);
-            else conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
             if (prefer != null) conn.setRequestProperty("Prefer", prefer);
             if (body != null) {
                 conn.setDoOutput(true);
