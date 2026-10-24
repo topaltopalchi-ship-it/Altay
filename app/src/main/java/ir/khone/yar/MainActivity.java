@@ -132,6 +132,7 @@ public class MainActivity extends ComponentActivity {
             }
         });
         buildUi();
+        showEntryChoiceDialog();
         initBazaarBilling();
         // Restore scheduled text reminders with vibration notifications.
         ReminderReceiver.restore(this);
@@ -152,6 +153,20 @@ public class MainActivity extends ComponentActivity {
         }
     }
 
+
+    private void showEntryChoiceDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("ورود به OBA")
+                .setMessage("برای شروع، یکی از روش‌ها را انتخاب کن. می‌توانی رایگان ادامه بدهی یا با حساب کاربری وارد شوی/حساب جدید بسازی. اطلاعات خانه و پشتیبان‌ها فقط روی همین گوشی می‌مانند.")
+                .setCancelable(false)
+                .setPositiveButton("ادامهٔ رایگان", (dialog, which) -> {
+                    getSharedPreferences("khoneyar", MODE_PRIVATE).edit()
+                            .putString("entry_mode", "free").apply();
+                })
+                .setNegativeButton("ورود به حساب", (dialog, which) -> showCloudAuthDialog(false))
+                .setNeutralButton("ساخت حساب", (dialog, which) -> showCloudAuthDialog(true))
+                .show();
+    }
 
     private boolean isBazaarBillingConfigured() {
         return BuildConfig.OBA_BAZAAR_SUBSCRIPTION_ID != null
@@ -411,10 +426,11 @@ public class MainActivity extends ComponentActivity {
         continuousTranscriptView.setGravity(Gravity.RIGHT | Gravity.TOP);
         continuousTranscriptView.setMinHeight(dp(104));
         continuousTranscriptView.setPadding(dp(12), dp(10), dp(12), dp(10));
-        GradientDrawable transcriptBox = round(Color.WHITE, 12);
+        // Keep transcript text high-contrast on the blue review panel.
+        GradientDrawable transcriptBox = round(Color.rgb(45, 62, 150), 12);
         transcriptBox.setStroke(dp(1), Color.rgb(210, 216, 220));
         continuousTranscriptView.setBackground(transcriptBox);
-        continuousTranscriptView.setTextColor(dark);
+        continuousTranscriptView.setTextColor(Color.WHITE);
         continuousTranscriptView.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
         continuousTranscriptView.setLineSpacing(dp(3), 1.08f);
         continuousTranscriptView.setTextIsSelectable(true);
