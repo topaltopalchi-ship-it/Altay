@@ -73,7 +73,6 @@ jobs:
           OBA_KEYSTORE_PASSWORD: ${{ secrets.OBA_KEYSTORE_PASSWORD }}
           OBA_KEY_ALIAS: ${{ secrets.OBA_KEY_ALIAS }}
           OBA_KEY_PASSWORD: ${{ secrets.OBA_KEY_PASSWORD }}
-        env:
           OBA_BAZAAR_PRODUCT_ID: ${{ vars.OBA_BAZAAR_PRODUCT_ID }}
           OBA_BAZAAR_RSA_PUBLIC_KEY: ${{ secrets.OBA_BAZAAR_RSA_PUBLIC_KEY }}
         run: gradle --no-daemon assembleRelease
