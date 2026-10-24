@@ -822,12 +822,12 @@ public class MainActivity extends Activity {
         EditText username = new EditText(this);
         if (createAccount) {
             username.setSingleLine(true);
-            username.setHint("نام کاربری اختیاری: حروف انگلیسی، عدد یا _");
+            username.setHint("نام کاربری (۳ تا ۲۴ حرف انگلیسی، عدد یا _)");
             form.addView(username, lp(-1, -2, 0, 4, 0, 4));
         }
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(createAccount ? "ساخت حساب OBA" : "ورود به حساب OBA")
-            .setMessage("برای ورود یا مدیریت حساب OBA، ایمیل و گذرواژه را وارد کن.")
+            .setMessage(createAccount ? "برای ساخت حساب، نام کاربری، ایمیل و گذرواژه را وارد کن. کد تأیید در صورت فعال بودن تأیید ایمیل از طریق ایمیل ارسال می‌شود." : "برای ورود، ایمیل و گذرواژه را وارد کن.")
             .setView(form)
             .setNegativeButton("انصراف", null)
             .setPositiveButton(createAccount ? "ثبت‌نام" : "ورود", null)
@@ -845,6 +845,10 @@ public class MainActivity extends Activity {
             String name = createAccount ? username.getText().toString().trim() : "";
             if (!android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches() || pass.length() < 6) {
                 Toast.makeText(this, "ایمیل معتبر و گذرواژه‌ای با حداقل ۶ نویسه وارد کن.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (createAccount && !name.matches("[a-zA-Z0-9_]{3,24}")) {
+                Toast.makeText(this, "نام کاربری باید ۳ تا ۲۴ نویسه و فقط شامل حروف انگلیسی، عدد یا _ باشد.", Toast.LENGTH_LONG).show();
                 return;
             }
             dialog.dismiss();
