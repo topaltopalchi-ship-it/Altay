@@ -63,6 +63,26 @@ final class OBACloud {
         return "ورود موفق بود.";
     }
 
+    static String requestPasswordRecovery(String email) throws Exception {
+        JSONObject body = new JSONObject().put("email", email.trim());
+        request("POST", "/auth/v1/recover", body, null, null);
+        return "اگر این ایمیل حساب معتبری داشته باشد، پیام بازیابی برای آن ارسال می‌شود.";
+    }
+
+    static String verifyRecoveryCodeAndSetPassword(Context c, String email, String code, String newPassword) throws Exception {
+        JSONObject verifyBody = new JSONObject();
+        verifyBody.put("email", email.trim());
+        verifyBody.put("token", code.trim());
+        verifyBody.put("type", "recovery");
+        JSONObject session = request("POST", "/auth/v1/verify", verifyBody, null, null);
+        String access = session.optString("access_token", "");
+        if (access.isEmpty()) throw new Exception("کد تأیید معتبر نیست یا منقضی شده است.");
+        JSONObject updateBody = new JSONObject().put("password", newPassword);
+        request("PUT", "/auth/v1/user", updateBody, access, null);
+        saveSession(c, session, email);
+        return "گذرواژه با موفقیت تغییر کرد.";
+    }
+
     private static String validToken(Context c) throws Exception {
         String token = get(c, ACCESS);
         long expiry = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(EXPIRES, 0);
