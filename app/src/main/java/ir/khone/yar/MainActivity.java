@@ -152,14 +152,6 @@ public class MainActivity extends ComponentActivity {
         }
     }
 
-    @Override protected void onDestroy() {
-        if (bazaarConnection != null) {
-            try { bazaarConnection.disconnect(); } catch (Exception ignored) {}
-        }
-        bazaarBillingConnected = false;
-        super.onDestroy();
-    }
-
 
     private boolean isBazaarBillingConfigured() {
         return BuildConfig.OBA_BAZAAR_PRODUCT_ID != null
@@ -4088,6 +4080,10 @@ public class MainActivity extends ComponentActivity {
     }
     private int dp(float v) { return (int)(v*getResources().getDisplayMetrics().density+0.5f); }
     @Override protected void onDestroy() {
+        if (bazaarConnection != null) {
+            try { bazaarConnection.disconnect(); } catch (Exception ignored) {}
+        }
+        bazaarBillingConnected = false;
         stopReminderSoundPreview();
         if(recognizer!=null) recognizer.destroy();
         if(offlineEngine!=null) offlineEngine.stop();
