@@ -827,12 +827,19 @@ public class MainActivity extends Activity {
         }
         AlertDialog dialog = new AlertDialog.Builder(this)
             .setTitle(createAccount ? "ساخت حساب OBA" : "ورود به حساب OBA")
-            .setMessage("برای پشتیبان ابری، ایمیل و گذرواژهٔ حساب را وارد کن.")
+            .setMessage("برای ورود یا مدیریت حساب OBA، ایمیل و گذرواژه را وارد کن.")
             .setView(form)
             .setNegativeButton("انصراف", null)
             .setPositiveButton(createAccount ? "ثبت‌نام" : "ورود", null)
             .create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+        dialog.setOnShowListener(ignored -> {
+            if (!createAccount) {
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                    dialog.dismiss();
+                    showPasswordRecoveryDialog();
+                });
+            }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String mail = email.getText().toString().trim();
             String pass = password.getText().toString();
             String name = createAccount ? username.getText().toString().trim() : "";
@@ -849,6 +856,88 @@ public class MainActivity extends Activity {
                 } catch (Exception e) {
                     message = e.getMessage() == null ? "ارتباط با سرور انجام نشد." : e.getMessage();
                 }
+                final String result = message;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                    if (OBACloud.isSignedIn(this)) showCloudOptions();
+                });
+            }).start();
+            });
+        });
+        if (!createAccount) dialog.setButton(AlertDialog.BUTTON_NEUTRAL, "فراموشی گذرواژه", (d, which) -> {});
+        dialog.show();
+    }
+
+    private void showPasswordRecoveryDialog() {
+        EditText email = new EditText(this);
+        email.setSingleLine(true);
+        email.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        email.setHint("ایمیل حساب");
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        form.addView(email, lp(-1, -2, 0, 4, 0, 4));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("بازیابی گذرواژه")
+            .setMessage("کد بازیابی به ایمیل حساب ارسال می‌شود.")
+            .setView(form)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("ارسال کد", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String mail = email.getText().toString().trim();
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(mail).matches()) {
+                Toast.makeText(this, "ایمیل معتبر وارد کن.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            dialog.dismiss();
+            new Thread(() -> {
+                String message;
+                try { message = OBACloud.requestPasswordRecovery(mail); }
+                catch (Exception e) { message = e.getMessage() == null ? "ارسال کد ناموفق بود." : e.getMessage(); }
+                final String result = message;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                    if (result.startsWith("اگر این ایمیل")) showPasswordRecoveryCodeDialog(mail);
+                });
+            }).start();
+        }));
+        dialog.show();
+    }
+
+    private void showPasswordRecoveryCodeDialog(String email) {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(20), dp(8), dp(20), dp(4));
+        EditText code = new EditText(this);
+        code.setSingleLine(true);
+        code.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        code.setHint("کد تأیید ایمیل");
+        form.addView(code, lp(-1, -2, 0, 4, 0, 4));
+        EditText newPassword = new EditText(this);
+        newPassword.setSingleLine(true);
+        newPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        newPassword.setHint("گذرواژه جدید (حداقل ۶ نویسه)");
+        form.addView(newPassword, lp(-1, -2, 0, 4, 0, 4));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("تعیین گذرواژه جدید")
+            .setMessage("کد ارسال‌شده را وارد کن و یک گذرواژه جدید بساز.")
+            .setView(form)
+            .setNegativeButton("انصراف", null)
+            .setPositiveButton("تغییر گذرواژه", null)
+            .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String otp = code.getText().toString().trim();
+            String pass = newPassword.getText().toString();
+            if (otp.length() < 6 || pass.length() < 6) {
+                Toast.makeText(this, "کد را کامل وارد کن و گذرواژه‌ای با حداقل ۶ نویسه بساز.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            dialog.dismiss();
+            new Thread(() -> {
+                String message;
+                try { message = OBACloud.verifyRecoveryCodeAndSetPassword(this, email, otp, pass); }
+                catch (Exception e) { message = e.getMessage() == null ? "بازیابی گذرواژه ناموفق بود." : e.getMessage(); }
                 final String result = message;
                 runOnUiThread(() -> {
                     Toast.makeText(this, result, Toast.LENGTH_LONG).show();
