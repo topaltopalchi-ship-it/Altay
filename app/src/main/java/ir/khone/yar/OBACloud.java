@@ -78,7 +78,8 @@ final class OBACloud {
     static JSONObject downloadBackup(Context c) throws Exception {
         String token = validToken(c);
         String path = "/rest/v1/oba_user_data?data_type=eq.app_backup&record_id=eq.main&select=payload&limit=1";
-        JSONArray rows = new JSONArray(request("GET", path, null, token, null).toString());
+        JSONArray rows = request("GET", path, null, token, null).optJSONArray("_array");
+        if (rows == null) rows = new JSONArray();
         if (rows.length() == 0) throw new Exception("نسخه پشتیبان ابری پیدا نشد.");
         JSONObject payload = rows.getJSONObject(0).optJSONObject("payload");
         JSONObject backup = payload == null ? null : payload.optJSONObject("backup");
