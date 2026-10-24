@@ -938,7 +938,17 @@ public class MainActivity extends Activity {
                 .setNegativeButton("انصراف", null)
                 .setPositiveButton("بازیابی", (d, w) -> {
                     try {
+                        String cloudAccess = prefs.getString("oba_cloud_access_token", "");
+                        String cloudRefresh = prefs.getString("oba_cloud_refresh_token", "");
+                        String cloudEmail = prefs.getString("oba_cloud_user_email", "");
+                        String cloudUserId = prefs.getString("oba_cloud_user_id", "");
+                        long cloudExpiry = prefs.getLong("oba_cloud_expires_at", 0);
                         SharedPreferences.Editor editor = prefs.edit().clear();
+                        if (!cloudAccess.isEmpty()) editor.putString("oba_cloud_access_token", cloudAccess);
+                        if (!cloudRefresh.isEmpty()) editor.putString("oba_cloud_refresh_token", cloudRefresh);
+                        if (!cloudEmail.isEmpty()) editor.putString("oba_cloud_user_email", cloudEmail);
+                        if (!cloudUserId.isEmpty()) editor.putString("oba_cloud_user_id", cloudUserId);
+                        if (cloudExpiry > 0) editor.putLong("oba_cloud_expires_at", cloudExpiry);
                         java.util.Iterator<String> keys = values.keys();
                         while (keys.hasNext()) {
                             String key = keys.next();
