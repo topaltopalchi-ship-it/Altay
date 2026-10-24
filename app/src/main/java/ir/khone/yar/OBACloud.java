@@ -3,7 +3,6 @@ package ir.khone.yar;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -61,33 +60,6 @@ final class OBACloud {
         saveSession(c, result, email);
         if (!isSignedIn(c)) throw new Exception("ورود انجام نشد؛ نشست معتبر از سرور دریافت نشد.");
         return "ورود موفق بود.";
-    }
-
-    static void uploadBackup(Context c, JSONObject backup) throws Exception {
-        String token = validToken(c);
-        JSONObject payload = new JSONObject();
-        payload.put("backup", backup);
-        JSONObject row = new JSONObject();
-        row.put("user_id", get(c, USER_ID));
-        if (get(c, USER_ID).isEmpty()) throw new Exception("شناسه حساب پیدا نشد؛ دوباره وارد حساب شو.");
-        row.put("data_type", "app_backup");
-        row.put("record_id", "main");
-        row.put("payload", payload);
-        JSONArray rows = new JSONArray().put(row);
-        request("POST", "/rest/v1/oba_user_data?on_conflict=user_id,data_type,record_id",
-            rows, token, "resolution=merge-duplicates,return=minimal");
-    }
-
-    static JSONObject downloadBackup(Context c) throws Exception {
-        String token = validToken(c);
-        String path = "/rest/v1/oba_user_data?data_type=eq.app_backup&record_id=eq.main&select=payload&limit=1";
-        JSONArray rows = request("GET", path, null, token, null).optJSONArray("_array");
-        if (rows == null) rows = new JSONArray();
-        if (rows.length() == 0) throw new Exception("نسخه پشتیبان ابری پیدا نشد.");
-        JSONObject payload = rows.getJSONObject(0).optJSONObject("payload");
-        JSONObject backup = payload == null ? null : payload.optJSONObject("backup");
-        if (backup == null) throw new Exception("ساختار نسخه پشتیبان ابری معتبر نیست.");
-        return backup;
     }
 
     private static String validToken(Context c) throws Exception {
