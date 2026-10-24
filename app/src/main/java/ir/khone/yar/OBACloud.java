@@ -24,6 +24,7 @@ final class OBACloud {
     private static final String REFRESH = "oba_cloud_refresh_token";
     private static final String EXPIRES = "oba_cloud_expires_at";
     private static final String USER = "oba_cloud_user_email";
+    private static final String USER_ID = "oba_cloud_user_id";
 
     private OBACloud() {}
 
@@ -35,7 +36,7 @@ final class OBACloud {
 
     static void signOut(Context c) {
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .remove(ACCESS).remove(REFRESH).remove(EXPIRES).remove(USER).apply();
+            .remove(ACCESS).remove(REFRESH).remove(EXPIRES).remove(USER).remove(USER_ID).apply();
     }
 
     static String signUp(Context c, String email, String password, String username) throws Exception {
@@ -67,6 +68,8 @@ final class OBACloud {
         JSONObject payload = new JSONObject();
         payload.put("backup", backup);
         JSONObject row = new JSONObject();
+        row.put("user_id", get(c, USER_ID));
+        if (get(c, USER_ID).isEmpty()) throw new Exception("شناسه حساب پیدا نشد؛ دوباره وارد حساب شو.");
         row.put("data_type", "app_backup");
         row.put("record_id", "main");
         row.put("payload", payload);
@@ -112,6 +115,8 @@ final class OBACloud {
         if (!refresh.isEmpty()) e.putString(REFRESH, refresh);
         if (expires > 0) e.putLong(EXPIRES, expires);
         if (email != null && !email.isEmpty()) e.putString(USER, email);
+        JSONObject user = result.optJSONObject("user");
+        if (user != null && !user.optString("id", "").isEmpty()) e.putString(USER_ID, user.optString("id"));
         e.apply();
     }
 
