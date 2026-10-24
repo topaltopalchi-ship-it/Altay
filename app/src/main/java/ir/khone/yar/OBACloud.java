@@ -3,6 +3,7 @@ package ir.khone.yar;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -13,7 +14,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
-/** Minimal Supabase Auth + RLS-protected OBA cloud-backup client. Never uses a service-role key. */
+/** Supabase Auth client for OBA account sign-up, sign-in, and session handling. Never uses a service-role key. */
 final class OBACloud {
     private static final String BASE = "https://sxyaujvliummbvzznejq.supabase.co";
     // Public publishable key; row-level security and the user's JWT protect private rows.
