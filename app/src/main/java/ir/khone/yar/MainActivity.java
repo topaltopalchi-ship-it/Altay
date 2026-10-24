@@ -776,7 +776,7 @@ public class MainActivity extends Activity {
 
     private void showBackupOptions() {
         new AlertDialog.Builder(this).setTitle("پشتیبان‌گیری")
-            .setItems(new String[]{"ساخت فایل پشتیبان", "بازیابی فایل پشتیبان", "☁️ پشتیبان ابری و حساب کاربری"}, (d, which) -> {
+            .setItems(new String[]{"ساخت فایل پشتیبان روی گوشی", "بازیابی فایل پشتیبان از گوشی", "حساب کاربری"}, (d, which) -> {
                 if (which == 0) createBackup();
                 else if (which == 1) chooseBackup();
                 else showCloudOptions();
@@ -788,14 +788,13 @@ public class MainActivity extends Activity {
             ? "حساب: " + OBACloud.userEmail(this)
             : "هنوز وارد حساب نشده‌ای";
         String[] options = OBACloud.isSignedIn(this)
-            ? new String[]{accountLabel, "☁️ ذخیره پشتیبان روی ابر", "☁️ بازیابی پشتیبان از ابر", "خروج از حساب"}
+            ? new String[]{accountLabel, "خروج از حساب"}
             : new String[]{accountLabel, "ورود به حساب", "ساخت حساب جدید"};
-        new AlertDialog.Builder(this).setTitle("حساب و پشتیبان ابری")
+        new AlertDialog.Builder(this).setTitle("حساب کاربری")
+            .setMessage("اطلاعات برنامه و فایل‌های پشتیبان فقط روی گوشی می‌مانند. حساب کاربری برای ورود و شناسایی کاربر استفاده می‌شود.")
             .setItems(options, (d, which) -> {
                 if (OBACloud.isSignedIn(this)) {
-                    if (which == 1) uploadCloudBackup();
-                    else if (which == 2) downloadCloudBackup();
-                    else if (which == 3) {
+                    if (which == 1) {
                         OBACloud.signOut(this);
                         Toast.makeText(this, "از حساب خارج شدی.", Toast.LENGTH_SHORT).show();
                     }
@@ -858,120 +857,6 @@ public class MainActivity extends Activity {
             }).start();
         }));
         dialog.show();
-    }
-
-    private JSONObject buildCloudBackup() throws Exception {
-        JSONObject json = new JSONObject();
-        json.put("app", "OBA");
-        json.put("version", 1);
-        JSONObject values = new JSONObject();
-        for (java.util.Map.Entry<String,?> entry : prefs.getAll().entrySet()) {
-            String key = entry.getKey();
-            Object value = entry.getValue();
-            if ("wake_enabled".equals(key)) continue;
-            if (isValidBackupPreference(key, value)) values.put(key, value);
-        }
-        json.put("preferences", values);
-        return json;
-    }
-
-    private void uploadCloudBackup() {
-        if (!OBACloud.isSignedIn(this)) { showCloudAuthDialog(false); return; }
-        final JSONObject backup;
-        try { backup = buildCloudBackup(); }
-        catch (Exception e) {
-            Toast.makeText(this, "ساخت نسخه پشتیبان ممکن نشد.", Toast.LENGTH_LONG).show();
-            return;
-        }
-        Toast.makeText(this, "در حال ذخیره امن نسخه پشتیبان…", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            String message;
-            try {
-                OBACloud.uploadBackup(this, backup);
-                message = "نسخه پشتیبان روی حساب ابری ذخیره شد.";
-            } catch (Exception e) {
-                message = e.getMessage() == null ? "ذخیره ابری انجام نشد." : e.getMessage();
-            }
-            final String result = message;
-            runOnUiThread(() -> Toast.makeText(this, result, Toast.LENGTH_LONG).show());
-        }).start();
-    }
-
-    private void downloadCloudBackup() {
-        if (!OBACloud.isSignedIn(this)) { showCloudAuthDialog(false); return; }
-        Toast.makeText(this, "در حال دریافت نسخه پشتیبان…", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            JSONObject backup = null;
-            String error = null;
-            try { backup = OBACloud.downloadBackup(this); }
-            catch (Exception e) { error = e.getMessage() == null ? "دریافت پشتیبان انجام نشد." : e.getMessage(); }
-            final JSONObject result = backup;
-            final String problem = error;
-            runOnUiThread(() -> {
-                if (problem != null) {
-                    Toast.makeText(this, problem, Toast.LENGTH_LONG).show();
-                    return;
-                }
-                applyCloudBackup(result);
-            });
-        }).start();
-    }
-
-    private void applyCloudBackup(JSONObject json) {
-        try {
-            if (json == null || !"OBA".equals(json.optString("app")) || json.optInt("version", -1) != 1
-                    || !(json.opt("preferences") instanceof JSONObject)) {
-                Toast.makeText(this, "نسخه پشتیبان ابری معتبر نیست؛ اطلاعات تغییر نکرد.", Toast.LENGTH_LONG).show();
-                return;
-            }
-            JSONObject values = json.getJSONObject("preferences");
-            java.util.Iterator<String> check = values.keys();
-            while (check.hasNext()) {
-                String key = check.next();
-                if (!isValidBackupPreference(key, values.opt(key))) {
-                    Toast.makeText(this, "پشتیبان دارای داده نامعتبر است؛ اطلاعات فعلی تغییر نکرد.", Toast.LENGTH_LONG).show();
-                    return;
-                }
-            }
-            new AlertDialog.Builder(this).setTitle("بازیابی پشتیبان ابری")
-                .setMessage("اطلاعات محلی فعلی با نسخه پشتیبان ابری جایگزین می‌شود. قبل از ادامه، در صورت نیاز از اطلاعات فعلی فایل پشتیبان بگیر.")
-                .setNegativeButton("انصراف", null)
-                .setPositiveButton("بازیابی", (d, w) -> {
-                    try {
-                        String cloudAccess = prefs.getString("oba_cloud_access_token", "");
-                        String cloudRefresh = prefs.getString("oba_cloud_refresh_token", "");
-                        String cloudEmail = prefs.getString("oba_cloud_user_email", "");
-                        String cloudUserId = prefs.getString("oba_cloud_user_id", "");
-                        long cloudExpiry = prefs.getLong("oba_cloud_expires_at", 0);
-                        SharedPreferences.Editor editor = prefs.edit().clear();
-                        if (!cloudAccess.isEmpty()) editor.putString("oba_cloud_access_token", cloudAccess);
-                        if (!cloudRefresh.isEmpty()) editor.putString("oba_cloud_refresh_token", cloudRefresh);
-                        if (!cloudEmail.isEmpty()) editor.putString("oba_cloud_user_email", cloudEmail);
-                        if (!cloudUserId.isEmpty()) editor.putString("oba_cloud_user_id", cloudUserId);
-                        if (cloudExpiry > 0) editor.putLong("oba_cloud_expires_at", cloudExpiry);
-                        java.util.Iterator<String> keys = values.keys();
-                        while (keys.hasNext()) {
-                            String key = keys.next();
-                            Object value = values.get(key);
-                            if (value instanceof String) editor.putString(key, (String) value);
-                            else if ("income".equals(key) || "expense".equals(key) || "home_budget".equals(key))
-                                editor.putLong(key, ((Number) value).longValue());
-                            else if (key.startsWith("stock_")) editor.putInt(key, ((Number) value).intValue());
-                        }
-                        editor.apply();
-                        incomeTotal = prefs.getLong("income", 0);
-                        expenseTotal = prefs.getLong("expense", 0);
-                        entries.clear();
-                        loadEntries();
-                        refresh();
-                        Toast.makeText(this, "پشتیبان ابری بازیابی شد.", Toast.LENGTH_LONG).show();
-                    } catch (Exception e) {
-                        Toast.makeText(this, "بازیابی انجام نشد؛ اطلاعات فعلی را بررسی کن.", Toast.LENGTH_LONG).show();
-                    }
-                }).show();
-        } catch (Exception e) {
-            Toast.makeText(this, "خواندن نسخه پشتیبان ممکن نشد.", Toast.LENGTH_LONG).show();
-        }
     }
 
     // Convert Gregorian dates to the Jalali (Solar Hijri) calendar for Persian display.
